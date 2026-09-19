@@ -6,7 +6,7 @@ M1
 
 ## Current task
 
-TASK-M1-004 — ledger accounts, double-entry postings, locking, held availability, and audit.
+TASK-M1-005 — plans CRUD, public list, cache, and delete protection.
 
 ## Completed tasks
 
@@ -141,6 +141,9 @@ blocker is resolved.
   lint, typecheck, formatting, and full Turbo build. The Telegram signature
   and expiry checks cover AC-132; no migration was needed because M0-007
   already created session-independent user and admin tables.
+- TASK-M1-004 — added the transactional double-entry ledger, sorted account
+  row locks with `FOR UPDATE`, held-reward-aware `available()`, insufficient
+  funds protection, and ledger audit reconciliation.
 
 ## Verification correction
 
@@ -154,6 +157,13 @@ internal token rejection outside the trusted CIDR, successful trusted internal
 user/token requests, 16 API tests, root tests, lint, typecheck, formatting, and
 Turbo build.
 
+- TASK-M1-004 acceptance checks passed: 18 API tests, clean PostgreSQL
+  migration/deploy, ten parallel real PostgreSQL debits of 100 from a 1000
+  minor-unit balance, `available() = 0`, audit over 7 accounts with zero
+  mismatches, root tests, lint, typecheck, formatting, and Turbo build. No
+  migration was needed because M0-007 already created all ledger tables and
+  immutable triggers.
+
 ## Known blockers
 
 M1 implementation is in progress. Hosted GitHub Actions execution and
@@ -162,5 +172,5 @@ gates belong to their scheduled milestones.
 
 ## Next
 
-Implement `TASK-M1-004`: ledger accounts and double-entry postings with
-`FOR UPDATE`, held reward availability, and immutable ledger audit behavior.
+Implement `TASK-M1-005`: plans CRUD, public list caching, and protection against
+deleting plans that already have sales.

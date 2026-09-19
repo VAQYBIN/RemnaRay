@@ -4,6 +4,7 @@ import { LoggerModule } from 'nestjs-pino';
 import { HealthController } from './health/health.controller';
 import { InfraModule } from './infra/infra.module';
 import { AuthModule } from './modules/auth/auth.module';
+import { LedgerModule } from './modules/ledger/ledger.module';
 import { SettingsModule } from './modules/settings/settings.module';
 import { UsersModule } from './modules/users/users.module';
 
@@ -13,6 +14,7 @@ import { UsersModule } from './modules/users/users.module';
     SettingsModule,
     UsersModule,
     AuthModule,
+    LedgerModule,
     LoggerModule.forRoot({
       pinoHttp: {
         level: process.env.RR_LOG_LEVEL ?? 'info',

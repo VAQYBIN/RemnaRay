@@ -23,6 +23,12 @@
         "responses": { "200": { "description": "Bot JWT" } }
       }
     },
+    "/api/internal/v1/ledger/users/{userId}/available": {
+      "get": {
+        "operationId": "getLedgerAvailable",
+        "responses": { "200": { "description": "Spendable balance in minor units" } }
+      }
+    },
     "/api/internal/v1/users/upsert": {
       "post": {
         "operationId": "upsertInternalUser",
