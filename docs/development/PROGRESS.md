@@ -6,7 +6,7 @@ M0
 
 ## Current task
 
-TASK-M0-003 — Caddy image and proxy plugin verification.
+TASK-M0-004 — Remnawave version and OpenAPI contract verification.
 
 ## Completed tasks
 
@@ -18,6 +18,8 @@ TASK-M0-003 — Caddy image and proxy plugin verification.
   the root, applications, and workspace packages; fixed `@types/node` at
   `~24.13.6`; added Renovate 24.6 policy groups, release-age windows,
   security bypasses, and major-version exceptions.
+- TASK-M0-003 — verified the official `caddy:2-alpine` image at Caddy
+  `v2.11.4` and added a two-stage custom image with `caddy-ratelimit`.
 
 ## Verification
 
@@ -51,6 +53,11 @@ blocker is resolved.
 - Renovate validation uses the official validator; the policy keeps major
   updates behind approval, delays ordinary updates, and allows patch
   automerge only for development dependencies outside sensitive packages.
+- Caddy verification on 2026-09-19: official `caddy:2-alpine` reported
+  `v2.11.4 h1:XKxkMTgNSizEvKG6QHue6cAsFOteU2qA61w2tKkCWi0=` at digest
+  `sha256:de23def33b17fb5d1290b0f6c2add1d70780e52341896c00a4c8a2a2fe9d355e`.
+  The custom build uses `caddy:2.11.4-builder-alpine` and embeds
+  `github.com/mholt/caddy-ratelimit`.
 
 ## Definition of Done review
 
@@ -61,6 +68,9 @@ blocker is resolved.
   proxy applications are scheduled later in M0 and are not claimed as passed.
 - TASK-M0-002 acceptance checks passed: frozen install, `pnpm ls --depth 0`,
   five tests, lint, typecheck, formatting, and Renovate config validation.
+- TASK-M0-003 acceptance checks passed: Docker build, runtime `caddy version`,
+  runtime `http.handlers.rate_limit` module check, six tests, lint, typecheck,
+  and formatting.
 
 ## Known blockers
 
@@ -69,5 +79,5 @@ None. The corrected Git policy allows staging and commits. Nested
 
 ## Next
 
-TASK-M0-003 — verify the current Caddy 2.x patch and implement
-`deploy/proxy/caddy` with the caddy-ratelimit plugin.
+TASK-M0-004 — verify the current Remnawave panel version, retrieve its
+OpenAPI contract, and document the result in `docs/adr/ADR-010`.

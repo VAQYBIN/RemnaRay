@@ -141,3 +141,11 @@ test('pnpm policy and Renovate exceptions are explicit', async () => {
   assert.equal(renovate.minimumReleaseAge, '7 days');
   assert.equal(renovate.vulnerabilityAlerts.minimumReleaseAge, null);
 });
+
+test('the Caddy proxy image pins the verified release and rate-limit module', async () => {
+  const dockerfile = await readFile('deploy/proxy/caddy/Dockerfile', 'utf8');
+  assert.match(dockerfile, /^ARG CADDY_VERSION=2\.11\.4$/m);
+  assert.match(dockerfile, /FROM caddy:\$\{CADDY_VERSION\}-builder-alpine AS builder/);
+  assert.match(dockerfile, /xcaddy build --with github\.com\/mholt\/caddy-ratelimit/);
+  assert.match(dockerfile, /http\.handlers\.rate_limit/);
+});
