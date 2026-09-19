@@ -187,8 +187,10 @@ test('the local deployment boundary includes Docker, Compose, and safe init scri
   const appDockerfile = await readFile('deploy/docker/app.Dockerfile', 'utf8');
   const webDockerfile = await readFile('deploy/docker/web.Dockerfile', 'utf8');
   const compose = await readFile('compose.yaml', 'utf8');
+  const composeDev = await readFile('compose.dev.yaml', 'utf8');
   const initEnv = await readFile('scripts/init-env.sh', 'utf8');
   const wrapper = await readFile('scripts/rr', 'utf8');
+  const mockServer = await readFile('scripts/dev-mock-server.mjs', 'utf8');
 
   assert.match(appDockerfile, /FROM node:24-alpine AS build/);
   assert.match(appDockerfile, /pnpm install --frozen-lockfile/);
@@ -196,9 +198,13 @@ test('the local deployment boundary includes Docker, Compose, and safe init scri
   assert.match(compose, /172\.28\.0\.0\/16/);
   assert.match(compose, /read_only: true/);
   assert.match(compose, /no-new-privileges:true/);
+  for (const service of ['remnawave-mock', 'payments-mock', 'telegram-mock']) {
+    assert.match(composeDev, new RegExp(`^  ${service}:`, 'm'));
+  }
   assert.match(initEnv, /umask 077/);
   assert.match(initEnv, /chmod 600/);
   assert.match(wrapper, /docker compose/);
+  assert.match(mockServer, /request.url === '\/health'/);
 });
 
 test('the CI workflow covers required quality and image gates', async () => {

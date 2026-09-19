@@ -114,8 +114,8 @@ blocker is resolved.
   tests, clean PostgreSQL 18 `migrate deploy`, seed counts, immutable ledger
   trigger check, root tests, lint, typecheck, and formatting.
 - TASK-M0-008 acceptance checks passed: app/web Docker builds, Compose config,
-  built-image API/web health smoke checks, nine tests, lint, typecheck, and
-  formatting.
+  built-image API/web health smoke checks, development PostgreSQL/Valkey plus
+  three mock health checks, ten tests, lint, typecheck, and formatting.
 - TASK-M0-009 acceptance checks passed: workflow coverage test, ten root tests,
   lint, typecheck, and formatting. Hosted GitHub Actions execution remains an
   external gate.

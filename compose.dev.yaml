@@ -23,3 +23,24 @@ services:
       interval: 5s
       timeout: 3s
       retries: 20
+
+  remnawave-mock:
+    image: node:24-alpine
+    environment: { MOCK_NAME: remnawave, MOCK_PORT: 8081 }
+    volumes: [./scripts/dev-mock-server.mjs:/app/mock.mjs:ro]
+    command: [node, /app/mock.mjs]
+    ports: ['127.0.0.1:8081:8081']
+
+  payments-mock:
+    image: node:24-alpine
+    environment: { MOCK_NAME: payments, MOCK_PORT: 8082 }
+    volumes: [./scripts/dev-mock-server.mjs:/app/mock.mjs:ro]
+    command: [node, /app/mock.mjs]
+    ports: ['127.0.0.1:8082:8082']
+
+  telegram-mock:
+    image: node:24-alpine
+    environment: { MOCK_NAME: telegram, MOCK_PORT: 8083 }
+    volumes: [./scripts/dev-mock-server.mjs:/app/mock.mjs:ro]
+    command: [node, /app/mock.mjs]
+    ports: ['127.0.0.1:8083:8083']
