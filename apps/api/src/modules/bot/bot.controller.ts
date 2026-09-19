@@ -23,7 +23,11 @@ import { SettingsService } from '../settings/settings.service';
 import { SubscriptionsService } from '../subscriptions/subscriptions.service';
 import { RemnawaveService, RevokeRateLimitError } from '../remnawave/remnawave.service';
 
-const STREAM_MAX_LENGTH = 10_000;
+const appendUpdate = `
+if redis.call('EXISTS', KEYS[2]) == 1 then return 0 end
+redis.call('XADD', KEYS[1], 'MAXLEN', '~', 10000, '*', 'payload', ARGV[1])
+redis.call('SET', KEYS[2], '1', 'EX', 604800)
+return 1`;
 const publicCommandNames = [
   'start',
   'menu',
@@ -64,13 +68,17 @@ export class TelegramWebhookController {
     const token = Array.isArray(header) ? header[0] : header;
     if (!equalToken(secretPath, configuredPath) || !equalToken(token, configuredToken))
       throw new ForbiddenException('FORBIDDEN');
-    await this.infra.redis.xadd(
+    if (
+      !isRecord(body) ||
+      typeof body.update_id !== 'number' ||
+      !Number.isSafeInteger(body.update_id)
+    )
+      throw new BadRequestException('INVALID_UPDATE');
+    await this.infra.redis.eval(
+      appendUpdate,
+      2,
       'tg:updates',
-      'MAXLEN',
-      '~',
-      STREAM_MAX_LENGTH,
-      '*',
-      'payload',
+      `tg:received:${String(body.update_id)}`,
       JSON.stringify(body),
     );
     return { ok: true };
@@ -123,10 +131,12 @@ export class BotInternalController {
     );
     return {
       mode,
+      token: String(await this.settings.get('bot.token')),
+      defaultLocale: await this.settings.get('locale.default'),
       webhookUrl: `https://${domain}/tg/webhook/${secretPath}`,
       secretPath,
       secretToken: String(await this.settings.get('bot.webhook_secret_token')),
-      locales: [...SUPPORTED_LOCALES],
+      locales: await this.settings.get('locale.enabled'),
       commands,
       adminCommands,
       supportForwardChatId,
@@ -334,6 +344,63 @@ export class BotUserController {
       minMinor: String(await this.settings.get('balance.topup_min_minor')),
       maxMinor: String(await this.settings.get('balance.topup_max_minor')),
     };
+  }
+
+  @Post('promocodes/redeem')
+  @HttpCode(200)
+  async redeemPromo(
+    @Headers('x-acting-user') actingUser: string | undefined,
+    @Body() body: unknown,
+  ) {
+    const user = await this.user(actingUser);
+    if (
+      !isRecord(body) ||
+      typeof body.code !== 'string' ||
+      !/^[A-Za-z0-9_-]{3,64}$/u.test(body.code)
+    )
+      throw new BadRequestException('INVALID_BODY');
+    const promo = await this.infra.db.promocode.findFirst({
+      where: { code: { equals: body.code, mode: 'insensitive' }, isActive: true, deletedAt: null },
+      select: { id: true },
+    });
+    if (!promo) throw new BadRequestException('PROMO_NOT_FOUND');
+    await this.infra.db.user.update({
+      where: { id: user.id },
+      data: { pendingPromocodeId: promo.id },
+    });
+    return { reservedForNextPurchase: true };
+  }
+
+  @Post('support/forward')
+  @HttpCode(204)
+  async supportForward(
+    @Headers('x-acting-user') actingUser: string | undefined,
+    @Body() body: unknown,
+  ) {
+    const user = await this.user(actingUser);
+    if (
+      !isRecord(body) ||
+      typeof body.text !== 'string' ||
+      body.text.length < 1 ||
+      body.text.length > 4000
+    )
+      throw new BadRequestException('INVALID_BODY');
+    const chatId = await this.settings.get('brand.support_forward_chat_id');
+    const token = await this.settings.get('bot.token');
+    if (typeof chatId !== 'number' || typeof token !== 'string' || !token) return;
+    const response = await fetch(
+      `https://api.telegram.org/bot${encodeURIComponent(token)}/sendMessage`,
+      {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        signal: AbortSignal.timeout(10_000),
+        body: JSON.stringify({
+          chat_id: chatId,
+          text: `#support ${user.telegramId.toString()}\n${body.text}`,
+        }),
+      },
+    );
+    if (!response.ok) throw new BadRequestException('SUPPORT_UNAVAILABLE');
   }
 
   @Post('invoices')

@@ -15,3 +15,7 @@ Screen handlers call the internal API facade for user state, subscriptions,
 plans, invoices, referrals, and balance data. Subscription QR images are
 generated in memory and sent as PNGs; no subscription or payment rules live in
 the bot process.
+
+Input dialogs use grammY Conversations and `tg:conv:<userId>` storage with a
+ten-minute TTL. `/menu` and other commands cancel an active dialog; invalid
+input is retried three times before the dialog exits.

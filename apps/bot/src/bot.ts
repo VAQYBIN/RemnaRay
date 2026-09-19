@@ -6,8 +6,9 @@ import { Bot, session } from 'grammy';
 import Redis from 'ioredis';
 
 import { ApiClient } from './api-client.js';
-import { BotI18n, normalizeLocale } from './i18n.js';
+import { BotI18n } from './i18n.js';
 import { registerScreens } from './screens/index.js';
+import { installConversations } from './conversations.js';
 import type { BotConfig, BotSession, RrContext } from './types.js';
 
 export type BotRuntime = {
@@ -19,9 +20,12 @@ export type BotRuntime = {
 
 const initialSession = (): BotSession => ({ lang: 'ru' });
 
-export function createBot(
-  options: { token?: string; api?: ApiClient; redis?: Redis } = {},
-): BotRuntime {
+export function createBot(options: {
+  token: string;
+  api?: ApiClient;
+  redis?: Redis;
+  apiRoot?: string;
+}): BotRuntime {
   const api = options.api ?? new ApiClient();
   const redis =
     options.redis ??
@@ -30,11 +34,16 @@ export function createBot(
       maxRetriesPerRequest: null,
     });
   const bot = new Bot<RrContext>(
-    options.token ?? process.env.TELEGRAM_BOT_TOKEN ?? '000000:disabled',
+    options.token,
+    options.apiRoot ? { client: { apiRoot: options.apiRoot } } : {},
   );
   const i18n = new BotI18n(api);
 
   bot.api.config.use(autoRetry({ maxDelaySeconds: 60, maxRetryAttempts: 5 }));
+  bot.use(async (ctx, next) => {
+    if (ctx.callbackQuery) await ctx.answerCallbackQuery();
+    if (ctx.from) await next();
+  });
   bot.use(sequentialize((ctx) => ctx.from?.id.toString()));
   bot.use(
     limit({
@@ -56,12 +65,9 @@ export function createBot(
   bot.use(i18n.middleware());
   bot.use(async (ctx, next) => {
     if (!ctx.from) return next();
-    if (ctx.session.lang === 'ru' && ctx.from.language_code) {
-      ctx.session.lang = normalizeLocale(ctx.from.language_code) ?? ctx.session.lang;
-    }
-    const isStart = ctx.message?.text?.split(/\s+/u)[0]?.toLowerCase() === '/start';
+    const isStart = /^\/start(?:@\w+)?(?:\s|$)/u.test(ctx.message?.text ?? '');
     if (!ctx.session.userInitialized || isStart) {
-      const payload = ctx.message?.text?.split(/\s+/u).slice(1).join(' ') || undefined;
+      const payload = isStart ? ctx.message?.text?.split(/\s+/u).slice(1).join(' ') : undefined;
       const result = await api.upsertUser({
         telegramId: ctx.from.id,
         ...(ctx.from.username ? { username: ctx.from.username } : {}),
@@ -71,13 +77,11 @@ export function createBot(
       });
       ctx.session.lang = result.user.language;
       ctx.session.userInitialized = true;
+      await i18n.bind(ctx, result.user.language);
     }
     await next();
   });
-  bot.on('callback_query', async (ctx, next) => {
-    await ctx.answerCallbackQuery();
-    await next();
-  });
+  installConversations(bot, redis, api);
   bot.catch((error) => {
     const updateId = error.ctx.update.update_id;
     const chatId = error.ctx.chat?.id;

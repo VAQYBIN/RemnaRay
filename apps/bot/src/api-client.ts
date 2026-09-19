@@ -114,6 +114,8 @@ export class ApiClient {
     const request: RequestInit = {
       method: options.method ?? 'GET',
       headers,
+      signal: AbortSignal.timeout(10_000),
+      redirect: 'error',
       ...(options.body === undefined ? {} : { body: JSON.stringify(options.body) }),
     };
     const response = await this.fetchImpl(`${this.baseUrl}${path}`, request);
@@ -174,6 +176,25 @@ export class ApiClient {
       '/api/internal/v1/me',
       { method: 'PATCH', userId: telegramId, body },
     );
+  }
+
+  redeemPromo(telegramId: number, code: string) {
+    return this.request<{ reservedForNextPurchase: boolean }>(
+      '/api/internal/v1/me/promocodes/redeem',
+      {
+        method: 'POST',
+        userId: telegramId,
+        body: { code },
+      },
+    );
+  }
+
+  forwardSupport(telegramId: number, messageId: number, message: string) {
+    return this.request<unknown>('/api/internal/v1/support/forward', {
+      method: 'POST',
+      userId: telegramId,
+      body: { telegramId, messageId, text: message },
+    });
   }
 
   getPlans() {

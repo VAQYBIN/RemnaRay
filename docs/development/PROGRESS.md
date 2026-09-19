@@ -6,7 +6,9 @@ M3
 
 ## Current task
 
-TASK-M3-003 is next; TASK-M3-002 is verified and committed.
+TASK-M3-004 is next; TASK-M3-003 is implemented, verified, and ready to commit.
+M3-001 and M3-002 received runtime corrections in this commit series; their
+remaining acceptance gaps are tracked below.
 
 ## Completed tasks
 
@@ -282,3 +284,37 @@ contract tests. No credentials were required for TASK-M3-001.
 ## Next
 
 M3-003 is next. Do not start M4.
+
+## M3 acceptance correction
+
+The earlier M3 completion statements above describe partial implementation,
+not acceptance. Commits 4829297 and f59894c must not be treated as proof of DoD.
+No history has been rewritten. Confirmed gaps under repair:
+
+- M3-001: transport switching and pending-update recovery have no integration
+  acceptance test; throttled callbacks are not acknowledged; startup still
+  depends on TELEGRAM_BOT_TOKEN instead of settings; catalogs export TS source.
+- M3-002: QR is generated in bot instead of API; client links and trial settings
+  are hardcoded; missing device/plan-change/invoice-cancel/referral-list screens;
+  no executing AC-042; OpenAPI has not been regenerated.
+- M3-003: uncommitted conversations are in progress and have not passed tests.
+- M3-005 depends explicitly on M4-002. M3-006 E2E-01 steps 3/6/8 depend on
+  notification/referral modules scheduled in M4-007/M4-006. User was asked to
+  resolve the milestone-order contradiction; independent M3 work continues.
+
+Next: repair and verify independent M3-001 transport/runtime acceptance before
+accepting further tasks. Do not start M4 without resolving the ordering conflict.
+
+## M3-003 verification
+
+- Context7 documentation was checked for `@grammyjs/conversations`, including
+  replay storage, filtered waits, timeout handling, and conversation exit.
+- Added Valkey-backed conversation storage with a 10-minute TTL, promo,
+  custom top-up, receipt email, and support-message flows, three-attempt
+  validation, command cancellation, and support forwarding.
+- Added internal API boundaries for promo reservation and support forwarding;
+  updated OpenAPI and both locale catalogs.
+- `@remnaray/bot`: lint, typecheck, 8 tests, and build passed.
+- `@remnaray/api`: lint, typecheck, 31 tests, and build passed.
+- i18n lint/typecheck/tests, root tooling tests (10), full Turbo build, and
+  Prettier passed.

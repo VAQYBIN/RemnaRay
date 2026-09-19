@@ -65,12 +65,22 @@ export const botCatalogs: Record<Locale, MessageCatalog> = {
     'bot.screen.notifications.enabled': 'Маркетинговые уведомления включены.',
     'bot.screen.notifications.disabled': 'Маркетинговые уведомления выключены.',
     'bot.screen.email.ask': 'Введите email для чека или нажмите «Пропустить».',
+    'bot.screen.email.saved': 'Email сохранён.',
+    'bot.screen.promo.ask': 'Введите промокод.',
+    'bot.screen.promo.accepted': 'Промокод применён к следующей покупке.',
+    'bot.screen.topup.ask': 'Введите сумму в рублях.',
+    'bot.screen.support.ask': 'Напишите сообщение оператору.',
+    'bot.screen.support.sent': 'Сообщение передано оператору.',
     'bot.screen.help.text': 'Выберите действие в меню. Для навигации используйте кнопки.',
     'bot.error.generic': 'Произошла ошибка. Код: {incidentId}',
     'bot.error.panel_unavailable': 'Панель временно недоступна. Попробуйте позже.',
     'bot.error.too_many_attempts': 'Слишком много неверных вводов. Диалог завершён.',
     'bot.error.bot_blocked': 'Не удалось отправить сообщение: пользователь заблокировал бота.',
     'bot.error.invoice_expired': 'Счёт истёк. Создайте новый.',
+    'bot.error.invalid_amount': 'Сумма вне допустимого диапазона.',
+    'bot.error.provider_unavailable': 'Способ оплаты временно недоступен.',
+    'bot.error.invalid_input': 'Неверный формат. Попробуйте ещё раз.',
+    'bot.error.conversation_timeout': 'Время ожидания истекло.',
     'bot.error.revoke_rate_limited': 'Ссылку можно сбросить только один раз за 24 часа.',
     'bot.admin.stats': 'Статистика пока недоступна.',
     'bot.admin.user': 'Пользователь: {id}',
@@ -138,12 +148,22 @@ export const botCatalogs: Record<Locale, MessageCatalog> = {
     'bot.screen.notifications.enabled': 'Marketing notifications are enabled.',
     'bot.screen.notifications.disabled': 'Marketing notifications are disabled.',
     'bot.screen.email.ask': 'Enter an email for the receipt or press “Skip”.',
+    'bot.screen.email.saved': 'Email saved.',
+    'bot.screen.promo.ask': 'Enter a promo code.',
+    'bot.screen.promo.accepted': 'The promo code is reserved for your next purchase.',
+    'bot.screen.topup.ask': 'Enter an amount in RUB.',
+    'bot.screen.support.ask': 'Write a message to support.',
+    'bot.screen.support.sent': 'Your message was sent to support.',
     'bot.screen.help.text': 'Choose an action from the menu. Use the buttons to navigate.',
     'bot.error.generic': 'Something went wrong. Code: {incidentId}',
     'bot.error.panel_unavailable': 'The panel is temporarily unavailable. Try again later.',
     'bot.error.too_many_attempts': 'Too many invalid inputs. The dialog was closed.',
     'bot.error.bot_blocked': 'The message could not be delivered because the bot is blocked.',
     'bot.error.invoice_expired': 'The invoice has expired. Create a new one.',
+    'bot.error.invalid_amount': 'The amount is outside the allowed range.',
+    'bot.error.provider_unavailable': 'Payment methods are temporarily unavailable.',
+    'bot.error.invalid_input': 'Invalid format. Try again.',
+    'bot.error.conversation_timeout': 'The input timed out.',
     'bot.error.revoke_rate_limited': 'The subscription link can be reset only once every 24 hours.',
     'bot.admin.stats': 'Statistics are unavailable.',
     'bot.admin.user': 'User: {id}',
@@ -162,5 +182,23 @@ export function formatMessage(
   values: Record<string, unknown> = {},
 ): string {
   const template = messages[key] ?? botCatalogs[locale][key] ?? botCatalogs.ru[key] ?? key;
-  return String(new IntlMessageFormat(template, locale).format(values));
+  return String(
+    new IntlMessageFormat(template, locale, undefined, { ignoreTag: true }).format(
+      Object.fromEntries(
+        Object.entries(values).map(([key, value]) => [
+          key,
+          typeof value === 'string' ? escapeHtml(value) : value,
+        ]),
+      ),
+    ),
+  );
+}
+
+export function escapeHtml(value: string): string {
+  return value
+    .replaceAll('&', '&amp;')
+    .replaceAll('<', '&lt;')
+    .replaceAll('>', '&gt;')
+    .replaceAll('"', '&quot;')
+    .replaceAll("'", '&#39;');
 }

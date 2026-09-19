@@ -100,10 +100,7 @@ export class UsersRepository implements UsersRepositoryPort {
               data: {
                 username: input.username ?? existing.username,
                 firstName: input.firstName ?? existing.firstName,
-                language:
-                  input.languageCode === 'ru' || input.languageCode === 'en'
-                    ? input.languageCode
-                    : existing.language,
+                language: existing.language,
                 ...(referrerId ? { referrerId } : {}),
                 lastSeenAt: new Date(),
               },

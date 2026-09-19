@@ -1,4 +1,5 @@
 import type { Context, SessionFlavor } from 'grammy';
+import type { ConversationFlavor } from '@grammyjs/conversations';
 
 import type { Locale } from '@remnaray/i18n-core';
 
@@ -16,7 +17,8 @@ export type I18nFlavor = {
   t: (key: string, values?: Record<string, unknown>) => string;
 };
 
-export type RrContext = Context & SessionFlavor<BotSession> & I18nFlavor;
+export type BaseContext = Context & SessionFlavor<BotSession> & I18nFlavor;
+export type RrContext = ConversationFlavor<BaseContext>;
 
 export const ALLOWED_UPDATES = [
   'message',
@@ -26,6 +28,8 @@ export const ALLOWED_UPDATES = [
 ] as const;
 
 export type BotConfig = {
+  token: string;
+  defaultLocale: Locale;
   mode: 'webhook' | 'polling';
   webhookUrl: string;
   secretPath: string;

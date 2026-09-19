@@ -54,4 +54,16 @@ describe('ApiClient', () => {
       code: 'PANEL_UNAVAILABLE',
     });
   });
+
+  it('sends support text through the internal boundary', async () => {
+    let body = '';
+    const api = new ApiClient({
+      fetchImpl: (_input, init) => {
+        body = typeof init?.body === 'string' ? init.body : '';
+        return Promise.resolve(new Response(null, { status: 204 }));
+      },
+    });
+    await api.forwardSupport(42, 7, 'hello');
+    expect(body).toContain('hello');
+  });
 });

@@ -12,7 +12,7 @@ describe('bot ingress boundary', () => {
     const controller = new TelegramWebhookController(
       {
         redis: {
-          xadd: (...args: unknown[]) => {
+          eval: (...args: unknown[]) => {
             calls.push(args);
             return Promise.resolve('1-0');
           },

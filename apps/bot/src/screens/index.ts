@@ -14,14 +14,15 @@ export function registerScreens(bot: Bot<RrContext>, api: ApiClient): void {
   bot.command('menu', (ctx) => showHome(ctx, api));
   bot.command('buy', (ctx) => showPlans(ctx, api));
   bot.command('sub', (ctx) => showSubscription(ctx, api));
+  bot.command('promo', (ctx) => ctx.conversation.enter('promoEnter'));
+  bot.callbackQuery('promo:enter', (ctx) => ctx.conversation.enter('promoEnter'));
+  bot.callbackQuery('topup:custom', (ctx) => ctx.conversation.enter('topupCustom'));
   bot.command('balance', (ctx) => showBalance(ctx, api));
   bot.command('ref', (ctx) => showReferrals(ctx, api));
   bot.command('lang', (ctx) => showLanguage(ctx));
   bot.command('notifications', (ctx) => showNotifications(ctx, api));
   bot.command('help', (ctx) => show(ctx, ctx.t('bot.screen.help.text'), backButton(ctx)));
-  bot.command('support', (ctx) =>
-    show(ctx, ctx.t('bot.screen.support.details', { contact: 'support' }), backButton(ctx)),
-  );
+  bot.command('support', (ctx) => ctx.conversation.enter('supportMessage'));
   bot.callbackQuery('home', (ctx) => showHome(ctx, api));
   bot.callbackQuery('profile', (ctx) => showHome(ctx, api));
   bot.callbackQuery('plans', (ctx) => showPlans(ctx, api));
@@ -61,7 +62,7 @@ export function registerScreens(bot: Bot<RrContext>, api: ApiClient): void {
   bot.callbackQuery(/^lang:(ru|en)$/u, (ctx) =>
     setLanguage(ctx, api, capture(ctx.match, 1) as 'ru' | 'en'),
   );
-  bot.callbackQuery('support', (ctx) => showSupport(ctx, api));
+  bot.callbackQuery('support', (ctx) => ctx.conversation.enter('supportMessage'));
   bot.callbackQuery('notif:toggle', (ctx) => toggleNotifications(ctx, api));
   bot.callbackQuery('email:ask', (ctx) =>
     show(ctx, ctx.t('bot.screen.email.ask'), backButton(ctx)),
@@ -170,16 +171,6 @@ async function toggleNotifications(ctx: RrContext, api: ApiClient): Promise<void
   const state = await api.getMe(ctx.from.id);
   await api.patchMe(ctx.from.id, { marketingOptOut: !state.user.marketingOptOut });
   await showNotifications(ctx, api);
-}
-
-async function showSupport(ctx: RrContext, api: ApiClient): Promise<void> {
-  const config = await api.getConfig();
-  const keyboard = new InlineKeyboard().text(ctx.t('bot.btn.back'), 'home');
-  await show(
-    ctx,
-    ctx.t('bot.screen.support.details', { contact: config.supportContact }),
-    keyboard,
-  );
 }
 
 function capture(match: string | RegExpMatchArray, index: number): string {

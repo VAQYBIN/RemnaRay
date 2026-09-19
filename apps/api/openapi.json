@@ -1,131 +1,232 @@
 {
   "openapi": "3.0.3",
-  "info": { "title": "RemnaRay API", "version": "0.1.0" },
+  "info": {
+    "title": "RemnaRay API",
+    "version": "0.1.0"
+  },
   "paths": {
     "/api/v1/auth/telegram": {
       "post": {
         "operationId": "telegramLogin",
-        "responses": { "200": { "description": "Authenticated user" } }
+        "responses": {
+          "200": {
+            "description": "Authenticated user"
+          }
+        }
       }
     },
     "/api/v1/auth/logout": {
-      "post": { "operationId": "logout", "responses": { "204": { "description": "Logged out" } } }
+      "post": {
+        "operationId": "logout",
+        "responses": {
+          "204": {
+            "description": "Logged out"
+          }
+        }
+      }
     },
     "/api/v1/me": {
       "get": {
         "operationId": "getCurrentUser",
-        "responses": { "200": { "description": "Current user" } }
+        "responses": {
+          "200": {
+            "description": "Current user"
+          }
+        }
       }
     },
     "/api/internal/v1/auth/issue-token": {
       "post": {
         "operationId": "issueBotToken",
-        "responses": { "200": { "description": "Bot JWT" } }
+        "responses": {
+          "200": {
+            "description": "Bot JWT"
+          }
+        }
       }
     },
     "/api/internal/v1/ledger/users/{userId}/available": {
       "get": {
         "operationId": "getLedgerAvailable",
-        "responses": { "200": { "description": "Spendable balance in minor units" } }
+        "responses": {
+          "200": {
+            "description": "Spendable balance in minor units"
+          }
+        }
       }
     },
     "/api/v1/public/plans": {
       "get": {
         "operationId": "getPublicPlans",
-        "responses": { "200": { "description": "Public plans" } }
+        "responses": {
+          "200": {
+            "description": "Public plans"
+          }
+        }
       }
     },
     "/api/v1/me/subscription": {
       "get": {
         "operationId": "getCurrentSubscription",
-        "responses": { "200": { "description": "Current subscription" } }
+        "responses": {
+          "200": {
+            "description": "Current subscription"
+          }
+        }
       }
     },
     "/api/v1/me/trial": {
       "post": {
         "operationId": "startTrial",
-        "responses": { "201": { "description": "Trial subscription" } }
+        "responses": {
+          "201": {
+            "description": "Trial subscription"
+          }
+        }
       }
     },
     "/api/v1/me/subscription/change/quote": {
       "post": {
         "operationId": "quotePlanChange",
-        "responses": { "201": { "description": "Plan change quote" } }
+        "responses": {
+          "201": {
+            "description": "Plan change quote"
+          }
+        }
       }
     },
     "/api/v1/me/subscription/change/apply": {
       "post": {
         "operationId": "applyPlanChange",
-        "responses": { "201": { "description": "Changed subscription" } }
+        "responses": {
+          "201": {
+            "description": "Changed subscription"
+          }
+        }
       }
     },
     "/api/internal/v1/subscriptions/expire": {
       "post": {
         "operationId": "expireSubscriptions",
-        "responses": { "201": { "description": "Expired subscription count" } }
+        "responses": {
+          "201": {
+            "description": "Expired subscription count"
+          }
+        }
       }
     },
     "/api/internal/v1/remnawave/health": {
       "get": {
         "operationId": "remnawaveHealth",
-        "responses": { "200": { "description": "Panel health" } }
+        "responses": {
+          "200": {
+            "description": "Panel health"
+          }
+        }
       }
     },
     "/api/internal/v1/remnawave/reconcile": {
       "post": {
         "operationId": "remnawaveReconcile",
-        "responses": { "200": { "description": "Reconcile result" } }
+        "responses": {
+          "200": {
+            "description": "Reconcile result"
+          }
+        }
       }
     },
     "/webhooks/remnawave": {
       "post": {
         "operationId": "remnawaveWebhook",
-        "responses": { "200": { "description": "Webhook result" } }
+        "responses": {
+          "200": {
+            "description": "Webhook result"
+          }
+        }
       }
     },
     "/api/admin/v1/plans": {
-      "get": { "operationId": "listPlans", "responses": { "200": { "description": "Plans" } } },
+      "get": {
+        "operationId": "listPlans",
+        "responses": {
+          "200": {
+            "description": "Plans"
+          }
+        }
+      },
       "post": {
         "operationId": "createPlan",
-        "responses": { "201": { "description": "Created plan" } }
+        "responses": {
+          "201": {
+            "description": "Created plan"
+          }
+        }
       }
     },
     "/api/admin/v1/plans/{id}": {
       "patch": {
         "operationId": "updatePlan",
-        "responses": { "200": { "description": "Updated plan" } }
+        "responses": {
+          "200": {
+            "description": "Updated plan"
+          }
+        }
       },
       "delete": {
         "operationId": "deletePlan",
-        "responses": { "200": { "description": "Deleted plan" } }
+        "responses": {
+          "200": {
+            "description": "Deleted plan"
+          }
+        }
       }
     },
     "/api/internal/v1/users/upsert": {
       "post": {
         "operationId": "upsertInternalUser",
-        "responses": { "200": { "description": "Upserted user" } }
+        "responses": {
+          "200": {
+            "description": "Upserted user"
+          }
+        }
       }
     },
     "/api/admin/v1/settings": {
       "get": {
         "operationId": "getSettings",
-        "responses": { "200": { "description": "Grouped settings" } }
+        "responses": {
+          "200": {
+            "description": "Grouped settings"
+          }
+        }
       },
       "put": {
         "operationId": "updateSettings",
-        "responses": { "200": { "description": "Updated settings" } }
+        "responses": {
+          "200": {
+            "description": "Updated settings"
+          }
+        }
       }
     },
     "/api/admin/v1/settings/schema": {
       "get": {
         "operationId": "getSettingsSchema",
-        "responses": { "200": { "description": "Settings schema" } }
+        "responses": {
+          "200": {
+            "description": "Settings schema"
+          }
+        }
       }
     },
     "/api/admin/v1/settings/export": {
       "get": {
         "operationId": "exportSettings",
-        "responses": { "200": { "description": "Safe settings snapshot" } }
+        "responses": {
+          "200": {
+            "description": "Safe settings snapshot"
+          }
+        }
       }
     },
     "/api/v1/me/invoices": {
@@ -136,12 +237,18 @@
             "in": "header",
             "name": "Idempotency-Key",
             "required": true,
-            "schema": { "type": "string" }
+            "schema": {
+              "type": "string"
+            }
           }
         ],
         "responses": {
-          "201": { "description": "Created invoice" },
-          "409": { "description": "Payment validation error" }
+          "201": {
+            "description": "Created invoice"
+          },
+          "409": {
+            "description": "Payment validation error"
+          }
         }
       }
     },
@@ -153,12 +260,19 @@
             "in": "path",
             "name": "id",
             "required": true,
-            "schema": { "type": "string", "format": "uuid" }
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
           }
         ],
         "responses": {
-          "200": { "description": "Invoice status" },
-          "429": { "description": "One check per 10 seconds" }
+          "200": {
+            "description": "Invoice status"
+          },
+          "429": {
+            "description": "One check per 10 seconds"
+          }
         }
       }
     },
@@ -166,37 +280,137 @@
       "post": {
         "operationId": "paymentWebhook",
         "parameters": [
-          { "in": "path", "name": "provider", "required": true, "schema": { "type": "string" } }
+          {
+            "in": "path",
+            "name": "provider",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
         ],
         "requestBody": {
           "required": true,
           "content": {
-            "application/json": { "schema": { "type": "object" } },
-            "application/x-www-form-urlencoded": { "schema": { "type": "object" } }
+            "application/json": {
+              "schema": {
+                "type": "object"
+              }
+            },
+            "application/x-www-form-urlencoded": {
+              "schema": {
+                "type": "object"
+              }
+            }
           }
         },
         "responses": {
-          "200": { "description": "Acknowledged" },
-          "400": { "description": "Invalid signature" }
+          "200": {
+            "description": "Acknowledged"
+          },
+          "400": {
+            "description": "Invalid signature"
+          }
         }
       }
     },
     "/api/internal/v1/payments/expire": {
       "post": {
         "operationId": "expireInvoices",
-        "responses": { "200": { "description": "Expired count" } }
+        "responses": {
+          "200": {
+            "description": "Expired count"
+          }
+        }
       }
     },
     "/api/internal/v1/payments/poll-pending": {
       "post": {
         "operationId": "pollPendingInvoices",
-        "responses": { "200": { "description": "Polled count" } }
+        "responses": {
+          "200": {
+            "description": "Polled count"
+          }
+        }
       }
     },
     "/api/admin/v1/settings/import": {
       "post": {
         "operationId": "importSettings",
-        "responses": { "200": { "description": "Imported settings" } }
+        "responses": {
+          "200": {
+            "description": "Imported settings"
+          }
+        }
+      }
+    },
+    "/api/internal/v1/me/promocodes/redeem": {
+      "post": {
+        "operationId": "redeemBotPromo",
+        "responses": {
+          "200": {
+            "description": "Promo reserved"
+          },
+          "400": {
+            "description": "Invalid promo"
+          }
+        }
+      }
+    },
+    "/api/internal/v1/support/forward": {
+      "post": {
+        "operationId": "forwardBotSupport",
+        "responses": {
+          "204": {
+            "description": "Forwarded"
+          },
+          "400": {
+            "description": "Support unavailable"
+          }
+        }
+      }
+    },
+    "/api/internal/v1/me/topup-config": {
+      "get": {
+        "operationId": "getBotTopupConfig",
+        "responses": {
+          "200": {
+            "description": "Top-up limits"
+          }
+        }
+      }
+    },
+    "/api/internal/v1/me/transactions": {
+      "get": {
+        "operationId": "getBotTransactions",
+        "responses": {
+          "200": {
+            "description": "Recent transactions"
+          }
+        }
+      }
+    },
+    "/api/internal/v1/me/referrals": {
+      "get": {
+        "operationId": "getBotReferrals",
+        "responses": {
+          "200": {
+            "description": "Referral summary"
+          }
+        }
+      }
+    },
+    "/api/internal/v1/me/subscription/revoke": {
+      "post": {
+        "operationId": "revokeBotSubscription",
+        "responses": {
+          "200": {
+            "description": "New subscription URL"
+          },
+          "429": {
+            "description": "Revoke rate limited"
+          }
+        }
       }
     }
   }

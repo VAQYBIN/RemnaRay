@@ -22,12 +22,16 @@ export class BotI18n {
     return response.messages;
   }
 
+  async bind(ctx: RrContext, locale: Locale): Promise<void> {
+    const messages = await this.catalog(locale);
+    ctx.locale = locale;
+    ctx.t = (key, values = {}) => formatMessage(locale, messages, key, values);
+  }
+
   middleware(): Middleware<RrContext> {
     return async (ctx, next) => {
       const locale = ctx.session.lang;
-      const messages = await this.catalog(locale);
-      ctx.locale = locale;
-      ctx.t = (key, values = {}) => formatMessage(locale, messages, key, values);
+      await this.bind(ctx, locale);
       await next();
     };
   }
