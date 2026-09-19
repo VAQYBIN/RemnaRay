@@ -98,6 +98,9 @@ importers:
       '@node-rs/argon2':
         specifier: ~2.2.1
         version: 2.2.1
+      '@remnaray/db':
+        specifier: workspace:*
+        version: link:../../packages/db
       '@scalar/nestjs-api-reference':
         specifier: ~1.2.19
         version: 1.2.19
@@ -110,6 +113,9 @@ importers:
       intl-messageformat:
         specifier: ~12.1.1
         version: 12.1.1
+      ioredis:
+        specifier: ~5.11.1
+        version: 5.11.1
       nestjs-pino:
         specifier: ~5.2.0
         version: 5.2.0(@nestjs/common@12.0.3(reflect-metadata@0.2.2)(rxjs@7.8.2))(@nestjs/core@12.0.3(@nestjs/common@12.0.3(reflect-metadata@0.2.2)(rxjs@7.8.2))(reflect-metadata@0.2.2)(rxjs@7.8.2))(pino-http@11.0.0)(pino@10.3.1)(rxjs@7.8.2)
@@ -135,6 +141,9 @@ importers:
       '@nestjs/testing':
         specifier: 12.0.3
         version: 12.0.3(@nestjs/common@12.0.3(reflect-metadata@0.2.2)(rxjs@7.8.2))(@nestjs/core@12.0.3(@nestjs/common@12.0.3(reflect-metadata@0.2.2)(rxjs@7.8.2))(reflect-metadata@0.2.2)(rxjs@7.8.2))
+      vitest:
+        specifier: ~5.0.1
+        version: 5.0.1(@types/node@24.13.6)(vite@8.3.0(@types/node@24.13.6)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.13)(yaml@2.9.1))
 
   apps/bot:
     dependencies:

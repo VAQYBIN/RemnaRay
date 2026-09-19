@@ -2,11 +2,11 @@
 
 ## Current milestone
 
-M0
+M1
 
 ## Current task
 
-M0 complete — TASK-M0-009 committed; M1 not started.
+TASK-M1-002 — users, channel identities, referral codes, and internal upsert.
 
 ## Completed tasks
 
@@ -33,6 +33,10 @@ M0 complete — TASK-M0-009 committed; M1 not started.
   development dependencies, safe environment initialization, and `./rr`.
 - TASK-M0-009 — added GitHub Actions CI for Node 24/26 quality checks,
   package tests, Turbo build, and non-publishing app/web Docker builds.
+- TASK-M1-001 — added the section 17.3 settings registry and Zod schemas,
+  AES-256-GCM secret envelopes, transactional Prisma repository, Redis Pub/Sub
+  cache invalidation, grouped admin settings API, schema endpoint, and safe
+  export/import.
 
 ## Verification
 
@@ -119,13 +123,19 @@ blocker is resolved.
 - TASK-M0-009 acceptance checks passed: workflow coverage test, ten root tests,
   lint, typecheck, and formatting. Hosted GitHub Actions execution remains an
   external gate.
+- TASK-M1-001 acceptance checks passed: six settings unit tests, Prisma runtime
+  client build, API test, lint, typecheck, formatting, and full Turbo build.
+  OpenAPI includes the settings routes; no migration was needed because M0-007
+  already created the complete `settings` table.
 
 ## Known blockers
 
-M0 implementation is complete. Hosted GitHub Actions execution and maintainer
-review are external gates; M1 remains intentionally unstarted. The later
-`proxy-smoke` and full e2e gates belong to their scheduled milestones.
+M1 implementation is in progress. Hosted GitHub Actions execution and
+maintainer review remain external gates. The later `proxy-smoke` and full e2e
+gates belong to their scheduled milestones.
 
 ## Next
 
-M1 is not started. Resume only after the M0 hosted CI/review gate is accepted.
+Implement `TASK-M1-002`: users, channel identities, referral code generation,
+and `POST /api/internal/v1/users/upsert` with referral/promo/plan payload
+parsing and unique `telegram_id` handling.

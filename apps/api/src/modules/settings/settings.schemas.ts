@@ -1,0 +1,487 @@
+import { z } from 'zod';
+
+const emptyOrUrl = z.union([z.url(), z.literal('')]);
+const minorAmount = z.string().regex(/^\d+$/, 'must be a non-negative integer in minor units');
+const locale = z.enum(['ru', 'en']);
+const clientLink = z.object({
+  id: z.string().min(1),
+  name: z.string().min(1),
+  platforms: z.array(z.string().min(1)),
+  deepLinkTemplate: z.string().min(1),
+  storeUrls: z.record(z.string(), z.url().or(z.literal(''))),
+});
+const webhook = z.object({
+  url: z.url(),
+  secret: z.string().min(1),
+  events: z.array(z.string().min(1)).min(1),
+  enabled: z.boolean().default(true),
+});
+
+export type SettingsGroup =
+  | 'setup'
+  | 'brand'
+  | 'domain'
+  | 'locale'
+  | 'theme'
+  | 'panel'
+  | 'bot'
+  | 'trial'
+  | 'subscription'
+  | 'invoice'
+  | 'balance'
+  | 'fiscal'
+  | 'referral'
+  | 'notifications'
+  | 'clients'
+  | 'webhooks'
+  | 'operator'
+  | 'admin'
+  | 'legal';
+
+export type SettingDefinition = {
+  group: SettingsGroup;
+  name: string;
+  schema: z.ZodType;
+  defaultValue: unknown;
+  secret: boolean;
+  description: string;
+};
+
+const definitions = (
+  group: SettingsGroup,
+  fields: Record<
+    string,
+    { schema: z.ZodType; defaultValue: unknown; secret?: boolean; description: string }
+  >,
+): SettingDefinition[] =>
+  Object.entries(fields).map(([name, field]) => ({
+    group,
+    name,
+    schema: field.schema,
+    defaultValue: field.defaultValue,
+    secret: field.secret ?? false,
+    description: field.description,
+  }));
+
+export const settingRegistry: SettingDefinition[] = [
+  ...definitions('setup', {
+    completed: {
+      schema: z.boolean(),
+      defaultValue: false,
+      description: 'Whether the initial setup wizard has completed.',
+    },
+    step: {
+      schema: z.string(),
+      defaultValue: '0',
+      description: 'Current setup wizard step.',
+    },
+  }),
+  ...definitions('brand', {
+    name: {
+      schema: z.string().min(1),
+      defaultValue: 'RemnaRay Shop',
+      description: 'Public shop name.',
+    },
+    slogan: {
+      schema: z.object({ ru: z.string(), en: z.string() }),
+      defaultValue: { ru: '', en: '' },
+      description: 'Localized public slogan.',
+    },
+    hide_powered_by: {
+      schema: z.boolean(),
+      defaultValue: false,
+      description: 'Hide the RemnaRay attribution.',
+    },
+    support_contact: {
+      schema: z.string(),
+      defaultValue: '',
+      description: 'Support Telegram handle or URL.',
+    },
+    support_forward_chat_id: {
+      schema: z.number().int().nullable(),
+      defaultValue: null,
+      description: 'Optional Telegram chat for forwarded support messages.',
+    },
+  }),
+  ...definitions('domain', {
+    main: {
+      schema: z.string().min(1),
+      defaultValue: process.env.RR_DOMAIN ?? 'localhost',
+      description: 'Primary public domain.',
+    },
+    acme_email: {
+      schema: z.email().or(z.literal('')),
+      defaultValue: process.env.RR_ACME_EMAIL ?? '',
+      description: 'Email used for ACME certificates.',
+    },
+    extra_domains: {
+      schema: z.array(z.string().min(1)),
+      defaultValue: [],
+      description: 'Additional domains that redirect to the primary domain.',
+    },
+  }),
+  ...definitions('locale', {
+    default: { schema: locale, defaultValue: 'ru', description: 'Default locale.' },
+    enabled: {
+      schema: z.array(locale).min(1),
+      defaultValue: ['ru', 'en'],
+      description: 'Enabled locales.',
+    },
+    timezone: {
+      schema: z.string().min(1),
+      defaultValue: 'Europe/Moscow',
+      description: 'IANA timezone for display and scheduled work.',
+    },
+  }),
+  ...definitions('theme', {
+    slug: { schema: z.string().min(1), defaultValue: 'manta', description: 'Active theme slug.' },
+  }),
+  ...definitions('panel', {
+    base_url: { schema: emptyOrUrl, defaultValue: '', description: 'Remnawave panel URL.' },
+    api_token: {
+      schema: z.string(),
+      defaultValue: '',
+      secret: true,
+      description: 'Remnawave API token.',
+    },
+    webhook_secret: {
+      schema: z.string(),
+      defaultValue: '',
+      secret: true,
+      description: 'Secret used to authenticate panel webhooks.',
+    },
+    extra_headers: {
+      schema: z.record(z.string(), z.string()),
+      defaultValue: {},
+      description: 'Additional headers sent to the panel.',
+    },
+    respect_manual_expire: {
+      schema: z.boolean(),
+      defaultValue: false,
+      description: 'Respect manual panel expiry changes.',
+    },
+    username_prefix: {
+      schema: z.string().min(1),
+      defaultValue: 'rr_',
+      description: 'Prefix for panel usernames.',
+    },
+  }),
+  ...definitions('bot', {
+    token: {
+      schema: z.string(),
+      defaultValue: '',
+      secret: true,
+      description: 'Telegram bot token.',
+    },
+    username: {
+      schema: z.string(),
+      defaultValue: '',
+      description: 'Cached Telegram bot username.',
+    },
+    mode: {
+      schema: z.enum(['webhook', 'polling']),
+      defaultValue: 'webhook',
+      description: 'Telegram update ingress mode.',
+    },
+    webhook_secret_path: {
+      schema: z.string(),
+      defaultValue: '',
+      secret: true,
+      description: 'Secret path segment for the Telegram webhook.',
+    },
+    webhook_secret_token: {
+      schema: z.string(),
+      defaultValue: '',
+      secret: true,
+      description: 'Telegram webhook secret token.',
+    },
+    admin_language: {
+      schema: locale,
+      defaultValue: 'ru',
+      description: 'Language of bot admin notifications.',
+    },
+  }),
+  ...definitions('trial', {
+    enabled: {
+      schema: z.boolean(),
+      defaultValue: true,
+      description: 'Enable trial subscriptions.',
+    },
+    days: {
+      schema: z.number().int().min(0).max(3650),
+      defaultValue: 3,
+      description: 'Trial duration.',
+    },
+    traffic_gb: {
+      schema: z.number().int().min(0),
+      defaultValue: 10,
+      description: 'Trial traffic limit in gigabytes.',
+    },
+    device_limit: {
+      schema: z.number().int().min(0),
+      defaultValue: 1,
+      description: 'Trial device limit.',
+    },
+    squads: { schema: z.array(z.uuid()), defaultValue: [], description: 'Trial panel squad IDs.' },
+  }),
+  ...definitions('subscription', {
+    grace_hours: {
+      schema: z.number().int().min(0).max(8760),
+      defaultValue: 0,
+      description: 'Grace period after expiry.',
+    },
+    user_can_remove_devices: {
+      schema: z.boolean(),
+      defaultValue: true,
+      description: 'Allow users to remove panel devices.',
+    },
+    revoke_cooldown_hours: {
+      schema: z.number().int().min(0).max(8760),
+      defaultValue: 24,
+      description: 'Cooldown before a revoked subscription can be reactivated.',
+    },
+  }),
+  ...definitions('invoice', {
+    ttl_minutes: {
+      schema: z.number().int().min(1).max(10080),
+      defaultValue: 30,
+      description: 'Invoice lifetime in minutes.',
+    },
+    ttl_minutes_crypto: {
+      schema: z.number().int().min(1).max(10080),
+      defaultValue: 60,
+      description: 'Crypto invoice lifetime in minutes.',
+    },
+    underpaid_tolerance_pct: {
+      schema: z.number().min(0).max(100),
+      defaultValue: 2,
+      description: 'Allowed underpayment percentage.',
+    },
+  }),
+  ...definitions('balance', {
+    topup_enabled: {
+      schema: z.boolean(),
+      defaultValue: true,
+      description: 'Enable balance top-ups.',
+    },
+    topup_presets_minor: {
+      schema: z.array(minorAmount),
+      defaultValue: ['10000', '30000', '50000', '100000'],
+      description: 'Preset top-up amounts in minor units.',
+    },
+    topup_min_minor: {
+      schema: minorAmount,
+      defaultValue: '5000',
+      description: 'Minimum top-up in minor units.',
+    },
+    topup_max_minor: {
+      schema: minorAmount,
+      defaultValue: '1000000',
+      description: 'Maximum top-up in minor units.',
+    },
+  }),
+  ...definitions('fiscal', {
+    mode: {
+      schema: z.enum(['none', 'receipt', 'manual']),
+      defaultValue: 'none',
+      description: 'Fiscalization mode.',
+    },
+    self_employed: {
+      schema: z.boolean(),
+      defaultValue: false,
+      description: 'Self-employed tax status.',
+    },
+    vat_code: { schema: z.number().int().min(1), defaultValue: 1, description: 'VAT code.' },
+    sno: { schema: z.string().min(1), defaultValue: 'npd', description: 'Taxation system code.' },
+    fallback_email: {
+      schema: z.email().or(z.literal('')),
+      defaultValue: '',
+      description: 'Receipt fallback email.',
+    },
+    item_name_template: {
+      schema: z.string().min(1),
+      defaultValue: 'Subscription {plan}',
+      description: 'Receipt item name template.',
+    },
+  }),
+  ...definitions('referral', {
+    enabled: { schema: z.boolean(), defaultValue: true, description: 'Enable referrals.' },
+    mode: {
+      schema: z.enum(['percent_first', 'percent_all', 'fixed_first']),
+      defaultValue: 'percent_first',
+      description: 'Referral reward mode.',
+    },
+    percent: {
+      schema: z.number().int().min(1).max(100),
+      defaultValue: 20,
+      description: 'Reward percentage.',
+    },
+    fixed_minor: {
+      schema: minorAmount,
+      defaultValue: '10000',
+      description: 'Fixed reward in minor units.',
+    },
+    all_months: {
+      schema: z.number().int().min(0).max(120),
+      defaultValue: 0,
+      description: 'Reward duration in months.',
+    },
+    invitee_bonus: {
+      schema: z.object({
+        type: z.enum(['none', 'days', 'balance']),
+        value: z.number().int().min(0),
+      }),
+      defaultValue: { type: 'days', value: 3 },
+      description: 'Bonus for the invited user.',
+    },
+    invitee_bonus_trigger: {
+      schema: z.enum(['signup', 'first_paid']),
+      defaultValue: 'first_paid',
+      description: 'Event that grants the invitee bonus.',
+    },
+    hold_hours: {
+      schema: z.number().int().min(0).max(720),
+      defaultValue: 0,
+      description: 'Reward hold duration.',
+    },
+    max_rewards_per_day: {
+      schema: z.number().int().min(0),
+      defaultValue: 20,
+      description: 'Daily reward cap.',
+    },
+    min_source_amount_minor: {
+      schema: minorAmount,
+      defaultValue: '0',
+      description: 'Minimum source payment.',
+    },
+    count_topups: {
+      schema: z.boolean(),
+      defaultValue: false,
+      description: 'Count balance top-ups for rewards.',
+    },
+  }),
+  ...definitions('notifications', {
+    expiring_days: {
+      schema: z.array(z.number().int().min(0)),
+      defaultValue: [3, 1],
+      description: 'Expiry notification offsets.',
+    },
+    traffic_threshold_pct: {
+      schema: z.number().int().min(1).max(100),
+      defaultValue: 80,
+      description: 'Traffic warning threshold.',
+    },
+  }),
+  ...definitions('clients', {
+    items: {
+      schema: z.array(clientLink),
+      defaultValue: [
+        {
+          id: 'happ',
+          name: 'Happ',
+          platforms: ['ios', 'android'],
+          deepLinkTemplate: 'happ://add/{url}',
+          storeUrls: {},
+        },
+        {
+          id: 'v2raytun',
+          name: 'v2rayTun',
+          platforms: ['ios', 'android'],
+          deepLinkTemplate: 'v2raytun://import/{url}',
+          storeUrls: {},
+        },
+        {
+          id: 'streisand',
+          name: 'Streisand',
+          platforms: ['ios'],
+          deepLinkTemplate: 'streisand://import/{url}',
+          storeUrls: {},
+        },
+        {
+          id: 'hiddify',
+          name: 'Hiddify',
+          platforms: ['ios', 'android', 'windows', 'macos'],
+          deepLinkTemplate: 'hiddify://import/{url}',
+          storeUrls: {},
+        },
+        {
+          id: 'clash-meta',
+          name: 'Clash Meta',
+          platforms: ['android', 'windows', 'macos'],
+          deepLinkTemplate: 'clash://install-config?url={url}',
+          storeUrls: {},
+        },
+      ],
+      description: 'Supported client applications.',
+    },
+  }),
+  ...definitions('webhooks', {
+    outgoing: {
+      schema: z.array(webhook),
+      defaultValue: [],
+      secret: true,
+      description: 'Outgoing webhook destinations.',
+    },
+  }),
+  ...definitions('operator', {
+    max_credit_minor: {
+      schema: minorAmount,
+      defaultValue: '100000',
+      description: 'Operator credit limit.',
+    },
+    max_refund_minor: {
+      schema: minorAmount,
+      defaultValue: '100000',
+      description: 'Operator refund limit.',
+    },
+  }),
+  ...definitions('admin', {
+    language: { schema: locale, defaultValue: 'ru', description: 'Admin interface language.' },
+    session_hours: {
+      schema: z.number().int().min(1).max(168),
+      defaultValue: 12,
+      description: 'Admin session lifetime.',
+    },
+    ip_allowlist: {
+      schema: z.array(z.string().min(1)),
+      defaultValue: [],
+      description: 'Optional admin IP allowlist.',
+    },
+    check_updates: {
+      schema: z.boolean(),
+      defaultValue: true,
+      description: 'Check GitHub releases for updates.',
+    },
+  }),
+  ...definitions('legal', {
+    terms_updated_at: {
+      schema: z.string().nullable(),
+      defaultValue: null,
+      description: 'Terms revision timestamp.',
+    },
+    privacy_updated_at: {
+      schema: z.string().nullable(),
+      defaultValue: null,
+      description: 'Privacy revision timestamp.',
+    },
+  }),
+];
+
+export const settingDefinitions = new Map(
+  settingRegistry.map((definition) => [`${definition.group}.${definition.name}`, definition]),
+);
+
+export const settingsGroups = [...new Set(settingRegistry.map((definition) => definition.group))];
+
+export const settingsImportSchema = z.object({
+  version: z.literal(1),
+  settings: z.record(z.string(), z.record(z.string(), z.unknown())),
+});
+
+export const settingsPatchSchema = z.record(z.string(), z.record(z.string(), z.unknown()));
+
+export type SettingsPatch = z.infer<typeof settingsImportSchema>['settings'];
+
+export function settingKey(group: SettingsGroup, name: string): string {
+  return `${group}.${name}`;
+}

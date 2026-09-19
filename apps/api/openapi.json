@@ -1,0 +1,34 @@
+{
+  "openapi": "3.0.3",
+  "info": { "title": "RemnaRay API", "version": "0.1.0" },
+  "paths": {
+    "/api/admin/v1/settings": {
+      "get": {
+        "operationId": "getSettings",
+        "responses": { "200": { "description": "Grouped settings" } }
+      },
+      "put": {
+        "operationId": "updateSettings",
+        "responses": { "200": { "description": "Updated settings" } }
+      }
+    },
+    "/api/admin/v1/settings/schema": {
+      "get": {
+        "operationId": "getSettingsSchema",
+        "responses": { "200": { "description": "Settings schema" } }
+      }
+    },
+    "/api/admin/v1/settings/export": {
+      "get": {
+        "operationId": "exportSettings",
+        "responses": { "200": { "description": "Safe settings snapshot" } }
+      }
+    },
+    "/api/admin/v1/settings/import": {
+      "post": {
+        "operationId": "importSettings",
+        "responses": { "200": { "description": "Imported settings" } }
+      }
+    }
+  }
+}

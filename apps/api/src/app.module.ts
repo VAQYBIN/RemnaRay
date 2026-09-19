@@ -2,9 +2,11 @@ import { Module } from '@nestjs/common';
 import { LoggerModule } from 'nestjs-pino';
 
 import { HealthController } from './health/health.controller';
+import { SettingsModule } from './modules/settings/settings.module';
 
 @Module({
   imports: [
+    SettingsModule,
     LoggerModule.forRoot({
       pinoHttp: {
         level: process.env.RR_LOG_LEVEL ?? 'info',
