@@ -15,10 +15,12 @@
     "lint": "eslint .",
     "prepare": "husky",
     "test": "node --test test/tooling.test.mjs",
+    "test:m1": "pnpm build && node --test test/m1.integration.test.mjs",
     "typecheck": "tsc --noEmit"
   },
   "devDependencies": {
     "@changesets/cli": "~3.0.3",
+    "@testcontainers/postgresql": "~12.1.0",
     "@commitlint/cli": "~21.2.2",
     "@commitlint/config-conventional": "~21.2.2",
     "@eslint/js": "~10.0.1",

@@ -32,6 +32,9 @@ importers:
       '@remnaray/eslint-config':
         specifier: workspace:*
         version: link:packages/eslint-config
+      '@testcontainers/postgresql':
+        specifier: ~12.1.0
+        version: 12.1.0
       '@types/node':
         specifier: ~24.13.6
         version: 24.13.6

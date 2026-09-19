@@ -6,7 +6,7 @@ M1
 
 ## Current task
 
-TASK-M1-009 — M1 Testcontainers integration suite and final M1 Definition of Done.
+M1 complete — TASK-M1-009 verified and committed; M2 not started.
 
 ## Completed tasks
 
@@ -154,6 +154,9 @@ blocker is resolved.
   endpoint.
 - TASK-M1-008 — added the shared queue contract, transactional outbox writer,
   BullMQ relay with stable job IDs, and worker two-second cron skeleton.
+- TASK-M1-009 — added the PostgreSQL 18 + Valkey 9.1 Testcontainers integration
+  gate covering migrations, concurrent ledger debits, trial, activation,
+  renewal, and expiry.
 
 ## Verification correction
 
@@ -189,14 +192,19 @@ Turbo build.
 - TASK-M1-008 acceptance checks passed: root tests, lint, typecheck, formatting,
   full Turbo build, and real PostgreSQL/Valkey outbox smoke: rollback left zero
   rows, committed job published to BullMQ in 34 ms.
+- TASK-M1-009 acceptance checks passed: `pnpm test:m1` with fresh PostgreSQL 18
+  and Valkey 9.1 containers, 10-way AC-070 concurrent debit assertion, and
+  subscription lifecycle assertions. Full M1 Definition of Done checks passed:
+  root tests, package/API tests, lint, typecheck, formatting, Turbo build,
+  migration deploy, contract mock smoke, and runtime API smoke.
 
 ## Known blockers
 
-M1 implementation is in progress. Hosted GitHub Actions execution and
-maintainer review remain external gates. The later `proxy-smoke` and full e2e
-gates belong to their scheduled milestones.
+M1 implementation is complete. Hosted GitHub Actions execution, maintainer
+review, and the later proxy-smoke/full e2e gates remain external gates. M2 is
+intentionally not started.
 
 ## Next
 
-Implement `TASK-M1-009`: add the M1 Testcontainers integration suite and run
-the final milestone Definition of Done checks.
+M2-001 is the next task after explicit milestone handoff; do not start M2 in
+this session.
