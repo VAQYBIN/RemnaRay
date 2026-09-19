@@ -8,8 +8,6 @@ M3
 
 M3 complete; all M3 tasks are implemented and verified. Do not start M4 until
 the documented milestone-order dependency decision remains in force.
-M3-001 and M3-002 received runtime corrections in this commit series; their
-remaining acceptance gaps are tracked below.
 
 ## Completed tasks
 
@@ -284,7 +282,7 @@ contract tests. No credentials were required for TASK-M3-001.
 
 ## Next
 
-M3-003 is next. Do not start M4.
+M3 is complete. M4 is intentionally not started in this session.
 
 ## M3 acceptance reconciliation
 
