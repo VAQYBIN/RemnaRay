@@ -1,0 +1,114 @@
+name: remnaray
+
+x-app-common: &app-common
+  image: ${RR_APP_IMAGE:-ghcr.io/remnaray/app:local}
+  env_file: .env
+  environment:
+    TZ: UTC
+    DATABASE_URL: ${DATABASE_URL:-postgresql://${POSTGRES_USER:-remnaray}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-remnaray}}
+    VALKEY_URL: ${VALKEY_URL:-redis://valkey:6379/0}
+  networks: [rr_net]
+  restart: unless-stopped
+  read_only: true
+  tmpfs: [/tmp]
+  security_opt: [no-new-privileges:true]
+  logging: { driver: json-file, options: { max-size: '50m', max-file: '5' } }
+
+services:
+  postgres:
+    image: postgres:18-alpine
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-remnaray}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB:-remnaray}
+    volumes: [pgdata:/var/lib/postgresql/data]
+    networks: [rr_net]
+    healthcheck:
+      test: [CMD-SHELL, 'pg_isready -U ${POSTGRES_USER:-remnaray} -d ${POSTGRES_DB:-remnaray}']
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  valkey:
+    image: valkey/valkey:9.1-alpine
+    command:
+      [
+        valkey-server,
+        --save,
+        '60',
+        '1000',
+        --appendonly,
+        yes,
+        --maxmemory,
+        256mb,
+        --maxmemory-policy,
+        noeviction,
+      ]
+    volumes: [valkeydata:/data]
+    networks: [rr_net]
+    healthcheck:
+      test: [CMD, valkey-cli, ping]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  api:
+    <<: *app-common
+    command: [node, dist/apps/api/main.js]
+    expose: ['3000']
+    depends_on:
+      postgres: { condition: service_healthy }
+      valkey: { condition: service_healthy }
+    healthcheck:
+      test: [CMD, wget, -qO-, http://127.0.0.1:3000/api/v1/health/ready]
+      interval: 10s
+      timeout: 5s
+      retries: 6
+
+  bot:
+    <<: *app-common
+    command: [node, dist/apps/bot/main.js]
+    expose: ['3002']
+    depends_on: { api: { condition: service_healthy } }
+    healthcheck:
+      test: [CMD, wget, -qO-, http://127.0.0.1:3002/health]
+      interval: 15s
+      timeout: 5s
+      retries: 4
+
+  worker:
+    <<: *app-common
+    command: [node, dist/apps/worker/main.js]
+    expose: ['3003']
+    depends_on: { api: { condition: service_healthy } }
+    healthcheck:
+      test: [CMD, wget, -qO-, http://127.0.0.1:3003/health]
+      interval: 15s
+      timeout: 5s
+      retries: 4
+
+  web:
+    image: ${RR_WEB_IMAGE:-ghcr.io/remnaray/web:local}
+    environment:
+      INTERNAL_API_URL: http://api:3000
+      RR_DOMAIN: ${RR_DOMAIN}
+      TZ: UTC
+      PORT: 3001
+    networks: [rr_net]
+    expose: ['3001']
+    depends_on: { api: { condition: service_healthy } }
+    healthcheck:
+      test: [CMD, wget, -qO-, http://127.0.0.1:3001/api/healthz]
+      interval: 10s
+      timeout: 5s
+      retries: 6
+    read_only: true
+    tmpfs: [/tmp, /app/apps/web/.next/cache]
+
+networks:
+  rr_net:
+    ipam: { config: [{ subnet: 172.28.0.0/16 }] }
+
+volumes:
+  pgdata: {}
+  valkeydata: {}

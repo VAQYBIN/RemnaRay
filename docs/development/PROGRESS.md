@@ -6,7 +6,7 @@ M0
 
 ## Current task
 
-TASK-M0-008 — application/web Dockerfiles and development compose stack.
+TASK-M0-009 — CI workflow and final M0 verification.
 
 ## Completed tasks
 
@@ -29,6 +29,8 @@ TASK-M0-008 — application/web Dockerfiles and development compose stack.
   and exact bigint minor-unit money helpers with package-level Vitest tests.
 - TASK-M0-007 — added the Prisma 7.10 schema, SQL `0001_init` migration,
   immutable-table guards, transaction guard, and initial system seeds.
+- TASK-M0-008 — added multi-stage app/web Dockerfiles, Compose runtime and
+  development dependencies, safe environment initialization, and `./rr`.
 
 ## Verification
 
@@ -82,6 +84,9 @@ blocker is resolved.
 - M0-007 keeps trigger-heavy PostgreSQL behavior in hand-reviewed SQL while
   Prisma owns the typed schema/client; generation works with a safe local URL
   fallback and deployment still requires the real `DATABASE_URL`.
+- M0-008 uses `pnpm` frozen installs in both image builders, rootless Node
+  runtime users, read-only Compose services with `/tmp` tmpfs, and a fixed
+  `172.28.0.0/16` network.
 
 ## Definition of Done review
 
@@ -106,6 +111,9 @@ blocker is resolved.
 - TASK-M0-007 acceptance checks passed: Prisma generation, migration static
   tests, clean PostgreSQL 18 `migrate deploy`, seed counts, immutable ledger
   trigger check, root tests, lint, typecheck, and formatting.
+- TASK-M0-008 acceptance checks passed: app/web Docker builds, Compose config,
+  built-image API/web health smoke checks, nine tests, lint, typecheck, and
+  formatting.
 
 ## Known blockers
 

@@ -5,3 +5,5 @@ coverage
 .next
 
 .turbo
+
+.env*

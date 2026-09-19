@@ -1,0 +1,25 @@
+name: remnaray-dev
+
+services:
+  postgres:
+    image: postgres:18-alpine
+    environment:
+      POSTGRES_USER: remnaray
+      POSTGRES_PASSWORD: remnaray
+      POSTGRES_DB: remnaray
+    ports: ['127.0.0.1:5432:5432']
+    healthcheck:
+      test: [CMD-SHELL, 'pg_isready -U remnaray -d remnaray']
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  valkey:
+    image: valkey/valkey:9.1-alpine
+    command: [valkey-server, --save, '', --appendonly, no]
+    ports: ['127.0.0.1:6379:6379']
+    healthcheck:
+      test: [CMD, valkey-cli, ping]
+      interval: 5s
+      timeout: 3s
+      retries: 20

@@ -1,0 +1,32 @@
+#!/usr/bin/env sh
+set -eu
+
+command=${1:-help}
+compose_file=${COMPOSE_FILE:-compose.yaml}
+
+case "$command" in
+  up)
+    docker compose -f "$compose_file" up -d
+    ;;
+  down)
+    docker compose -f "$compose_file" down
+    ;;
+  logs)
+    shift
+    docker compose -f "$compose_file" logs "$@"
+    ;;
+  ps)
+    docker compose -f "$compose_file" ps
+    ;;
+  config)
+    docker compose -f "$compose_file" config
+    ;;
+  *)
+    cat <<USAGE
+Usage: ./scripts/rr {up|down|logs|ps|config}
+
+Set COMPOSE_FILE=compose.dev.yaml for the local PostgreSQL/Valkey dependencies.
+USAGE
+    exit 1
+    ;;
+esac
