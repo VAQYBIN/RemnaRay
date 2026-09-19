@@ -4,7 +4,10 @@
   "private": true,
   "scripts": {
     "lint": "eslint .",
-    "typecheck": "tsc --noEmit -p tsconfig.json"
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "build": "tsc -p tsconfig.json",
+    "dev": "tsx watch src/main.ts",
+    "start": "node dist/main.js"
   },
   "dependencies": {
     "@asteasolutions/zod-to-openapi": "~9.1.0",

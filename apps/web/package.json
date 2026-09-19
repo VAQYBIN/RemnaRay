@@ -4,7 +4,10 @@
   "private": true,
   "scripts": {
     "lint": "eslint .",
-    "typecheck": "tsc --noEmit -p tsconfig.json"
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "build": "next build",
+    "dev": "next dev",
+    "start": "node .next/standalone/apps/web/server.js"
   },
   "dependencies": {
     "@radix-ui/react-dialog": "~1.1.23",
@@ -17,6 +20,7 @@
     "tailwind-merge": "~3.7.0"
   },
   "devDependencies": {
-    "tailwindcss": "~4.3.3"
+    "tailwindcss": "~4.3.3",
+    "@tailwindcss/postcss": "~4.3.3"
   }
 }

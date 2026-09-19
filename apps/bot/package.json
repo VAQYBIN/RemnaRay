@@ -4,7 +4,10 @@
   "private": true,
   "scripts": {
     "lint": "eslint .",
-    "typecheck": "tsc --noEmit -p tsconfig.json"
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "build": "tsc -p tsconfig.json",
+    "dev": "tsx watch src/main.ts",
+    "start": "node dist/main.js"
   },
   "dependencies": {
     "@grammyjs/auto-retry": "~2.0.2",
@@ -16,5 +19,8 @@
     "grammy": "~1.46.0",
     "ioredis": "~5.11.1",
     "intl-messageformat": "~12.1.1"
+  },
+  "devDependencies": {
+    "@types/node": "~24.13.6"
   }
 }

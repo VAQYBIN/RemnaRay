@@ -4,7 +4,10 @@
   "private": true,
   "scripts": {
     "lint": "eslint .",
-    "typecheck": "tsc --noEmit -p tsconfig.json"
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "build": "tsc -p tsconfig.json",
+    "dev": "tsx watch src/main.ts",
+    "start": "node dist/main.js"
   },
   "dependencies": {
     "@nestjs/common": "12.0.3",
@@ -13,6 +16,8 @@
     "@nestjs/schedule": "12.0.2",
     "@nestjs/terminus": "12.0.0",
     "bullmq": "~6.3.7",
-    "ioredis": "~5.11.1"
+    "ioredis": "~5.11.1",
+    "@nestjs/platform-fastify": "12.0.3",
+    "nestjs-pino": "~5.2.0"
   }
 }

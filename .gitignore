@@ -4,7 +4,7 @@ node_modules/
 
 /coverage
 
-/.next/
+.next/
 /out/
 
 /build
@@ -20,7 +20,7 @@ node_modules/
 *.tsbuildinfo
 next-env.d.ts
 
-/dist
+dist/
 /tmp
 
 logs
@@ -39,3 +39,5 @@ AGENTS.md
 docs/task
 docs/development/*
 !docs/development/PROGRESS.md
+
+.turbo/

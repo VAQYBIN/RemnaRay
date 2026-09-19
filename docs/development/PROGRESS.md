@@ -6,7 +6,7 @@ M0
 
 ## Current task
 
-TASK-M0-005 — application process skeletons and health endpoints.
+TASK-M0-006 — configuration, logger, and money packages.
 
 ## Completed tasks
 
@@ -23,6 +23,8 @@ TASK-M0-005 — application process skeletons and health endpoints.
 - TASK-M0-004 — verified Remnawave panel `v3.4.4` and its official OpenAPI
   document; recorded the section 10.1 compatibility matrix and required
   v3 identifier mapping in `docs/adr/ADR-010.md`.
+- TASK-M0-005 — added the NestJS/Fastify API, grammY bot, BullMQ worker, and
+  Next.js/Tailwind web shells with their required local health endpoints.
 
 ## Verification
 
@@ -66,6 +68,10 @@ blocker is resolved.
   `bebc345543b82c66ee1f956333e65cddfb8aec46099bf4427de38fb43df69396`.
   The v3 contract uses numeric `userId` values and does not expose the
   specified Telegram lookup route; ADR-010 records each affected row.
+- M0-005 uses CommonJS NestJS output as required by section 6.1. The API and
+  worker are inert with external services unconfigured; the BullMQ worker is
+  enabled only with `RR_WORKER_ENABLED=true`, while all health routes remain
+  available for local smoke checks.
 
 ## Definition of Done review
 
@@ -82,6 +88,9 @@ blocker is resolved.
 - TASK-M0-004 acceptance checks passed: official release/OpenAPI retrieval,
   endpoint and schema comparison, ADR-010 coverage test, seven tests, lint,
   typecheck, and formatting.
+- TASK-M0-005 acceptance checks passed: frozen install, eight tests, lint,
+  typecheck, formatting, Turbo build, and local HTTP 200 smoke checks for
+  API, bot, worker, and web health endpoints.
 
 ## Known blockers
 

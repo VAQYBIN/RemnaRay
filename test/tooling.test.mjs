@@ -166,3 +166,19 @@ test('the Remnawave contract verification is recorded', async () => {
     assert.ok(row?.includes('✓') || row?.includes('✗'), method);
   }
 });
+
+test('the four process shells expose their required health entrypoints', async () => {
+  const api = await readFile('apps/api/src/health/health.controller.ts', 'utf8');
+  const bot = await readFile('apps/bot/src/main.ts', 'utf8');
+  const worker = await readFile('apps/worker/src/health/health.controller.ts', 'utf8');
+  const web = await readFile('apps/web/app/api/healthz/route.ts', 'utf8');
+
+  assert.match(api, /@Controller\('api\/v1\/health'\)/);
+  assert.match(api, /@Get\('ready'\)/);
+  assert.match(bot, /createServer/);
+  assert.match(bot, /service: 'bot'/);
+  assert.match(worker, /@Controller\('health'\)/);
+  assert.match(worker, /service: 'worker'/);
+  assert.match(web, /dynamic = 'force-dynamic'/);
+  assert.match(web, /service: 'web'/);
+});
