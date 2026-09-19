@@ -200,3 +200,15 @@ test('the local deployment boundary includes Docker, Compose, and safe init scri
   assert.match(initEnv, /chmod 600/);
   assert.match(wrapper, /docker compose/);
 });
+
+test('the CI workflow covers required quality and image gates', async () => {
+  const workflow = await readFile('.github/workflows/ci.yml', 'utf8');
+  assert.match(workflow, /pnpm install --frozen-lockfile/);
+  assert.match(workflow, /pnpm lint/);
+  assert.match(workflow, /pnpm typecheck/);
+  assert.match(workflow, /pnpm build/);
+  assert.match(workflow, /node: \['24\.21\.0', '26\.x'\]/);
+  assert.match(workflow, /deploy\/docker\/app\.Dockerfile/);
+  assert.match(workflow, /deploy\/docker\/web\.Dockerfile/);
+  assert.match(workflow, /push: false/);
+});

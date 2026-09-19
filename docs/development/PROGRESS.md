@@ -6,7 +6,7 @@ M0
 
 ## Current task
 
-TASK-M0-009 — CI workflow and final M0 verification.
+M0 complete — TASK-M0-009 committed; M1 not started.
 
 ## Completed tasks
 
@@ -31,6 +31,8 @@ TASK-M0-009 — CI workflow and final M0 verification.
   immutable-table guards, transaction guard, and initial system seeds.
 - TASK-M0-008 — added multi-stage app/web Dockerfiles, Compose runtime and
   development dependencies, safe environment initialization, and `./rr`.
+- TASK-M0-009 — added GitHub Actions CI for Node 24/26 quality checks,
+  package tests, Turbo build, and non-publishing app/web Docker builds.
 
 ## Verification
 
@@ -114,13 +116,16 @@ blocker is resolved.
 - TASK-M0-008 acceptance checks passed: app/web Docker builds, Compose config,
   built-image API/web health smoke checks, nine tests, lint, typecheck, and
   formatting.
+- TASK-M0-009 acceptance checks passed: workflow coverage test, ten root tests,
+  lint, typecheck, and formatting. Hosted GitHub Actions execution remains an
+  external gate.
 
 ## Known blockers
 
-None. The corrected Git policy allows staging and commits. Nested
-`node_modules/` remain ignored, and the handoff file is tracked.
+M0 implementation is complete. Hosted GitHub Actions execution and maintainer
+review are external gates; M1 remains intentionally unstarted. The later
+`proxy-smoke` and full e2e gates belong to their scheduled milestones.
 
 ## Next
 
-TASK-M0-004 — verify the current Remnawave panel version, retrieve its
-OpenAPI contract, and document the result in `docs/adr/ADR-010`.
+M1 is not started. Resume only after the M0 hosted CI/review gate is accepted.
