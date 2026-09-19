@@ -6,7 +6,7 @@ M1
 
 ## Current task
 
-TASK-M1-003 — Telegram widget, Valkey sessions, bot JWT, guards, CSRF, and throttling.
+TASK-M1-004 — ledger accounts, double-entry postings, locking, held availability, and audit.
 
 ## Completed tasks
 
@@ -40,6 +40,9 @@ TASK-M1-003 — Telegram widget, Valkey sessions, bot JWT, guards, CSRF, and thr
 - TASK-M1-002 — added Telegram user upsert, v1 channel identity creation,
   cryptographically generated referral codes, referral attribution, payload
   parsing for `ref_`, `promo_`, and `plan_`, and the internal bot endpoint.
+- TASK-M1-003 — added Telegram Login Widget verification, Valkey cookie
+  sessions, HS256 bot JWT issue/exchange, cookie/bearer guards, CSRF checks,
+  internal token guard, and Valkey-backed Nest throttling.
 
 ## Verification
 
@@ -134,6 +137,10 @@ blocker is resolved.
   typecheck, formatting, and full Turbo build. The existing M0-007 migration
   already contains unique `users.telegram_id`, `users.referral_code`, the
   Telegram identity uniqueness constraint, and referral attribution tables.
+- TASK-M1-003 acceptance checks passed: thirteen API unit tests, root tests,
+  lint, typecheck, formatting, and full Turbo build. The Telegram signature
+  and expiry checks cover AC-132; no migration was needed because M0-007
+  already created session-independent user and admin tables.
 
 ## Known blockers
 
@@ -143,5 +150,5 @@ gates belong to their scheduled milestones.
 
 ## Next
 
-Implement `TASK-M1-003`: Telegram widget verification, Valkey cookie sessions,
-bot JWT issuance and guards, CSRF checks, and Valkey-backed throttling.
+Implement `TASK-M1-004`: ledger accounts and double-entry postings with
+`FOR UPDATE`, held reward availability, and immutable ledger audit behavior.

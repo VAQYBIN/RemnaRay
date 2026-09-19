@@ -4,6 +4,7 @@ import { createPrismaClient } from '@remnaray/db';
 
 import { SettingsModule } from '../settings/settings.module';
 import { SettingsService } from '../settings/settings.service';
+import { InternalTokenGuard } from '../auth/auth.guards';
 import { UsersController } from './users.controller';
 import { UsersRepository } from './users.repository';
 import { UsersService } from './users.service';
@@ -15,6 +16,7 @@ const repository = new UsersRepository(prisma);
   imports: [SettingsModule],
   controllers: [UsersController],
   providers: [
+    InternalTokenGuard,
     { provide: UsersRepository, useValue: repository },
     {
       provide: UsersService,
