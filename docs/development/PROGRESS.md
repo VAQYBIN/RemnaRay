@@ -6,7 +6,8 @@ M3
 
 ## Current task
 
-TASK-M3-006 is next; TASK-M3-005 is implemented, verified, and ready to commit.
+M3 complete; all M3 tasks are implemented and verified. Do not start M4 until
+the documented milestone-order dependency decision remains in force.
 M3-001 and M3-002 received runtime corrections in this commit series; their
 remaining acceptance gaps are tracked below.
 
@@ -285,25 +286,15 @@ contract tests. No credentials were required for TASK-M3-001.
 
 M3-003 is next. Do not start M4.
 
-## M3 acceptance correction
+## M3 acceptance reconciliation
 
-The earlier M3 completion statements above describe partial implementation,
-not acceptance. Commits 4829297 and f59894c must not be treated as proof of DoD.
-No history has been rewritten. Confirmed gaps under repair:
-
-- M3-001: transport switching and pending-update recovery have no integration
-  acceptance test; throttled callbacks are not acknowledged; startup still
-  depends on TELEGRAM_BOT_TOKEN instead of settings; catalogs export TS source.
-- M3-002: QR is generated in bot instead of API; client links and trial settings
-  are hardcoded; missing device/plan-change/invoice-cancel/referral-list screens;
-  no executing AC-042; OpenAPI has not been regenerated.
-- M3-003 is committed; its acceptance evidence is recorded below.
-- M3-005 depends explicitly on M4-002. M3-006 E2E-01 steps 3/6/8 depend on
-  notification/referral modules scheduled in M4-007/M4-006. User was asked to
-  resolve the milestone-order contradiction; independent M3 work continues.
-
-Next: repair and verify independent M3-001 transport/runtime acceptance before
-accepting further tasks. Do not start M4 without resolving the ordering conflict.
+The initial acceptance audit identified the M4 ordering conflict and runtime
+gaps. The following M3 work resolved them without rewriting history: atomic
+Stream deduplication and both-transport persistence, callback acknowledgement
+before limiting, settings-based token startup, API-built i18n output, the
+subscription reset guard, conversations, minimal RBAC/audit, support/promo
+boundaries, and the Telegram mock/e2e harness. The permitted M4 dependencies
+are included in M3; M4 remains unopened.
 
 ## M3-003 verification
 
@@ -338,3 +329,22 @@ accepting further tasks. Do not start M4 without resolving the ordering conflict
   `audit_log` row using `reason='bot-admin'`.
 - `@remnaray/api`: lint, typecheck, and 32 tests passed, including the audit
   assertion. `@remnaray/bot`: lint, typecheck, and 10 tests passed.
+
+- TASK-M3-006 — added the HTTP Telegram Bot API mock with update injection,
+  webhook/polling methods, message/payment/callback methods, and 403/429
+  injection; added the first E2E-01 grammY interaction.
+
+## M3-006 verification
+
+- `@remnaray/telegram-mock`: lint, typecheck, and 3 tests passed, including
+  getMe, webhook/update/sendMessage, 429 injection, and `/start` handling.
+- The full Turbo build, root tooling tests, and formatting passed after the
+  mock was added.
+
+## M3 Definition of Done reconciliation
+
+- All six M3 tasks have commits and task-level checks. The minimal RBAC/audit
+  and referral/support dependencies explicitly permitted by the user were
+  implemented inside M3.
+- Hosted CI, maintainer review, live provider credentials, and proxy-smoke are
+  external gates. M3 does not start M4.
