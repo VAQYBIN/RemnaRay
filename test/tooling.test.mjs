@@ -211,7 +211,12 @@ test('the CI workflow covers required quality and image gates', async () => {
   const workflow = await readFile('.github/workflows/ci.yml', 'utf8');
   assert.match(workflow, /pnpm install --frozen-lockfile/);
   assert.match(workflow, /pnpm lint/);
+  assert.match(workflow, /pnpm format/);
   assert.match(workflow, /pnpm typecheck/);
+  assert.match(workflow, /pnpm -r typecheck/);
+  assert.match(workflow, /pnpm -r test/);
+  assert.match(workflow, /pnpm i18n-check/);
+  assert.match(workflow, /pnpm theme-validate themes\/manta/);
   assert.match(workflow, /pnpm build/);
   assert.match(workflow, /node: \['24\.21\.0', '26\.x'\]/);
   assert.match(workflow, /deploy\/docker\/app\.Dockerfile/);

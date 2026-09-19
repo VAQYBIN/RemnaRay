@@ -39,18 +39,25 @@ jobs:
       - name: Lint
         run: pnpm lint
 
+      - name: Format
+        run: pnpm format
+
       - name: Typecheck
-        run: pnpm typecheck
+        run: |
+          pnpm typecheck
+          pnpm -r typecheck
 
       - name: Repository tests
         run: pnpm test
 
-      - name: Package tests
+      - name: Workspace tests
+        run: pnpm -r test
+
+      - name: Locale and theme checks
         run: |
-          pnpm --filter @remnaray/config test
-          pnpm --filter @remnaray/logger test
-          pnpm --filter @remnaray/money test
-          pnpm --filter @remnaray/db test
+          pnpm i18n-check
+          pnpm theme-validate themes/manta
+          pnpm theme-validate themes/_admin
 
       - name: Build
         run: pnpm build
