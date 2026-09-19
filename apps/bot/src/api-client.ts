@@ -197,6 +197,41 @@ export class ApiClient {
     });
   }
 
+  getAdminRole(telegramId: number) {
+    return this.request<{ role: string }>(
+      `/api/internal/v1/admins/by-telegram/${String(telegramId)}`,
+    );
+  }
+
+  adminStats(telegramId: number) {
+    return this.request<{ users: number; activeSubscriptions: number; transactionsToday: number }>(
+      '/api/internal/v1/admins/stats',
+      { userId: telegramId },
+    );
+  }
+
+  adminUser(telegramId: number, query: string) {
+    return this.request<{ telegramId: string; username: string | null; firstName: string | null }>(
+      `/api/internal/v1/admins/users/${encodeURIComponent(query)}`,
+      { userId: telegramId },
+    );
+  }
+
+  adminExtend(telegramId: number, targetTelegramId: string, days: number) {
+    return this.request<{ expiresAt: string; days: number }>('/api/internal/v1/admins/extend', {
+      method: 'POST',
+      userId: telegramId,
+      body: { telegramId: targetTelegramId, days },
+    });
+  }
+
+  adminBroadcastStatus(telegramId: number) {
+    return this.request<{ id: string; status: string; sent: number; total: number } | null>(
+      '/api/internal/v1/admins/broadcast-status',
+      { userId: telegramId },
+    );
+  }
+
   getPlans() {
     return this.request<{ items: PublicPlan[] }>('/api/internal/v1/me/plans');
   }

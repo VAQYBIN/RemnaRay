@@ -460,6 +460,135 @@ export class BotUserController {
   }
 }
 
+@Controller('api/internal/v1/admins')
+@UseGuards(InternalTokenGuard)
+export class BotAdminController {
+  constructor(private readonly infra: Infrastructure) {}
+
+  @Get('by-telegram/:id')
+  async byTelegram(@Param('id') id: string) {
+    const admin = await this.infra.db.admin.findFirst({
+      where: { telegramId: BigInt(id), isActive: true, deletedAt: null },
+      select: { role: true },
+    });
+    if (!admin) throw new BadRequestException('ADMIN_NOT_FOUND');
+    return { role: admin.role };
+  }
+
+  @Get('stats')
+  async stats(@Headers('x-acting-user') actingUser: string | undefined) {
+    await this.authorize(actingUser);
+    const [users, active, today] = await Promise.all([
+      this.infra.db.user.count(),
+      this.infra.db.subscription.count({ where: { status: 'active' } }),
+      this.infra.db.transaction.count({ where: { createdAt: { gte: startOfDay() } } }),
+    ]);
+    return { users, activeSubscriptions: active, transactionsToday: today };
+  }
+
+  @Get('users/:query')
+  async user(
+    @Headers('x-acting-user') actingUser: string | undefined,
+    @Param('query') query: string,
+  ) {
+    await this.authorize(actingUser);
+    const user = await this.infra.db.user.findFirst({
+      where: /^\d+$/.test(query)
+        ? { telegramId: BigInt(query) }
+        : { username: { equals: query.replace(/^@/u, ''), mode: 'insensitive' } },
+      select: { id: true, telegramId: true, username: true, firstName: true, language: true },
+    });
+    if (!user) throw new BadRequestException('USER_NOT_FOUND');
+    return { ...user, telegramId: user.telegramId.toString() };
+  }
+
+  @Post('extend')
+  @HttpCode(200)
+  async extend(@Headers('x-acting-user') actingUser: string | undefined, @Body() body: unknown) {
+    const admin = await this.authorize(actingUser);
+    if (
+      !isRecord(body) ||
+      typeof body.telegramId !== 'string' ||
+      !/^\d+$/.test(body.telegramId) ||
+      typeof body.days !== 'number' ||
+      !Number.isInteger(body.days) ||
+      body.days < 1 ||
+      body.days > 3650
+    )
+      throw new BadRequestException('INVALID_BODY');
+    const user = await this.infra.db.user.findUnique({
+      where: { telegramId: BigInt(body.telegramId) },
+    });
+    if (!user) throw new BadRequestException('USER_NOT_FOUND');
+    const subscription = await this.infra.db.subscription.findFirst({
+      where: { userId: user.id, status: { in: ['provisioning', 'active', 'grace'] } },
+      orderBy: { expiresAt: 'desc' },
+    });
+    if (!subscription) throw new BadRequestException('SUBSCRIPTION_NOT_FOUND');
+    const before = { expiresAt: subscription.expiresAt.toISOString() };
+    const afterDate = new Date(subscription.expiresAt.getTime() + body.days * 86_400_000);
+    await this.infra.db.$transaction(async (transaction) => {
+      await transaction.subscription.update({
+        where: { id: subscription.id },
+        data: { expiresAt: afterDate },
+      });
+      await transaction.transaction.create({
+        data: {
+          userId: user.id,
+          type: 'adjustment',
+          status: 'completed',
+          amountMinor: 0n,
+          currency: 'RUB',
+          reason: 'bot-admin',
+          actorAdminId: admin.id,
+          subscriptionId: subscription.id,
+        },
+      });
+      await transaction.auditLog.create({
+        data: {
+          actorAdminId: admin.id,
+          actorType: 'admin',
+          action: 'subscription.extend',
+          entity: 'subscription',
+          entityId: subscription.id,
+          before,
+          after: { expiresAt: afterDate.toISOString(), days: Number(body.days) },
+          reason: 'bot-admin',
+        },
+      });
+    });
+    return { expiresAt: afterDate.toISOString(), days: body.days };
+  }
+
+  @Get('broadcast-status')
+  async broadcastStatus(@Headers('x-acting-user') actingUser: string | undefined) {
+    await this.authorize(actingUser);
+    const broadcast = await this.infra.db.broadcast.findFirst({ orderBy: { createdAt: 'desc' } });
+    return broadcast
+      ? {
+          id: broadcast.id,
+          status: broadcast.status,
+          sent: broadcast.sentCount,
+          total: broadcast.totalCount,
+        }
+      : null;
+  }
+
+  private async authorize(actingUser: string | undefined) {
+    if (!actingUser || !/^\d+$/.test(actingUser)) throw new ForbiddenException('FORBIDDEN');
+    const admin = await this.infra.db.admin.findFirst({
+      where: {
+        telegramId: BigInt(actingUser),
+        isActive: true,
+        deletedAt: null,
+        role: { in: ['admin', 'operator'] },
+      },
+    });
+    if (!admin) throw new ForbiddenException('FORBIDDEN');
+    return admin;
+  }
+}
+
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null;
 }
@@ -513,4 +642,10 @@ function toInvoiceView(invoice: {
     expiresAt: invoice.expiresAt.toISOString(),
     createdAt: invoice.createdAt.toISOString(),
   };
+}
+
+function startOfDay(): Date {
+  const date = new Date();
+  date.setHours(0, 0, 0, 0);
+  return date;
 }

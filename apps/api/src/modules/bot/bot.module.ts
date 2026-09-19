@@ -8,13 +8,19 @@ import { SubscriptionsModule } from '../subscriptions/subscriptions.module';
 import { RemnawaveModule } from '../remnawave/remnawave.module';
 import {
   BotInternalController,
+  BotAdminController,
   BotUserController,
   TelegramWebhookController,
 } from './bot.controller';
 
 @Module({
   imports: [SettingsModule, PaymentsModule, PlansModule, SubscriptionsModule, RemnawaveModule],
-  controllers: [TelegramWebhookController, BotInternalController, BotUserController],
+  controllers: [
+    TelegramWebhookController,
+    BotInternalController,
+    BotUserController,
+    BotAdminController,
+  ],
   providers: [InternalTokenGuard],
 })
 // eslint-disable-next-line @typescript-eslint/no-extraneous-class

@@ -6,7 +6,7 @@ M3
 
 ## Current task
 
-TASK-M3-005 is next; TASK-M3-004 is implemented, verified, and ready to commit.
+TASK-M3-006 is next; TASK-M3-005 is implemented, verified, and ready to commit.
 M3-001 and M3-002 received runtime corrections in this commit series; their
 remaining acceptance gaps are tracked below.
 
@@ -329,3 +329,12 @@ accepting further tasks. Do not start M4 without resolving the ordering conflict
   per-chat spacing.
 - `@remnaray/bot`: lint, typecheck, and 10 tests passed.
 - `@remnaray/api`: lint, typecheck, and 31 tests passed.
+
+## M3-005 verification
+
+- Added the agreed minimal M4 dependency: bot-admin role checks for active
+  `admin`/`operator` records, user lookup, daily stats, broadcast status, and
+  `/admin_extend` with a zero-value adjustment transaction and immutable
+  `audit_log` row using `reason='bot-admin'`.
+- `@remnaray/api`: lint, typecheck, and 32 tests passed, including the audit
+  assertion. `@remnaray/bot`: lint, typecheck, and 10 tests passed.

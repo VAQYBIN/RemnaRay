@@ -23,6 +23,10 @@ export function registerScreens(bot: Bot<RrContext>, api: ApiClient): void {
   bot.command('notifications', (ctx) => showNotifications(ctx, api));
   bot.command('help', (ctx) => show(ctx, ctx.t('bot.screen.help.text'), backButton(ctx)));
   bot.command('support', (ctx) => ctx.conversation.enter('supportMessage'));
+  bot.command('admin_stats', (ctx) => adminStats(ctx, api));
+  bot.command('admin_user', (ctx) => adminUser(ctx, api));
+  bot.command('admin_extend', (ctx) => adminExtend(ctx, api));
+  bot.command('admin_broadcast_status', (ctx) => adminBroadcastStatus(ctx, api));
   bot.callbackQuery('home', (ctx) => showHome(ctx, api));
   bot.callbackQuery('profile', (ctx) => showHome(ctx, api));
   bot.callbackQuery('plans', (ctx) => showPlans(ctx, api));
@@ -175,4 +179,49 @@ async function toggleNotifications(ctx: RrContext, api: ApiClient): Promise<void
 
 function capture(match: string | RegExpMatchArray, index: number): string {
   return typeof match === 'string' ? match : (match[index] ?? '');
+}
+
+async function isAdmin(ctx: RrContext, api: ApiClient): Promise<boolean> {
+  if (!ctx.from) return false;
+  try {
+    await api.getAdminRole(ctx.from.id);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+async function adminStats(ctx: RrContext, api: ApiClient): Promise<void> {
+  if (!ctx.from || !(await isAdmin(ctx, api))) return;
+  const stats = await api.adminStats(ctx.from.id);
+  await ctx.reply(
+    ctx.t('bot.admin.stats') + `\n${String(stats.users)} / ${String(stats.activeSubscriptions)}`,
+  );
+}
+
+async function adminUser(ctx: RrContext, api: ApiClient): Promise<void> {
+  if (!ctx.from || !(await isAdmin(ctx, api))) return;
+  const query = ctx.message?.text?.split(/\s+/u)[1];
+  if (!query) return;
+  const user = await api.adminUser(ctx.from.id, query);
+  await ctx.reply(ctx.t('bot.admin.user', { id: user.telegramId }));
+}
+
+async function adminExtend(ctx: RrContext, api: ApiClient): Promise<void> {
+  if (!ctx.from || !(await isAdmin(ctx, api))) return;
+  const [, target, rawDays] = ctx.message?.text?.split(/\s+/u) ?? [];
+  const days = Number(rawDays);
+  if (!target || !Number.isInteger(days)) return;
+  const result = await api.adminExtend(ctx.from.id, target, days);
+  await ctx.reply(ctx.t('bot.admin.extended', { days: result.days }));
+}
+
+async function adminBroadcastStatus(ctx: RrContext, api: ApiClient): Promise<void> {
+  if (!ctx.from || !(await isAdmin(ctx, api))) return;
+  const status = await api.adminBroadcastStatus(ctx.from.id);
+  await ctx.reply(
+    status
+      ? `${status.status}: ${String(status.sent)}/${String(status.total)}`
+      : ctx.t('bot.admin.broadcast'),
+  );
 }

@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import {
+  BotAdminController,
   BotInternalController,
   BotUserController,
   TelegramWebhookController,
@@ -89,5 +90,32 @@ describe('bot ingress boundary', () => {
       trialAvailable: true,
       subscription: null,
     });
+  });
+
+  it('authorizes bot admin extension and writes an audit record', async () => {
+    let audited = false;
+    const controller = new BotAdminController({
+      db: {
+        admin: { findFirst: () => Promise.resolve({ id: 'admin-1', role: 'admin' }) },
+        user: { findUnique: () => Promise.resolve({ id: 'user-1' }) },
+        subscription: {
+          findFirst: () =>
+            Promise.resolve({ id: 'sub-1', expiresAt: new Date('2026-01-01T00:00:00.000Z') }),
+        },
+        $transaction: async (callback: (transaction: unknown) => Promise<void>) =>
+          callback({
+            subscription: { update: () => Promise.resolve() },
+            transaction: { create: () => Promise.resolve() },
+            auditLog: {
+              create: () => {
+                audited = true;
+                return Promise.resolve();
+              },
+            },
+          }),
+      },
+    } as never);
+    await controller.extend('123', { telegramId: '456', days: 7 });
+    expect(audited).toBe(true);
   });
 });
