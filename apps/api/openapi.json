@@ -35,6 +35,36 @@
         "responses": { "200": { "description": "Public plans" } }
       }
     },
+    "/api/v1/me/subscription": {
+      "get": {
+        "operationId": "getCurrentSubscription",
+        "responses": { "200": { "description": "Current subscription" } }
+      }
+    },
+    "/api/v1/me/trial": {
+      "post": {
+        "operationId": "startTrial",
+        "responses": { "201": { "description": "Trial subscription" } }
+      }
+    },
+    "/api/v1/me/subscription/change/quote": {
+      "post": {
+        "operationId": "quotePlanChange",
+        "responses": { "201": { "description": "Plan change quote" } }
+      }
+    },
+    "/api/v1/me/subscription/change/apply": {
+      "post": {
+        "operationId": "applyPlanChange",
+        "responses": { "201": { "description": "Changed subscription" } }
+      }
+    },
+    "/api/internal/v1/subscriptions/expire": {
+      "post": {
+        "operationId": "expireSubscriptions",
+        "responses": { "201": { "description": "Expired subscription count" } }
+      }
+    },
     "/api/admin/v1/plans": {
       "get": { "operationId": "listPlans", "responses": { "200": { "description": "Plans" } } },
       "post": {

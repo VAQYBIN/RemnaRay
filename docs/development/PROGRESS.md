@@ -6,7 +6,7 @@ M1
 
 ## Current task
 
-TASK-M1-006 — subscriptions: trial, activation, renewal, plan changes, expiry, and statuses.
+TASK-M1-007 — Remnawave SDK/mock, panel sync/reconcile, webhook, health, and alerts.
 
 ## Completed tasks
 
@@ -146,6 +146,9 @@ blocker is resolved.
   funds protection, and ledger audit reconciliation.
 - TASK-M1-005 — added validated plan CRUD, public plan list caching in Valkey,
   mutation invalidation, and `PLAN_HAS_SALES` protection for sold plans.
+- TASK-M1-006 — added subscription lifecycle operations, one-time trial
+  eligibility, purchase activation/renewal, plan-change quote/apply, grace and
+  expiry transitions, and the internal expiry pass.
 
 ## Verification correction
 
@@ -170,6 +173,10 @@ Turbo build.
   public filtering, deactivation filtering, and `PLAN_HAS_SALES` rejection;
   root tests, lint, typecheck, formatting, and Turbo build. No migration was
   needed because M0-007 already created `plans` and transaction plan links.
+- TASK-M1-006 acceptance checks passed: 22 API tests, real PostgreSQL lifecycle
+  smoke for trial, activation, renewal, quote/apply, and expiry, root tests,
+  lint, typecheck, formatting, and Turbo build. No migration was needed because
+  M0-007 already created the partial one-live-subscription index.
 
 ## Known blockers
 
@@ -179,5 +186,5 @@ gates belong to their scheduled milestones.
 
 ## Next
 
-Implement `TASK-M1-006`: subscriptions, trial and activation lifecycle,
-renewal, quote/apply plan changes, expiry cron, statuses, and FR-011 index use.
+Implement `TASK-M1-007`: verify the Remnawave SDK contract, add the panel mock,
+sync/reconcile service, webhook handling, and panel health/alerts.
