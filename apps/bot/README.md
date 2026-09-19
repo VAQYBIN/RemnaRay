@@ -10,3 +10,8 @@ Telegram's pending updates when switching modes.
 
 The bot subscribes to `rr:settings.changed`; changing `bot.*` or `domain.*`
 reloads commands and the ingress transport without a process restart.
+
+Screen handlers call the internal API facade for user state, subscriptions,
+plans, invoices, referrals, and balance data. Subscription QR images are
+generated in memory and sent as PNGs; no subscription or payment rules live in
+the bot process.

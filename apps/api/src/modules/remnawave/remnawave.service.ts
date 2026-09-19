@@ -16,6 +16,13 @@ export class PanelUnavailableError extends Error {
   }
 }
 
+export class RevokeRateLimitError extends Error {
+  readonly code = 'REVOKE_RATE_LIMITED';
+  constructor() {
+    super('Subscription link can be reset once per 24 hours');
+  }
+}
+
 @Injectable()
 export class RemnawaveService {
   constructor(
@@ -126,6 +133,27 @@ export class RemnawaveService {
       return await client.system.health();
     } finally {
       await client.close();
+    }
+  }
+
+  async revokeSubscription(userId: string): Promise<{ subscriptionUrl: string }> {
+    const lockKey = `rr:revoke:${userId}`;
+    const acquired = await this.infra.redis.set(lockKey, '1', 'EX', 86_400, 'NX');
+    if (acquired !== 'OK') throw new RevokeRateLimitError();
+    try {
+      const row = await this.infra.db.panelUser.findUnique({ where: { userId } });
+      if (!row) throw new PanelUnavailableError();
+      const client = await this.client();
+      try {
+        const updated = await client.users.revokeSubscription(row.panelUuid);
+        await this.saveSnapshot(userId, updated, false);
+        return { subscriptionUrl: updated.subscriptionUrl };
+      } finally {
+        await client.close();
+      }
+    } catch (error) {
+      await this.infra.redis.del(lockKey);
+      throw error;
     }
   }
 

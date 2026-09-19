@@ -7,6 +7,7 @@ import Redis from 'ioredis';
 
 import { ApiClient } from './api-client.js';
 import { BotI18n, normalizeLocale } from './i18n.js';
+import { registerScreens } from './screens/index.js';
 import type { BotConfig, BotSession, RrContext } from './types.js';
 
 export type BotRuntime = {
@@ -82,9 +83,7 @@ export function createBot(
     const chatId = error.ctx.chat?.id;
     console.error('Telegram update failed', { updateId, chatId, error: error.error });
   });
-  bot.command('start', (ctx) => ctx.reply(ctx.t('bot.screen.home.welcome', { brand: 'RemnaRay' })));
-  bot.command('help', (ctx) => ctx.reply(ctx.t('bot.screen.help.text')));
-  bot.command('menu', (ctx) => ctx.reply(ctx.t('bot.screen.home.welcome', { brand: 'RemnaRay' })));
+  registerScreens(bot, api);
   return { bot, api, redis, i18n };
 }
 

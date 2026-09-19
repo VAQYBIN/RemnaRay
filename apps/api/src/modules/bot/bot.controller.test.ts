@@ -1,6 +1,10 @@
 import { describe, expect, it } from 'vitest';
 
-import { BotInternalController, TelegramWebhookController } from './bot.controller';
+import {
+  BotInternalController,
+  BotUserController,
+  TelegramWebhookController,
+} from './bot.controller';
 
 describe('bot ingress boundary', () => {
   it('writes a valid Telegram update to the Valkey stream', async () => {
@@ -48,6 +52,42 @@ describe('bot ingress boundary', () => {
       mode: 'webhook',
       webhookUrl: 'https://shop.example.test/tg/webhook/path-secret',
       admins: ['123'],
+    });
+  });
+
+  it('returns state used to choose the home menu', async () => {
+    const controller = new BotUserController(
+      {
+        db: {
+          user: {
+            findUniqueOrThrow: () =>
+              Promise.resolve({
+                id: 'user-1',
+                telegramId: 123n,
+                username: null,
+                firstName: 'User',
+                language: 'ru',
+                referralCode: 'ABCD2345',
+                email: null,
+                marketingOptOut: false,
+                trialUsedAt: null,
+              }),
+          },
+          account: { findFirst: () => Promise.resolve({ balanceMinor: 29900n }) },
+          subscription: { findFirst: () => Promise.resolve(null) },
+          transaction: { count: () => Promise.resolve(0) },
+        },
+      } as never,
+      {} as never,
+      {} as never,
+      {} as never,
+      {} as never,
+      {} as never,
+    );
+    await expect(controller.me('123')).resolves.toMatchObject({
+      balance: { amountMinor: '29900' },
+      trialAvailable: true,
+      subscription: null,
     });
   });
 });

@@ -6,7 +6,7 @@ M3
 
 ## Current task
 
-TASK-M3-002 is next; TASK-M3-001 is verified and committed.
+TASK-M3-003 is next; TASK-M3-002 is verified and committed.
 
 ## Completed tasks
 
@@ -184,6 +184,11 @@ blocker is resolved.
   ingress with consumer groups and `XAUTOCLAIM`, polling with runner, live
   transport reconfiguration, and localized command registration.
 
+- TASK-M3-002 — added the state-aware home menu, trial and subscription
+  screens, panel link reset with a 24-hour Valkey guard, QR PNG and client
+  deep-link output, plan/payment screens, balance and preset top-ups,
+  referrals, language, support, notifications, and email prompt routes.
+
 ## Verification correction
 
 The M1-001..003 runtime correction added a CommonJS-compatible DB export,
@@ -247,6 +252,17 @@ contract tests. No credentials were required for TASK-M3-001.
   and reclaims pending entries after 60 seconds. Settings changes for `bot.*`
   and `domain.*` reload transport and commands without restart.
 
+## M3-002 verification
+
+- Context7 documentation was checked for the installed QR generator's async
+  `toBuffer` API; QR output is generated as a 512px PNG in the bot process.
+- `@remnaray/bot`: lint, typecheck, and 5 tests passed.
+- `@remnaray/api`: lint, typecheck, and 31 tests passed, including home-menu
+  state data, bot config, locale delivery, and webhook stream insertion.
+- The internal bot facade serializes bigint money and panel values as strings,
+  enforces acting-user ownership for invoice checks, and exposes top-up,
+  referral, transaction, and subscription actions through `ApiClient`.
+
 ## M2 verification
 
 - PostgreSQL 18 integration: duplicate paid webhook produced one invoice
@@ -265,4 +281,4 @@ contract tests. No credentials were required for TASK-M3-001.
 
 ## Next
 
-M3-002 is next. Do not start M4.
+M3-003 is next. Do not start M4.

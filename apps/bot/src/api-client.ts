@@ -29,6 +29,52 @@ export type UpsertUserResult = {
   planSlug?: string;
 };
 
+export type HomeState = {
+  user: UserSummary & { email: string | null; marketingOptOut: boolean };
+  balance: { amountMinor: string; currency: string };
+  subscription: { status: string; expiresAt: string; planId: string | null } | null;
+  trialAvailable: boolean;
+};
+
+export type PublicPlan = {
+  id: string;
+  slug: string;
+  name: Record<string, string>;
+  durationDays: number;
+  trafficLimitBytes: number;
+  deviceLimit: number;
+  price: { amountMinor: number; currency: string };
+};
+
+export type SubscriptionState = {
+  subscription: {
+    status: string;
+    expiresAt: string;
+    trafficLimitBytes: string;
+    deviceLimit: number;
+  } | null;
+  panel: { subscriptionUrl: string; usedTrafficBytes: string; trafficLimitBytes: string } | null;
+};
+
+export type InvoiceView = {
+  id: string;
+  kind: string;
+  status: string;
+  provider: string;
+  amount: { amountMinor: string; currency: string };
+  paymentUrl?: string;
+  expiresAt: string;
+  createdAt: string;
+};
+
+export type ReferralState = {
+  code: string;
+  link: string;
+  invited: number;
+  converted: number;
+  earned: { amountMinor: string; currency: string };
+};
+
 export type ApiClientOptions = {
   baseUrl?: string;
   internalToken?: string;
@@ -114,6 +160,101 @@ export class ApiClient {
     return this.request<{ lang: Locale; messages: Record<string, string> }>(
       `/api/internal/v1/i18n/${lang}`,
     );
+  }
+
+  getMe(telegramId: number) {
+    return this.request<HomeState>('/api/internal/v1/me', { userId: telegramId });
+  }
+
+  patchMe(
+    telegramId: number,
+    body: { language?: Locale; marketingOptOut?: boolean; email?: string | null },
+  ) {
+    return this.request<{ language: Locale; email: string | null; marketingOptOut: boolean }>(
+      '/api/internal/v1/me',
+      { method: 'PATCH', userId: telegramId, body },
+    );
+  }
+
+  getPlans() {
+    return this.request<{ items: PublicPlan[] }>('/api/internal/v1/me/plans');
+  }
+
+  getSubscription(telegramId: number) {
+    return this.request<SubscriptionState>('/api/internal/v1/me/subscription', {
+      userId: telegramId,
+    });
+  }
+
+  getTransactions(telegramId: number) {
+    return this.request<{
+      items: Array<{
+        amountMinor: string;
+        currency: string;
+        description: string | null;
+        createdAt: string;
+      }>;
+    }>('/api/internal/v1/me/transactions', { userId: telegramId });
+  }
+
+  getReferrals(telegramId: number) {
+    return this.request<ReferralState>('/api/internal/v1/me/referrals', { userId: telegramId });
+  }
+
+  startTrial(telegramId: number) {
+    return this.request<{ subscription: unknown }>('/api/internal/v1/me/trial', {
+      method: 'POST',
+      userId: telegramId,
+    });
+  }
+
+  revokeSubscription(telegramId: number) {
+    return this.request<{ subscriptionUrl: string }>('/api/internal/v1/me/subscription/revoke', {
+      method: 'POST',
+      userId: telegramId,
+    });
+  }
+
+  getPaymentMethods() {
+    return this.request<{
+      items: Array<{
+        code: string;
+        displayName: Record<string, string>;
+        kind: string;
+        available: boolean;
+      }>;
+    }>('/api/internal/v1/me/payment-methods');
+  }
+
+  getTopupConfig() {
+    return this.request<{ presetsMinor: string[]; minMinor: string; maxMinor: string }>(
+      '/api/internal/v1/me/topup-config',
+    );
+  }
+
+  createInvoice(
+    telegramId: number,
+    body: {
+      kind: 'purchase' | 'topup' | 'plan_change';
+      planId?: string;
+      provider: string;
+      amountMinor?: string;
+    },
+    idempotencyKey: string,
+  ) {
+    return this.request<InvoiceView>('/api/internal/v1/me/invoices', {
+      method: 'POST',
+      userId: telegramId,
+      body,
+      idempotencyKey,
+    });
+  }
+
+  checkInvoice(telegramId: number, invoiceId: string) {
+    return this.request<InvoiceView>(`/api/internal/v1/me/invoices/${invoiceId}/check`, {
+      method: 'POST',
+      userId: telegramId,
+    });
   }
 
   issueToken(telegramId: number) {

@@ -34,6 +34,7 @@ export type BotConfig = {
   commands: Record<Locale, Array<{ command: string; description: string }>>;
   adminCommands: Record<Locale, Array<{ command: string; description: string }>>;
   supportForwardChatId: number | null;
+  supportContact: string;
   admins: string[];
 };
 
