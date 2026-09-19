@@ -2,12 +2,12 @@
 
 ## Current milestone
 
-M3
+M4
 
 ## Current task
 
-M3 complete; all M3 tasks are implemented and verified. Do not start M4 until
-the documented milestone-order dependency decision remains in force.
+TASK-M4-002 — M4-001 is complete and verified. Continue with admin
+authentication, RBAC, and audit interception; do not start M5.
 
 ## Completed tasks
 
@@ -189,6 +189,10 @@ blocker is resolved.
   screens, panel link reset with a 24-hour Valkey guard, QR PNG and client
   deep-link output, plan/payment screens, balance and preset top-ups,
   referrals, language, support, notifications, and email prompt routes.
+- TASK-M4-001 — added the `packages/ui` shadcn-style primitives, Radix dialog,
+  CVA variants, loading/empty/error states, runtime Tailwind CSS variables,
+  Zod theme schema and contrast validation, `_admin` and `manta` themes, and
+  the complete Manta asset set.
 
 ## Verification correction
 
@@ -232,11 +236,9 @@ Turbo build.
 
 ## Known blockers
 
-M3 implementation is in progress. Hosted GitHub Actions execution, maintainer
-review, provider credential healthchecks, and the later proxy-smoke/full e2e
-gates remain external gates. The specification lists M2-008 as depending on
-M2-008; the bot has no external credential dependency for its deterministic
-contract tests. No credentials were required for TASK-M3-001.
+Hosted GitHub Actions execution, maintainer review, provider credential
+healthchecks, and the later proxy-smoke/full e2e gates remain external gates.
+No credentials or external infrastructure were required for TASK-M4-001.
 
 ## M3-001 verification
 
@@ -282,7 +284,8 @@ contract tests. No credentials were required for TASK-M3-001.
 
 ## Next
 
-M3 is complete. M4 is intentionally not started in this session.
+TASK-M4-002 — admin password + TOTP authentication, lockouts, RBAC, and
+AuditInterceptor. M4-001 is complete; M5 remains unopened.
 
 ## M3 acceptance reconciliation
 
@@ -345,4 +348,32 @@ are included in M3; M4 remains unopened.
   and referral/support dependencies explicitly permitted by the user were
   implemented inside M3.
 - Hosted CI, maintainer review, live provider credentials, and proxy-smoke are
-  external gates. M3 does not start M4.
+  external gates. M3 is complete and M4 is now active.
+
+## M4-001 verification
+
+- Context7 documentation was checked for Tailwind v4 `@theme inline`, React 19
+  refs, Radix Dialog, CVA variants, and Zod 4 schemas.
+- `pnpm theme-validate themes/manta` and `_admin` passed. The authoritative
+  Manta palette reports the specified 3.03:1 primary/white pair as a warning;
+  schema and asset validation still pass per section 18.3.
+- Theme-schema tests: 3 passed. UI tests: 2 passed. Both package typechecks
+  and lint passed; web typecheck and production build passed.
+- Root `pnpm test` passed (10 tooling tests), `pnpm lint`, `pnpm typecheck`,
+  `pnpm format`, and full `pnpm build` passed. Frozen install passed after the
+  workspace lockfile update.
+- Added `docs/theming.md` and `.changeset/m4-001-ui-theme.md`. No API routes,
+  OpenAPI contract, or database migration changed in this task.
+
+## M4-001 decisions
+
+- `theme.json` remains the data source; `@remnaray/theme-schema` exports the
+  runtime parser, CSS variable projection, and WCAG contrast helpers.
+- `packages/ui` follows ADR-008 with Tailwind class composition, CVA variants,
+  Radix Dialog accessibility, and reusable Skeleton/EmptyState/ErrorState
+  components.
+- The server layout emits validated Manta tokens and dark-mode variables;
+  Tailwind v4 maps them with `@theme inline`, so a theme switch does not need
+  a rebuild.
+- The generated Manta OG asset is stored at 1200×630, with the required bot
+  avatar at 512×512 and Apple touch icon at 180×180.

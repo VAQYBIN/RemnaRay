@@ -10,6 +10,8 @@
     "start": "node .next/standalone/apps/web/server.js"
   },
   "dependencies": {
+    "@remnaray/theme-schema": "workspace:*",
+    "@remnaray/ui": "workspace:*",
     "@radix-ui/react-dialog": "~1.1.23",
     "class-variance-authority": "~0.7.1",
     "lucide-react": "~1.47.0",

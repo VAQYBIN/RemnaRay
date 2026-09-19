@@ -12,6 +12,7 @@
     "dev": "turbo run dev",
     "format": "prettier --check .",
     "format:fix": "prettier --write .",
+    "theme-validate": "tsx tools/theme-validate.ts",
     "lint": "eslint .",
     "prepare": "husky",
     "test": "node --test test/tooling.test.mjs",
