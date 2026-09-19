@@ -29,6 +29,29 @@
         "responses": { "200": { "description": "Spendable balance in minor units" } }
       }
     },
+    "/api/v1/public/plans": {
+      "get": {
+        "operationId": "getPublicPlans",
+        "responses": { "200": { "description": "Public plans" } }
+      }
+    },
+    "/api/admin/v1/plans": {
+      "get": { "operationId": "listPlans", "responses": { "200": { "description": "Plans" } } },
+      "post": {
+        "operationId": "createPlan",
+        "responses": { "201": { "description": "Created plan" } }
+      }
+    },
+    "/api/admin/v1/plans/{id}": {
+      "patch": {
+        "operationId": "updatePlan",
+        "responses": { "200": { "description": "Updated plan" } }
+      },
+      "delete": {
+        "operationId": "deletePlan",
+        "responses": { "200": { "description": "Deleted plan" } }
+      }
+    },
     "/api/internal/v1/users/upsert": {
       "post": {
         "operationId": "upsertInternalUser",

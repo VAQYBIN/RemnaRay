@@ -6,7 +6,7 @@ M1
 
 ## Current task
 
-TASK-M1-005 — plans CRUD, public list, cache, and delete protection.
+TASK-M1-006 — subscriptions: trial, activation, renewal, plan changes, expiry, and statuses.
 
 ## Completed tasks
 
@@ -144,6 +144,8 @@ blocker is resolved.
 - TASK-M1-004 — added the transactional double-entry ledger, sorted account
   row locks with `FOR UPDATE`, held-reward-aware `available()`, insufficient
   funds protection, and ledger audit reconciliation.
+- TASK-M1-005 — added validated plan CRUD, public plan list caching in Valkey,
+  mutation invalidation, and `PLAN_HAS_SALES` protection for sold plans.
 
 ## Verification correction
 
@@ -163,6 +165,11 @@ Turbo build.
   mismatches, root tests, lint, typecheck, formatting, and Turbo build. No
   migration was needed because M0-007 already created all ledger tables and
   immutable triggers.
+- TASK-M1-005 acceptance checks passed: 21 API tests, real PostgreSQL/Valkey
+  CRUD and public cache smoke, 60-second cache TTL, mutation invalidation,
+  public filtering, deactivation filtering, and `PLAN_HAS_SALES` rejection;
+  root tests, lint, typecheck, formatting, and Turbo build. No migration was
+  needed because M0-007 already created `plans` and transaction plan links.
 
 ## Known blockers
 
@@ -172,5 +179,5 @@ gates belong to their scheduled milestones.
 
 ## Next
 
-Implement `TASK-M1-005`: plans CRUD, public list caching, and protection against
-deleting plans that already have sales.
+Implement `TASK-M1-006`: subscriptions, trial and activation lifecycle,
+renewal, quote/apply plan changes, expiry cron, statuses, and FR-011 index use.
