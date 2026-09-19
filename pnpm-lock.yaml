@@ -101,6 +101,9 @@ importers:
       '@remnaray/db':
         specifier: workspace:*
         version: link:../../packages/db
+      '@remnaray/remnawave-sdk':
+        specifier: workspace:*
+        version: link:../../packages/remnawave-sdk
       '@scalar/nestjs-api-reference':
         specifier: ~1.2.19
         version: 1.2.19
@@ -323,13 +326,28 @@ importers:
 
   packages/payments-mock: {}
 
-  packages/remnawave-mock: {}
+  packages/remnawave-mock:
+    dependencies:
+      '@remnaray/remnawave-sdk':
+        specifier: workspace:*
+        version: link:../remnawave-sdk
+      fastify:
+        specifier: ~5.12.5
+        version: 5.12.5
+    devDependencies:
+      vitest:
+        specifier: ~5.0.1
+        version: 5.0.1(@types/node@24.13.6)(vite@8.3.0(@types/node@24.13.6)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.13)(yaml@2.9.1))
 
   packages/remnawave-sdk:
     dependencies:
       undici:
         specifier: ~8.10.2
         version: 8.10.2
+    devDependencies:
+      vitest:
+        specifier: ~5.0.1
+        version: 5.0.1(@types/node@24.13.6)(vite@8.3.0(@types/node@24.13.6)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.13)(yaml@2.9.1))
 
   packages/telegram-mock: {}
 

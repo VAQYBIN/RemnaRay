@@ -6,7 +6,7 @@ M1
 
 ## Current task
 
-TASK-M1-007 — Remnawave SDK/mock, panel sync/reconcile, webhook, health, and alerts.
+TASK-M1-008 — BullMQ queues, transactional outbox relay, and worker cron skeleton.
 
 ## Completed tasks
 
@@ -149,6 +149,9 @@ blocker is resolved.
 - TASK-M1-006 — added subscription lifecycle operations, one-time trial
   eligibility, purchase activation/renewal, plan-change quote/apply, grace and
   expiry transitions, and the internal expiry pass.
+- TASK-M1-007 — added the typed undici Remnawave client, Fastify in-memory
+  panel mock, panel sync/reconcile service, HMAC webhook boundary, and health
+  endpoint.
 
 ## Verification correction
 
@@ -177,6 +180,10 @@ Turbo build.
   smoke for trial, activation, renewal, quote/apply, and expiry, root tests,
   lint, typecheck, formatting, and Turbo build. No migration was needed because
   M0-007 already created the partial one-live-subscription index.
+- TASK-M1-007 acceptance checks passed: SDK/mock typecheck, lint, unit tests,
+  package builds, joint HTTP mock smoke (`create → getByUsername → health`),
+  API typecheck/lint, and full source formatting. ADR-010 numeric panel ID
+  incompatibilities remain explicitly documented for later mapping work.
 
 ## Known blockers
 
@@ -186,5 +193,5 @@ gates belong to their scheduled milestones.
 
 ## Next
 
-Implement `TASK-M1-007`: verify the Remnawave SDK contract, add the panel mock,
-sync/reconcile service, webhook handling, and panel health/alerts.
+Implement `TASK-M1-008`: BullMQ queues, transactional outbox relay, and the
+worker cron skeleton with commit/rollback publication guarantees.

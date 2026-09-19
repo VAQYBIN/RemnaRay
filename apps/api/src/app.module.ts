@@ -6,6 +6,7 @@ import { InfraModule } from './infra/infra.module';
 import { AuthModule } from './modules/auth/auth.module';
 import { LedgerModule } from './modules/ledger/ledger.module';
 import { PlansModule } from './modules/plans/plans.module';
+import { RemnawaveModule } from './modules/remnawave/remnawave.module';
 import { SubscriptionsModule } from './modules/subscriptions/subscriptions.module';
 import { SettingsModule } from './modules/settings/settings.module';
 import { UsersModule } from './modules/users/users.module';
@@ -18,6 +19,7 @@ import { UsersModule } from './modules/users/users.module';
     AuthModule,
     LedgerModule,
     PlansModule,
+    RemnawaveModule,
     SubscriptionsModule,
     LoggerModule.forRoot({
       pinoHttp: {

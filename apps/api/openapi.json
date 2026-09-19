@@ -65,6 +65,24 @@
         "responses": { "201": { "description": "Expired subscription count" } }
       }
     },
+    "/api/internal/v1/remnawave/health": {
+      "get": {
+        "operationId": "remnawaveHealth",
+        "responses": { "200": { "description": "Panel health" } }
+      }
+    },
+    "/api/internal/v1/remnawave/reconcile": {
+      "post": {
+        "operationId": "remnawaveReconcile",
+        "responses": { "200": { "description": "Reconcile result" } }
+      }
+    },
+    "/webhooks/remnawave": {
+      "post": {
+        "operationId": "remnawaveWebhook",
+        "responses": { "200": { "description": "Webhook result" } }
+      }
+    },
     "/api/admin/v1/plans": {
       "get": { "operationId": "listPlans", "responses": { "200": { "description": "Plans" } } },
       "post": {
