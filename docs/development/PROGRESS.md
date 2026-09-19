@@ -6,8 +6,36 @@ M4
 
 ## Current task
 
-TASK-M4-004 — M4-003 is complete and verified. Continue with the customer
-account pages and payment/auth flows; do not start M5.
+M4 acceptance reconciliation, then TASK-M4-004. The earlier M4-001..003
+completion statements below overstate acceptance: commits exist and the listed
+checks ran, but those checks did not establish complete specification compliance.
+TASK-M4-004 has uncommitted partial UI work. Do not start M5.
+
+## Current handoff correction
+
+- Committed implementation: `c56c5fc` (M4-001), `a52a91e` (M4-002),
+  `e1cd614` (M4-003). These are implementation checkpoints, not verified
+  milestone acceptance. Preserve their history; fix gaps in follow-up commits.
+- M4-001 gaps observed in code: the full section 14.4 component list is missing;
+  themes are imported at build time rather than loaded through ThemeService;
+  AA acceptance is not proved by the warning-only validator.
+- M4-002 gaps observed in code: LAST_ADMIN management/AC-143 is absent;
+  RBAC metadata covers settings only; auth routes bypass CSRF; password failure
+  increments and challenge consumption are not atomic; TOTP setup secrets are
+  plaintext in Valkey; audit before contains request data rather than prior state.
+- M4-003 gaps observed in code: Russian landing text contains English copy;
+  CTA links point to legal pages; public config, runtime theme, language selector,
+  complete legal text and Lighthouse acceptance are missing. Money is displayed
+  as raw minor units. Key parity alone is not an ICU/placeholder check.
+- M4-004 partial UI is saved on disk, uncommitted. The last web build/typecheck
+  and single Markdown test passed, but AC-133/134 are not verified. The UI expects
+  API response shapes that differ from existing controllers; essential actions,
+  15-second cache/invalidation, payment deadlines, and page-state tests remain.
+- Exact next work: reconcile M4-001 and M4-002 acceptance gaps before extending
+  dependent work; keep the existing M4-004 draft intact. Recheck actual command
+  exit codes and runtime behavior, not just build output.
+- The user reported repeated model-capacity warnings. No service-side telemetry
+  is available here to establish their cause. Repository tool access still works.
 
 ## Completed tasks
 
