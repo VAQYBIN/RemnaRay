@@ -6,7 +6,7 @@ M1
 
 ## Current task
 
-TASK-M1-008 — BullMQ queues, transactional outbox relay, and worker cron skeleton.
+TASK-M1-009 — M1 Testcontainers integration suite and final M1 Definition of Done.
 
 ## Completed tasks
 
@@ -152,6 +152,8 @@ blocker is resolved.
 - TASK-M1-007 — added the typed undici Remnawave client, Fastify in-memory
   panel mock, panel sync/reconcile service, HMAC webhook boundary, and health
   endpoint.
+- TASK-M1-008 — added the shared queue contract, transactional outbox writer,
+  BullMQ relay with stable job IDs, and worker two-second cron skeleton.
 
 ## Verification correction
 
@@ -184,6 +186,9 @@ Turbo build.
   package builds, joint HTTP mock smoke (`create → getByUsername → health`),
   API typecheck/lint, and full source formatting. ADR-010 numeric panel ID
   incompatibilities remain explicitly documented for later mapping work.
+- TASK-M1-008 acceptance checks passed: root tests, lint, typecheck, formatting,
+  full Turbo build, and real PostgreSQL/Valkey outbox smoke: rollback left zero
+  rows, committed job published to BullMQ in 34 ms.
 
 ## Known blockers
 
@@ -193,5 +198,5 @@ gates belong to their scheduled milestones.
 
 ## Next
 
-Implement `TASK-M1-008`: BullMQ queues, transactional outbox relay, and the
-worker cron skeleton with commit/rollback publication guarantees.
+Implement `TASK-M1-009`: add the M1 Testcontainers integration suite and run
+the final milestone Definition of Done checks.
