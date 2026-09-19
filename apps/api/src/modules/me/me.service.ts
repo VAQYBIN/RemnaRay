@@ -27,6 +27,11 @@ type ClientLink = {
   storeUrls?: Record<string, string>;
 };
 
+type PromocodeClient = Pick<
+  Infrastructure['db'],
+  'promocode' | 'promocodeRedemption' | 'transaction' | 'plan'
+>;
+
 const TERMINAL_INVOICE_STATUSES = new Set(['paid', 'expired', 'canceled', 'failed']);
 
 function money(amountMinor: bigint, currency = 'RUB') {
@@ -255,9 +260,11 @@ export class MeService {
       if (!Number.isInteger(amount) || amount < config.minMinor || amount > config.maxMinor)
         throw new ApiError('TOPUP_AMOUNT_OUT_OF_RANGE', HttpStatus.BAD_REQUEST, undefined, config);
     }
-    const promocodeId = input.promocode
-      ? (await this.resolvePromocode(userId, input.promocode, input.planId)).id
-      : undefined;
+    // Section 15.5: the slot is reserved under a row lock before the invoice
+    // exists, so two concurrent buyers can never oversell `max_uses`.
+    const reservation = input.promocode
+      ? await this.reservePromocodeSlot(userId, input.promocode, input.planId)
+      : null;
 
     try {
       const invoice = await this.payments.createInvoice({
@@ -266,12 +273,23 @@ export class MeService {
         provider: input.provider,
         ...(input.planId ? { planId: input.planId } : {}),
         ...(input.amountMinor === undefined ? {} : { amountMinor: BigInt(input.amountMinor) }),
+        ...(reservation
+          ? { discountMinor: reservation.discountMinor, promocodeId: reservation.promocodeId }
+          : {}),
         idempotencyKey: idempotencyKey || randomUUID(),
       });
       if (!invoice) throw new ApiError('NOT_FOUND', HttpStatus.NOT_FOUND);
-      if (promocodeId) await this.reservePromocode(promocodeId, userId, invoice.id);
+      if (reservation)
+        await this.infra.db.promocodeRedemption.update({
+          where: { id: reservation.redemptionId },
+          data: { invoiceId: invoice.id, appliedValueMinor: reservation.discountMinor },
+        });
       return await this.invoiceView(invoice);
     } catch (error) {
+      if (reservation)
+        await this.infra.db.promocodeRedemption
+          .update({ where: { id: reservation.redemptionId }, data: { status: 'released' } })
+          .catch(() => undefined);
       throw this.paymentFailure(error);
     }
   }
@@ -482,8 +500,22 @@ export class MeService {
 
   /** Section 15.5 validation, shared by preview, redeem and invoice creation. */
   private async resolvePromocode(userId: string, code: string, planId?: string) {
-    const promocode = await this.infra.db.promocode.findFirst({
+    const found = await this.infra.db.promocode.findFirst({
       where: { code: { in: normalizePromocode(code) }, deletedAt: null },
+      select: { id: true },
+    });
+    if (!found) throw new ApiError('PROMO_NOT_FOUND', HttpStatus.NOT_FOUND);
+    return this.validatePromocode(this.infra.db, found.id, userId, planId);
+  }
+
+  private async validatePromocode(
+    tx: PromocodeClient,
+    promocodeId: string,
+    userId: string,
+    planId?: string,
+  ) {
+    const promocode = await tx.promocode.findFirst({
+      where: { id: promocodeId, deletedAt: null },
     });
     if (!promocode?.isActive) throw new ApiError('PROMO_NOT_FOUND', HttpStatus.NOT_FOUND);
     const now = new Date();
@@ -494,14 +526,14 @@ export class MeService {
       throw new ApiError('PROMO_EXPIRED', HttpStatus.CONFLICT);
 
     const [reserved, usedByUser, purchases] = await Promise.all([
-      this.infra.db.promocodeRedemption.count({
+      tx.promocodeRedemption.count({
         where: { promocodeId: promocode.id, status: 'reserved' },
       }),
-      this.infra.db.promocodeRedemption.count({
+      tx.promocodeRedemption.count({
         where: { promocodeId: promocode.id, userId, status: { in: ['applied', 'reserved'] } },
       }),
       promocode.firstPurchaseOnly
-        ? this.infra.db.transaction.count({ where: { userId, type: 'purchase' } })
+        ? tx.transaction.count({ where: { userId, type: 'purchase' } })
         : Promise.resolve(0),
     ]);
     if (promocode.maxUses !== null && promocode.usedCount + reserved >= promocode.maxUses)
@@ -515,15 +547,40 @@ export class MeService {
     return promocode;
   }
 
-  private async reservePromocode(
-    promocodeId: string,
+  /**
+   * Locks the promo code row, re-validates it under the lock and inserts the
+   * reservation. Returns the discount so the invoice can be created with it.
+   */
+  private async reservePromocodeSlot(
     userId: string,
-    invoiceId: string,
-  ): Promise<void> {
-    await this.infra.db.promocodeRedemption.create({
-      data: { promocodeId, userId, invoiceId, status: 'reserved' },
+    code: string,
+    planId: string | undefined,
+  ): Promise<{ redemptionId: string; promocodeId: string; discountMinor: bigint }> {
+    return this.infra.db.$transaction(async (tx) => {
+      const candidates = normalizePromocode(code);
+      const [locked] = await tx.$queryRaw<{ id: string }[]>`
+        SELECT id FROM promocodes
+        WHERE code = ANY(${candidates}::text[]) AND deleted_at IS NULL
+        FOR UPDATE`;
+      if (!locked) throw new ApiError('PROMO_NOT_FOUND', HttpStatus.NOT_FOUND);
+      const promocode = await this.validatePromocode(tx, locked.id, userId, planId);
+      const discount =
+        planId && (promocode.type === 'discount_percent' || promocode.type === 'discount_fixed')
+          ? this.discountFor(promocode, await this.planPrice(tx, planId))
+          : 0n;
+      const redemption = await tx.promocodeRedemption.create({
+        data: { promocodeId: promocode.id, userId, status: 'reserved' },
+      });
+      return { redemptionId: redemption.id, promocodeId: promocode.id, discountMinor: discount };
     });
-    await this.infra.db.invoice.update({ where: { id: invoiceId }, data: { promocodeId } });
+  }
+
+  private async planPrice(tx: PromocodeClient, planId: string): Promise<bigint> {
+    const plan = await tx.plan.findFirst({
+      where: { id: planId, isActive: true, deletedAt: null },
+    });
+    if (!plan) throw new ApiError('PLAN_UNAVAILABLE', HttpStatus.CONFLICT);
+    return plan.priceMinor;
   }
 
   private async requireInvoice(userId: string, id: string) {

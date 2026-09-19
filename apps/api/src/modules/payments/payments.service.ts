@@ -24,6 +24,8 @@ export class PaymentsService {
     planId?: string;
     provider: string;
     amountMinor?: bigint;
+    discountMinor?: bigint;
+    promocodeId?: string;
     idempotencyKey: string;
   }) {
     if (!input.idempotencyKey) throw new PaymentError('IDEMPOTENCY_REQUIRED');
@@ -58,6 +60,8 @@ export class PaymentsService {
       const name = plan.name as Record<string, string>;
       description = name[user.language] ?? name.ru ?? plan.slug;
     }
+    const discount = input.discountMinor ?? 0n;
+    if (discount > 0n) amount = amount > discount ? amount - discount : 1n;
     if (amount <= 0n) throw new PaymentError('PLAN_UNAVAILABLE', 'Amount must be positive');
     const expiresAt = new Date(Date.now() + 30 * 60_000);
     const provider = this.providers.get(input.provider);
@@ -108,6 +112,8 @@ export class PaymentsService {
       provider: input.provider,
       amountMinor: amount,
       currency: 'RUB',
+      ...(discount > 0n ? { discountMinor: discount } : {}),
+      ...(input.promocodeId ? { promocodeId: input.promocodeId } : {}),
       idempotencyKey: input.idempotencyKey,
       expiresAt: created.expiresAt,
       providerInvoiceId: created.providerInvoiceId,

@@ -15,7 +15,14 @@ export class AuthService {
     private readonly appKey: string,
   ) {}
 
-  async authenticateTelegram(value: unknown, requestMeta?: { userAgent?: string; ip?: string }) {
+  /**
+   * Section 15.3: the `rr_ref` cookie set by `/r/<code>` attributes a user who
+   * signs in on the site, using the same start payload the bot would send.
+   */
+  async authenticateTelegram(
+    value: unknown,
+    requestMeta?: { userAgent?: string; ip?: string; referralCode?: string },
+  ) {
     const input = telegramWidgetSchema.parse(value);
     const botToken = await this.settings.get('bot.token');
     if (typeof botToken !== 'string' || !botToken) throw new AuthFailure('AUTH_UNAVAILABLE');
@@ -25,6 +32,7 @@ export class AuthService {
       firstName: input.first_name,
       ...(input.username ? { username: input.username } : {}),
       ...(input.language_code ? { languageCode: input.language_code } : {}),
+      ...(requestMeta?.referralCode ? { startPayload: `ref_${requestMeta.referralCode}` } : {}),
     });
     const sessionId = await this.sessions.create({
       userId: user.user.id,

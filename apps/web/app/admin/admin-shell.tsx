@@ -30,6 +30,8 @@ const links: { href: string; key: string; permission: Permission }[] = [
   { href: '/admin/subscriptions', key: 'subscriptions', permission: 'subscriptions.read' },
   { href: '/admin/payments', key: 'payments', permission: 'payments.read' },
   { href: '/admin/plans', key: 'plans', permission: 'plans.read' },
+  { href: '/admin/promocodes', key: 'promocodes', permission: 'promocodes.read' },
+  { href: '/admin/referrals', key: 'referrals', permission: 'referrals.read' },
 ];
 
 /**

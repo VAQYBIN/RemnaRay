@@ -6,8 +6,8 @@ M4
 
 ## Current task
 
-TASK-M4-005 is complete and committed. Next: TASK-M4-006 (promocodes and the
-referral programme, modules plus UI). Do not start M5.
+TASK-M4-006 is complete and committed. Next: TASK-M4-007 (notifications,
+templates, notification_log, cron and alerts). Do not start M5.
 
 ## Current handoff correction
 
@@ -584,6 +584,33 @@ Verified on 2026-09-20.
 - Checks: api 91 tests (22 files), web 18 tests (4 files), `pnpm test:m4`,
   workspace tests, `pnpm lint`, `pnpm -r typecheck`, `pnpm format`, full
   `pnpm build`, `pnpm i18n-check`.
+
+## M4-006 verification
+
+Verified on 2026-09-20.
+
+- Added the section 15.2 accrual engine, running inside the payment
+  transaction: source filters, the three modes, the daily cap with an
+  administrator alert, idempotency on `source_transaction_id`, holds, the
+  invitee bonus and the `maintenance.referral-release` endpoint.
+- Refunding a source reverses the reward, fully or proportionally rounded down,
+  and administrators can reverse manually from `/admin/referrals`.
+- Section 15.3 attribution now also works from the site: `POST
+/api/v1/auth/telegram` turns the `rr_ref` cookie into a `ref_<code>` start
+  payload, and the sign-up invitee bonus is granted when the trigger says so.
+- Section 15.5 promo codes reserve their slot under `SELECT … FOR UPDATE` on the
+  promo code row before the invoice exists, so `max_uses` can never be oversold;
+  the reservation carries the discount onto the invoice and settles to `applied`
+  with `used_count + 1` on payment, or is released on cancel/underpay/failure.
+- Added the admin promo code screen (create, batch generation, CSV export,
+  soft delete) and the referral screen (programme form, accrual list, reversal),
+  both hidden for roles without the permission.
+- AC-152, AC-153 and AC-155 are covered by
+  `test/m4.rewards.integration.test.mjs` on PostgreSQL 18; the test also asserts
+  that held rewards are not spendable through `ledger.available()`.
+- Checks: api 91 tests, web 18 tests, workspace tests, `pnpm lint`,
+  `pnpm -r typecheck`, `pnpm format`, full `pnpm build`, `pnpm i18n-check`, and
+  the M1, M2 and M4 integration gates.
 
 ## M4-003 decisions
 

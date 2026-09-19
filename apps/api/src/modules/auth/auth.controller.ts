@@ -19,9 +19,11 @@ export class AuthController {
     @Req() request: AuthenticatedRequest,
     @Res({ passthrough: true }) reply: FastifyReply,
   ) {
+    const referralCode = readReferralCookie(request.headers.cookie);
     const result = await this.auth.authenticateTelegram(body, {
       ip: request.ip,
       ...(request.headers['user-agent'] ? { userAgent: request.headers['user-agent'] } : {}),
+      ...(referralCode ? { referralCode } : {}),
     });
     setSessionCookie(reply, result.sessionId);
     return { user: result.user };
@@ -60,6 +62,16 @@ export class InternalAuthController {
   issueToken(@Body() body: unknown) {
     return this.auth.issueBotToken(body);
   }
+}
+
+/** Reads `rr_ref` from `/r/<code>` (section 15.3). */
+export function readReferralCookie(header: string | undefined): string | undefined {
+  const value = header
+    ?.split(';')
+    .map((item) => item.trim())
+    .find((item) => item.startsWith('rr_ref='))
+    ?.slice('rr_ref='.length);
+  return value && /^[A-Za-z0-9]{4,16}$/.test(value) ? value : undefined;
 }
 
 function setSessionCookie(reply: FastifyReply, value: string): void {

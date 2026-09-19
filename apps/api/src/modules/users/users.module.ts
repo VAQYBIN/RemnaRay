@@ -8,9 +8,11 @@ import { InternalTokenGuard } from '../auth/auth.guards';
 import { UsersController } from './users.controller';
 import { UsersRepository } from './users.repository';
 import { UsersService } from './users.service';
+import { RewardsModule } from '../rewards/rewards.module';
+import { RewardsService } from '../rewards/rewards.service';
 
 @Module({
-  imports: [SettingsModule],
+  imports: [SettingsModule, RewardsModule],
   controllers: [UsersController],
   providers: [
     InternalTokenGuard,
@@ -21,9 +23,12 @@ import { UsersService } from './users.service';
     },
     {
       provide: UsersService,
-      inject: [UsersRepository, SettingsService],
-      useFactory: (repository: UsersRepository, settings: SettingsService) =>
-        new UsersService(repository, settings),
+      inject: [UsersRepository, SettingsService, RewardsService],
+      useFactory: (
+        repository: UsersRepository,
+        settings: SettingsService,
+        rewards: RewardsService,
+      ) => new UsersService(repository, settings, rewards),
     },
   ],
   exports: [UsersService],

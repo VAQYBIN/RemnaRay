@@ -422,6 +422,233 @@
         }
       }
     },
+    "/api/admin/v1/promocodes": {
+      "get": {
+        "operationId": "listPromocodes",
+        "summary": "Promo codes",
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        }
+      },
+      "post": {
+        "operationId": "createPromocode",
+        "summary": "Create a promo code",
+        "responses": {
+          "201": {
+            "description": "Created"
+          },
+          "403": {
+            "description": "FORBIDDEN"
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/admin/v1/promocodes/export": {
+      "get": {
+        "operationId": "exportPromocodes",
+        "summary": "CSV export",
+        "responses": {
+          "200": {
+            "description": "CSV",
+            "content": {
+              "text/csv": {}
+            }
+          }
+        }
+      }
+    },
+    "/api/admin/v1/promocodes/generate": {
+      "post": {
+        "operationId": "generatePromocodes",
+        "summary": "Section 15.6 batch generation",
+        "responses": {
+          "201": {
+            "description": "Created"
+          },
+          "403": {
+            "description": "FORBIDDEN"
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/admin/v1/promocodes/{id}": {
+      "patch": {
+        "operationId": "updatePromocode",
+        "summary": "Update a promo code",
+        "responses": {
+          "200": {
+            "description": "OK"
+          },
+          "403": {
+            "description": "FORBIDDEN"
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object"
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "operationId": "deletePromocode",
+        "summary": "Soft-delete a promo code",
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ]
+      }
+    },
+    "/api/admin/v1/promocodes/{id}/redemptions": {
+      "get": {
+        "operationId": "listPromocodeRedemptions",
+        "summary": "Redemptions of one code",
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ]
+      }
+    },
+    "/api/admin/v1/referral/program": {
+      "get": {
+        "operationId": "getReferralProgram",
+        "summary": "settings.referral.*",
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        }
+      },
+      "put": {
+        "operationId": "setReferralProgram",
+        "summary": "Update the programme; admin only",
+        "responses": {
+          "200": {
+            "description": "OK"
+          },
+          "403": {
+            "description": "FORBIDDEN"
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/admin/v1/referral/rewards": {
+      "get": {
+        "operationId": "listReferralRewards",
+        "summary": "Accruals with their hold state",
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        }
+      }
+    },
+    "/api/admin/v1/referral/rewards/{id}/reverse": {
+      "post": {
+        "operationId": "reverseReferralReward",
+        "summary": "Manual reversal; reason required",
+        "responses": {
+          "200": {
+            "description": "OK"
+          },
+          "403": {
+            "description": "FORBIDDEN"
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object"
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/admin/v1/settings": {
       "get": {
         "operationId": "getSettings",
@@ -1168,6 +1395,17 @@
         "responses": {
           "200": {
             "description": "Reconcile result"
+          }
+        }
+      }
+    },
+    "/api/internal/v1/rewards/release-held": {
+      "post": {
+        "operationId": "releaseHeldRewards",
+        "summary": "Cron maintenance.referral-release",
+        "responses": {
+          "200": {
+            "description": "OK"
           }
         }
       }

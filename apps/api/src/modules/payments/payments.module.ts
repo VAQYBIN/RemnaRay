@@ -3,6 +3,8 @@ import { Module } from '@nestjs/common';
 import { Infrastructure } from '../../infra/infra.module';
 import { SettingsModule } from '../settings/settings.module';
 import { SettingsService } from '../settings/settings.service';
+import { RewardsModule } from '../rewards/rewards.module';
+import { RewardsService } from '../rewards/rewards.service';
 import { MockPaymentProvider } from '@remnaray/payments-mock';
 import {
   BalanceProvider,
@@ -19,7 +21,7 @@ import { PaymentProviderRegistry } from './payments.registry';
 import { PaymentsService } from './payments.service';
 
 @Module({
-  imports: [SettingsModule],
+  imports: [SettingsModule, RewardsModule],
   controllers: [PaymentsWebhookController, PaymentsInternalController],
   providers: [
     {
@@ -43,8 +45,9 @@ import { PaymentsService } from './payments.service';
     },
     {
       provide: PaymentsRepository,
-      inject: [Infrastructure],
-      useFactory: (infra: Infrastructure) => new PaymentsRepository(infra.db),
+      inject: [Infrastructure, RewardsService],
+      useFactory: (infra: Infrastructure, rewards: RewardsService) =>
+        new PaymentsRepository(infra.db, rewards),
     },
     {
       provide: PaymentsService,

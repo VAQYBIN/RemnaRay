@@ -18,7 +18,7 @@
     "test": "node --test test/tooling.test.mjs",
     "test:m1": "pnpm build && node --test test/m1.integration.test.mjs",
     "test:m2": "pnpm build && node --test test/m2.payment.integration.test.mjs",
-    "test:m4": "pnpm build && node --test test/m4.admin.integration.test.mjs",
+    "test:m4": "pnpm build && node --test test/m4.admin.integration.test.mjs test/m4.rewards.integration.test.mjs",
     "theme-validate": "tsx tools/theme-validate.ts",
     "typecheck": "tsc --noEmit"
   },

@@ -2,6 +2,26 @@ import { Prisma, type PrismaClient } from '@remnaray/db';
 
 import { PaymentError } from './payments.errors';
 import type { ProviderEvent } from './payments.types';
+import type { Tx } from '../rewards/rewards.types';
+
+/**
+ * Money that settles inside a payment transaction and is not part of the
+ * payment itself: referral accrual, its reversal and promo-code settlement.
+ * Section 15.2 requires these to run in the same transaction as the payment.
+ */
+export interface RewardHooksPort {
+  onPaid(
+    tx: Tx,
+    source: { id: string; userId: string; type: string; amountMinor: bigint },
+  ): Promise<void>;
+  onRefund(
+    tx: Tx,
+    source: { id: string; amountMinor: bigint },
+    refundedMinor: bigint,
+  ): Promise<void>;
+  onInvoiceSettled(tx: Tx, invoiceId: string): Promise<void>;
+  onInvoiceReleased(tx: Tx, invoiceId: string): Promise<void>;
+}
 
 export type InvoiceInput = {
   userId: string;
@@ -10,6 +30,8 @@ export type InvoiceInput = {
   provider: string;
   amountMinor: bigint;
   currency: string;
+  discountMinor?: bigint | undefined;
+  promocodeId?: string | undefined;
   idempotencyKey: string;
   expiresAt: Date;
   providerInvoiceId?: string | undefined;
@@ -24,7 +46,10 @@ export type InvoiceInput = {
 export type StoredEvent = { id: string; duplicate: boolean };
 
 export class PaymentsRepository {
-  constructor(private readonly prisma: PrismaClient) {}
+  constructor(
+    private readonly prisma: PrismaClient,
+    private readonly rewards?: RewardHooksPort,
+  ) {}
 
   async findInvoice(id: string) {
     return this.prisma.invoice.findUnique({ where: { id } });
@@ -45,6 +70,8 @@ export class PaymentsRepository {
           status: 'pending',
           amountMinor: input.amountMinor,
           currency: input.currency,
+          discountMinor: input.discountMinor ?? 0n,
+          promocodeId: input.promocodeId ?? null,
           idempotencyKey: input.idempotencyKey,
           expiresAt: input.expiresAt,
           providerInvoiceId: input.providerInvoiceId ?? null,
@@ -175,6 +202,13 @@ export class PaymentsRepository {
       });
       if (invoice.planId)
         await this.activateSubscription(tx, invoice.userId, invoice.planId, false);
+      await this.rewards?.onInvoiceSettled(tx, invoice.id);
+      await this.rewards?.onPaid(tx, {
+        id: transaction.id,
+        userId: invoice.userId,
+        type: 'purchase',
+        amountMinor: invoice.amountMinor,
+      });
       await tx.outboxJob.create({
         data: {
           queue: 'panel',
@@ -247,6 +281,11 @@ export class PaymentsRepository {
         where: { id: original.id },
         data: { refundedMinor: original.refundedMinor + amountMinor },
       });
+      await this.rewards?.onRefund(
+        tx,
+        { id: original.id, amountMinor: original.amountMinor },
+        original.refundedMinor + amountMinor,
+      );
     });
   }
 
@@ -283,6 +322,7 @@ export class PaymentsRepository {
       if (!invoice) throw new PaymentError('INVOICE_NOT_FOUND');
       if (event.type === 'canceled' && invoice.status === 'pending') {
         await tx.invoice.update({ where: { id: invoice.id }, data: { status: 'canceled' } });
+        await this.rewards?.onInvoiceReleased(tx, invoice.id);
       }
       if (event.type === 'paid' && invoice.status !== 'paid') {
         const paid = parsed.paidAmountMinorRub
@@ -351,6 +391,14 @@ export class PaymentsRepository {
             },
           });
         }
+        if (underpaid) await this.rewards?.onInvoiceReleased(tx, invoice.id);
+        else await this.rewards?.onInvoiceSettled(tx, invoice.id);
+        await this.rewards?.onPaid(tx, {
+          id: txRow.id,
+          userId: invoice.userId,
+          type: txRow.type,
+          amountMinor: txRow.amountMinor,
+        });
       }
       await tx.$executeRaw(Prisma.sql`
         UPDATE payment_events SET processed_at = now() WHERE id = ${event.id}::uuid
