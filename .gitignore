@@ -1,4 +1,4 @@
-/node_modules
+node_modules/
 /.pnp
 .pnp.js
 
@@ -37,4 +37,5 @@ lerna-debug.log*
 .codex
 AGENTS.md
 docs/task
-docs/development
+docs/development/*
+!docs/development/PROGRESS.md

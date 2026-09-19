@@ -1,0 +1,9 @@
+{
+  "name": "@remnaray/test-fixtures",
+  "version": "0.1.0",
+  "private": false,
+  "scripts": {
+    "lint": "eslint .",
+    "typecheck": "tsc --noEmit -p tsconfig.json"
+  }
+}
