@@ -6,7 +6,7 @@ M1
 
 ## Current task
 
-TASK-M1-002 — users, channel identities, referral codes, and internal upsert.
+TASK-M1-003 — Telegram widget, Valkey sessions, bot JWT, guards, CSRF, and throttling.
 
 ## Completed tasks
 
@@ -37,6 +37,9 @@ TASK-M1-002 — users, channel identities, referral codes, and internal upsert.
   AES-256-GCM secret envelopes, transactional Prisma repository, Redis Pub/Sub
   cache invalidation, grouped admin settings API, schema endpoint, and safe
   export/import.
+- TASK-M1-002 — added Telegram user upsert, v1 channel identity creation,
+  cryptographically generated referral codes, referral attribution, payload
+  parsing for `ref_`, `promo_`, and `plan_`, and the internal bot endpoint.
 
 ## Verification
 
@@ -127,6 +130,10 @@ blocker is resolved.
   client build, API test, lint, typecheck, formatting, and full Turbo build.
   OpenAPI includes the settings routes; no migration was needed because M0-007
   already created the complete `settings` table.
+- TASK-M1-002 acceptance checks passed: ten API unit tests, root tests, lint,
+  typecheck, formatting, and full Turbo build. The existing M0-007 migration
+  already contains unique `users.telegram_id`, `users.referral_code`, the
+  Telegram identity uniqueness constraint, and referral attribution tables.
 
 ## Known blockers
 
@@ -136,6 +143,5 @@ gates belong to their scheduled milestones.
 
 ## Next
 
-Implement `TASK-M1-002`: users, channel identities, referral code generation,
-and `POST /api/internal/v1/users/upsert` with referral/promo/plan payload
-parsing and unique `telegram_id` handling.
+Implement `TASK-M1-003`: Telegram widget verification, Valkey cookie sessions,
+bot JWT issuance and guards, CSRF checks, and Valkey-backed throttling.

@@ -2,6 +2,12 @@
   "openapi": "3.0.3",
   "info": { "title": "RemnaRay API", "version": "0.1.0" },
   "paths": {
+    "/api/internal/v1/users/upsert": {
+      "post": {
+        "operationId": "upsertInternalUser",
+        "responses": { "200": { "description": "Upserted user" } }
+      }
+    },
     "/api/admin/v1/settings": {
       "get": {
         "operationId": "getSettings",

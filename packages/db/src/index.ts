@@ -4,6 +4,7 @@ import { PrismaClient } from './generated/prisma/client.js';
 
 export type { PrismaClient } from './generated/prisma/client.js';
 export { Prisma } from './generated/prisma/client.js';
+export { ReferralStatus } from './generated/prisma/enums.js';
 
 export function createPrismaClient(databaseUrl = process.env.DATABASE_URL) {
   const adapter = new PrismaPg({
