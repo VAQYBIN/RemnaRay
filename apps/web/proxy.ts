@@ -17,5 +17,5 @@ export default function proxy(request: NextRequest) {
 }
 
 export const config = {
-  matcher: ['/((?!api|themes|auth|r/|_next|.*\\..*).*)'],
+  matcher: ['/((?!api|themes|auth|admin|setup|r/|_next|.*\\..*).*)'],
 };

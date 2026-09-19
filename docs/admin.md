@@ -58,3 +58,39 @@ is copied into the audit row.
 - CSRF applies to `/api/admin/v1/auth/*` as well. Login and TOTP requests have no
   session yet, so they are checked by origin and `X-Requested-With`; once a
   session exists, `X-CSRF-Token` is also required.
+
+## Console
+
+`/admin` is served without a locale prefix and always uses the neutral `_admin`
+theme; its texts come from the shipped `admin.json` only, which section 18.4
+keeps outside the owner's override surface. The interface language follows
+`settings.locale.default` until an administrator profile language exists.
+
+| Path                                | Content                                                               |
+| ----------------------------------- | --------------------------------------------------------------------- |
+| `/admin/login`                      | email + password → TOTP, with first-login enrolment and a QR code     |
+| `/admin`                            | FR-142 widgets, revenue and registration charts, "requires attention" |
+| `/admin/users`, `/admin/users/[id]` | FR-140 search and filters; FR-141 actions behind reason modals        |
+| `/admin/subscriptions`              | Status, plan and expiry filters; bulk extension up to 500 rows        |
+| `/admin/payments`                   | Invoices with masked provider events, recheck, transactions, refund   |
+| `/admin/plans`                      | FR-145 CRUD with ordering                                             |
+
+`AdminShell` loads `GET /api/admin/v1/auth/me` once, keeps the CSRF token for
+later mutations and hides every section the role does not carry. Server-side,
+`@Roles`/`@Permissions` enforce the same matrix, so hiding a control is a
+convenience rather than the boundary.
+
+## Dashboard aggregates
+
+Every FR-142 number is a SQL aggregate over `transactions`, `subscriptions`,
+`users` and `accounts`, cached in Valkey for 60 seconds. Revenue counts
+`purchase` and `topup` minus `refund`; the trial conversion is a cohort by trial
+date. `test/m4.admin.integration.test.mjs` re-computes each aggregate with an
+independent SQL control on fixtures (AC-142) and also covers AC-140 search and
+AC-141 audited actions.
+
+## Operator limits
+
+`settings.operator.max_credit_minor` caps an operator's daily total credit and
+`settings.operator.max_refund_minor` caps a single refund. An operator can never
+debit a balance, run a bulk extension, anonymize a user or edit plans.

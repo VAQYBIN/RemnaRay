@@ -6,8 +6,8 @@ M4
 
 ## Current task
 
-TASK-M4-004 is complete and committed. Next: TASK-M4-005 (admin dashboard,
-users, subscriptions, payments, plans). Do not start M5.
+TASK-M4-005 is complete and committed. Next: TASK-M4-006 (promocodes and the
+referral programme, modules plus UI). Do not start M5.
 
 ## Current handoff correction
 
@@ -556,6 +556,32 @@ Verified on 2026-09-20.
   the three-second polling window, the countdown, Stars deep links, the paid and
   expired states and the error state.
 - Checks: api 81 tests (20 files), web 13 tests (3 files), bot 10 tests, all
+  workspace tests, `pnpm lint`, `pnpm -r typecheck`, `pnpm format`, full
+  `pnpm build`, `pnpm i18n-check`.
+
+## M4-005 verification
+
+Verified on 2026-09-20.
+
+- Added the section 9.6 admin API this task covers: dashboard overview, daily
+  series and the requires-attention counters; user search, card and every FR-141
+  action; subscriptions with bulk extension; invoices with masked provider
+  events, recheck, transactions and refund; plan reorder. Every mutation returns
+  `Audited`, so the interceptor records the prior state.
+- Section 14.2 limits are enforced server-side: an operator cannot debit a
+  balance, bulk-extend, anonymize or write plans, and their daily credit total is
+  capped by `settings.operator.max_credit_minor`.
+- Added `/admin` with the `_admin` theme and no locale prefix: login with TOTP
+  enrolment, dashboard with Recharts revenue and registration charts, users list
+  and card with reason modals, subscriptions with selection and bulk extension,
+  payments with the event viewer and refund, and plan management with ordering.
+- AC-142: `test/m4.admin.integration.test.mjs` recomputes revenue, payments, new
+  users, trials, active subscriptions, balance liability and referral rewards
+  with an independent SQL control on PostgreSQL 18 fixtures and compares them to
+  the service output; the daily series sums back to the same totals. The same
+  test covers AC-140 search by Telegram id, username and status, and AC-141
+  audited extend, balance and anonymize actions.
+- Checks: api 91 tests (22 files), web 18 tests (4 files), `pnpm test:m4`,
   workspace tests, `pnpm lint`, `pnpm -r typecheck`, `pnpm format`, full
   `pnpm build`, `pnpm i18n-check`.
 

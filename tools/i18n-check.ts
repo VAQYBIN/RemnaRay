@@ -19,6 +19,9 @@ const nonCyrillicRussianKeys = new Set([
   'common.language.en',
   'bot.lang.en',
   'account.email',
+  'admin.login.email',
+  'admin.users.telegramId',
+  'admin.users.username',
 ]);
 const cyrillic = /[\u0400-\u04FF]/u;
 const failures: string[] = [];

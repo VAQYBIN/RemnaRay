@@ -38,4 +38,8 @@ export class PlansService {
   remove(id: string) {
     return this.repository.remove(id);
   }
+
+  reorder(ids: string[]) {
+    return this.repository.reorder(ids);
+  }
 }

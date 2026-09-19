@@ -1,0 +1,271 @@
+import { execFileSync } from 'node:child_process';
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import process from 'node:process';
+import { PostgreSqlContainer } from '@testcontainers/postgresql';
+
+/** A Valkey-free stand-in: the dashboard only uses the cache opportunistically. */
+const noCache = {
+  get: () => Promise.resolve(null),
+  set: () => Promise.resolve('OK'),
+  del: () => Promise.resolve(0),
+  publish: () => Promise.resolve(0),
+};
+
+test(
+  'M4 admin surface: AC-140 search, AC-141 audited actions, AC-142 dashboard aggregates',
+  { timeout: 300_000 },
+  async () => {
+    const postgres = await new PostgreSqlContainer('postgres:18-alpine')
+      .withDatabase('remnaray')
+      .withUsername('remnaray')
+      .withPassword('remnaray')
+      .start();
+    const databaseUrl = postgres.getConnectionUri();
+    try {
+      execFileSync('pnpm', ['--filter', '@remnaray/db', 'db:migrate:deploy'], {
+        cwd: process.cwd(),
+        env: { ...process.env, DATABASE_URL: databaseUrl },
+        stdio: 'pipe',
+      });
+      const { createPrismaClient } = await import('../packages/db/dist/index.js');
+      const { DashboardService } =
+        await import('../apps/api/dist/modules/admin-api/dashboard.service.js');
+      const { AdminUsersService } =
+        await import('../apps/api/dist/modules/admin-api/admin-users.service.js');
+      const prisma = createPrismaClient(databaseUrl);
+      const infra = { db: prisma, redis: noCache };
+      const settings = {
+        get: (key) => Promise.resolve(key === 'operator.max_credit_minor' ? '100000' : '100000'),
+      };
+      const dashboard = new DashboardService(infra);
+      const users = new AdminUsersService(infra, settings, {});
+
+      const admin = await prisma.admin.create({
+        data: { email: 'owner@example.test', passwordHash: 'x', role: 'admin' },
+      });
+      const plan = await prisma.plan.create({
+        data: {
+          slug: 'm4-month',
+          name: { ru: 'Месяц', en: 'Month' },
+          durationDays: 30,
+          squads: [],
+          priceMinor: 29900n,
+        },
+      });
+
+      const created = [];
+      for (let index = 0; index < 5; index += 1) {
+        const user = await prisma.user.create({
+          data: {
+            telegramId: BigInt(994000000 + index),
+            username: `m4user${String(index)}`,
+            language: 'ru',
+            referralCode: `M4USER${String(index)}`,
+          },
+        });
+        await prisma.account.create({
+          data: {
+            kind: 'user',
+            userId: user.id,
+            currency: 'RUB',
+            balanceMinor: BigInt(1000 * index),
+          },
+        });
+        created.push(user);
+      }
+
+      await prisma.transaction.createMany({
+        data: [
+          {
+            userId: created[0].id,
+            type: 'purchase',
+            status: 'completed',
+            amountMinor: 29900n,
+            currency: 'RUB',
+            provider: 'mock',
+          },
+          {
+            userId: created[1].id,
+            type: 'purchase',
+            status: 'completed',
+            amountMinor: 29900n,
+            currency: 'RUB',
+            provider: 'mock',
+          },
+          {
+            userId: created[2].id,
+            type: 'topup',
+            status: 'completed',
+            amountMinor: 50000n,
+            currency: 'RUB',
+            provider: 'yookassa',
+          },
+          {
+            userId: created[0].id,
+            type: 'refund',
+            status: 'completed',
+            amountMinor: 10000n,
+            currency: 'RUB',
+            provider: 'mock',
+          },
+          {
+            userId: created[3].id,
+            type: 'referral_reward',
+            status: 'completed',
+            amountMinor: 5980n,
+            currency: 'RUB',
+          },
+        ],
+      });
+      await prisma.subscription.createMany({
+        data: [
+          {
+            userId: created[0].id,
+            planId: plan.id,
+            source: 'purchase',
+            status: 'active',
+            startsAt: new Date(),
+            expiresAt: new Date(Date.now() + 2 * 86_400_000),
+            trafficLimitBytes: 0n,
+            trafficResetStrategy: 'NO_RESET',
+            deviceLimit: 3,
+            squads: [],
+          },
+          {
+            userId: created[1].id,
+            planId: plan.id,
+            source: 'trial',
+            status: 'active',
+            startsAt: new Date(),
+            expiresAt: new Date(Date.now() + 20 * 86_400_000),
+            trafficLimitBytes: 0n,
+            trafficResetStrategy: 'NO_RESET',
+            deviceLimit: 1,
+            squads: [],
+          },
+          {
+            userId: created[4].id,
+            planId: plan.id,
+            source: 'trial',
+            status: 'expired',
+            startsAt: new Date(),
+            expiresAt: new Date(Date.now() - 86_400_000),
+            trafficLimitBytes: 0n,
+            trafficResetStrategy: 'NO_RESET',
+            deviceLimit: 1,
+            squads: [],
+          },
+        ],
+      });
+
+      const from = new Date(Date.now() - 86_400_000);
+      const to = new Date(Date.now() + 86_400_000);
+      const overview = await dashboard.overview({ from: from.toISOString(), to: to.toISOString() });
+
+      // AC-142: independent SQL control for every aggregate.
+      const [control] = await prisma.$queryRaw`
+        SELECT
+          (SELECT COALESCE(SUM(CASE WHEN type = 'refund' THEN -amount_minor ELSE amount_minor END), 0)
+             FROM transactions
+            WHERE status = 'completed' AND type IN ('purchase','topup','refund')
+              AND created_at BETWEEN ${from} AND ${to})::bigint AS revenue,
+          (SELECT COUNT(*) FROM transactions
+            WHERE status = 'completed' AND type IN ('purchase','topup')
+              AND created_at BETWEEN ${from} AND ${to})::bigint AS payments,
+          (SELECT COUNT(*) FROM users WHERE created_at BETWEEN ${from} AND ${to})::bigint AS new_users,
+          (SELECT COUNT(*) FROM subscriptions WHERE source = 'trial'
+              AND created_at BETWEEN ${from} AND ${to})::bigint AS trials,
+          (SELECT COUNT(*) FROM subscriptions WHERE status = 'active')::bigint AS active,
+          (SELECT COALESCE(SUM(balance_minor), 0) FROM accounts WHERE kind = 'user')::bigint AS liability,
+          (SELECT COALESCE(SUM(amount_minor), 0) FROM transactions
+            WHERE type = 'referral_reward' AND status = 'completed'
+              AND created_at BETWEEN ${from} AND ${to})::bigint AS rewards`;
+
+      assert.equal(overview.revenue.amountMinor, Number(control.revenue));
+      assert.equal(overview.payments, Number(control.payments));
+      assert.equal(overview.newUsers, Number(control.new_users));
+      assert.equal(overview.trialsIssued, Number(control.trials));
+      assert.equal(overview.activeSubscriptions, Number(control.active));
+      assert.equal(overview.userBalanceLiability.amountMinor, Number(control.liability));
+      assert.equal(overview.referralRewards.amountMinor, Number(control.rewards));
+      assert.equal(overview.revenue.amountMinor, 99800);
+      assert.equal(overview.averagePayment.amountMinor, Math.floor(109800 / 3));
+      assert.equal(overview.expiringInThreeDays, 1);
+      assert.equal(overview.trialConversionPercent, 50);
+      assert.deepEqual(
+        overview.topProviders.map((row) => [row.provider, row.total.amountMinor]),
+        [
+          ['yookassa', 50000],
+          ['mock', 59800],
+        ].sort((left, right) => right[1] - left[1]),
+      );
+
+      const series = await dashboard.series({ from: from.toISOString(), to: to.toISOString() });
+      assert.equal(
+        series.revenue.reduce((sum, row) => sum + row.amountMinor, 0),
+        overview.revenue.amountMinor,
+      );
+      assert.equal(
+        series.registrations.reduce((sum, row) => sum + row.count, 0),
+        overview.newUsers,
+      );
+
+      // AC-140: search reaches a user by Telegram id and by username.
+      const byTelegram = await users.list({ q: String(created[2].telegramId) });
+      assert.equal(byTelegram.items.length, 1);
+      assert.equal(byTelegram.items[0].id, created[2].id);
+      const byUsername = await users.list({ q: 'm4user1' });
+      assert.equal(byUsername.items[0].id, created[1].id);
+      const activeOnly = await users.list({ status: 'active', limit: 100 });
+      assert.deepEqual(
+        activeOnly.items.map((row) => row.id).sort(),
+        [created[0].id, created[1].id].sort(),
+      );
+
+      // AC-141: every action records an immutable audit row through the service result.
+      const extend = await users.extend(
+        created[0].id,
+        { days: 7, reason: 'support request' },
+        { id: admin.id, role: 'admin' },
+      );
+      assert.ok(extend.before.expiresAt < extend.after.expiresAt);
+      const adjustment = await prisma.transaction.findFirst({
+        where: { userId: created[0].id, type: 'adjustment' },
+      });
+      assert.equal(adjustment.amountMinor, 0n);
+      assert.equal(adjustment.reason, 'support request');
+      assert.equal(adjustment.actorAdminId, admin.id);
+
+      const credit = await users.adjustBalance(
+        created[0].id,
+        { amountMinor: 2500, reason: 'goodwill' },
+        { id: admin.id, role: 'admin' },
+      );
+      assert.equal(credit.after.balance.amountMinor, credit.before.balance.amountMinor + 2500);
+
+      await assert.rejects(
+        users.adjustBalance(
+          created[0].id,
+          { amountMinor: -10_000_000, reason: 'oops' },
+          { id: admin.id, role: 'admin' },
+        ),
+      );
+
+      const anonymized = await users.anonymize(created[3].id, { reason: 'gdpr request' });
+      assert.equal(anonymized.after.username, null);
+      const stored = await prisma.user.findUnique({ where: { id: created[3].id } });
+      assert.ok(stored.telegramId < 0n);
+      assert.ok(stored.anonymizedAt);
+      assert.equal(
+        await prisma.transaction.count({ where: { userId: created[3].id } }),
+        1,
+        'financial history survives anonymization',
+      );
+
+      await prisma.$disconnect();
+    } finally {
+      await postgres.stop();
+    }
+  },
+);

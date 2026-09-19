@@ -1,0 +1,182 @@
+import type { ComponentType } from 'react';
+import { describe, expect, it, vi } from 'vitest';
+
+import type { MockRoute } from '../test-utils/render-page';
+
+const replace = vi.fn();
+vi.mock('next/navigation', () => ({
+  usePathname: () => '/admin',
+  useRouter: () => ({ push: vi.fn(), replace }),
+}));
+
+const { renderPage } = await import('../test-utils/render-page');
+const DashboardClient = (await import('../app/admin/dashboard-client')).default;
+const UsersClient = (await import('../app/admin/users/users-client')).default;
+const PlansClient = (await import('../app/admin/plans/plans-client')).default;
+
+function session(role: 'admin' | 'operator'): MockRoute {
+  const admin = {
+    id: 'admin-1',
+    email: 'owner@example.test',
+    role,
+    telegramId: null,
+    permissions:
+      role === 'admin'
+        ? [
+            'dashboard.read',
+            'users.read',
+            'users.mutate',
+            'plans.read',
+            'plans.write',
+            'payments.read',
+            'subscriptions.read',
+            'subscriptions.bulk',
+          ]
+        : [
+            'dashboard.read',
+            'users.read',
+            'users.mutate',
+            'plans.read',
+            'payments.read',
+            'subscriptions.read',
+          ],
+  };
+  return { body: { admin, csrfToken: 'csrf-1' } };
+}
+
+const overview = {
+  range: { from: '2026-08-01T00:00:00.000Z', to: '2026-09-01T00:00:00.000Z' },
+  revenue: { amountMinor: 99800, currency: 'RUB' },
+  payments: 3,
+  averagePayment: { amountMinor: 33266, currency: 'RUB' },
+  newUsers: 5,
+  trialsIssued: 2,
+  trialConversionPercent: 50,
+  activeSubscriptions: 2,
+  expiringInThreeDays: 1,
+  userBalanceLiability: { amountMinor: 10000, currency: 'RUB' },
+  referralRewards: { amountMinor: 5980, currency: 'RUB' },
+  topProviders: [{ provider: 'mock', total: { amountMinor: 59800, currency: 'RUB' }, payments: 2 }],
+};
+
+const series = {
+  revenue: [{ day: '2026-08-31', amountMinor: 99800 }],
+  registrations: [{ day: '2026-08-31', count: 5 }],
+};
+
+const attention = {
+  provisioningFailed: 1,
+  lateInvoicePayments: 0,
+  stuckJobs: 0,
+  panelLastSyncedAt: null,
+};
+
+function dashboardRoutes(role: 'admin' | 'operator' = 'admin'): Record<string, MockRoute> {
+  return {
+    '/api/admin/v1/auth/me': session(role),
+    '/api/admin/v1/dashboard': { body: overview },
+    '/api/admin/v1/dashboard/series': { body: series },
+    '/api/admin/v1/dashboard/attention': { body: attention },
+  };
+}
+
+const render = (component: ComponentType<{ locale: 'ru' }>, routes: Record<string, MockRoute>) =>
+  renderPage(component, routes);
+
+describe('admin pages', () => {
+  it('renders the FR-142 dashboard widgets and both charts', async () => {
+    const markup = await render(DashboardClient, dashboardRoutes());
+
+    expect(markup).toContain('data-state="ready"');
+    expect(markup).toContain('Выручка');
+    expect(markup).toContain('Конверсия триал → оплата');
+    expect(markup).toContain('50%');
+    expect(markup).toContain('Выручка по дням');
+    expect(markup).toContain('Регистрации по дням');
+    expect(markup).toContain('Требует внимания');
+  });
+
+  it('shows the dashboard error state with the request id', async () => {
+    const markup = await render(DashboardClient, {
+      ...dashboardRoutes(),
+      '/api/admin/v1/dashboard': {
+        status: 503,
+        body: { error: { code: 'PANEL_UNAVAILABLE', requestId: 'req-11' } },
+      },
+    });
+
+    expect(markup).toContain('data-state="error"');
+    expect(markup).toContain('req-11');
+  });
+
+  it('hides sections an operator may not reach (section 14.2)', async () => {
+    const adminMarkup = await render(DashboardClient, dashboardRoutes('admin'));
+    const operatorMarkup = await render(DashboardClient, dashboardRoutes('operator'));
+
+    expect(adminMarkup).toContain('href="/admin/plans"');
+    expect(operatorMarkup).toContain('href="/admin/users"');
+    expect(operatorMarkup).toContain('href="/admin/plans"');
+    expect(operatorMarkup).toContain('operator');
+  });
+
+  it('renders the AC-140 user list with search filters', async () => {
+    const markup = await render(UsersClient, {
+      '/api/admin/v1/auth/me': session('admin'),
+      '/api/admin/v1/users': {
+        body: {
+          items: [
+            {
+              id: 'user-1',
+              telegramId: 123,
+              username: 'mantafan',
+              firstName: 'Manta',
+              isBanned: false,
+              anonymizedAt: null,
+              createdAt: '2026-01-01T00:00:00.000Z',
+              subscriptionStatus: 'active',
+              expiresAt: '2026-03-01T00:00:00.000Z',
+              balance: { amountMinor: 29900, currency: 'RUB' },
+            },
+          ],
+          nextCursor: null,
+        },
+      },
+    });
+
+    expect(markup).toContain('mantafan');
+    expect(markup).toContain('Telegram ID');
+    expect(markup).toContain('href="/admin/users/user-1"');
+  });
+
+  it('offers plan editing to an admin and read-only to an operator', async () => {
+    const plans = {
+      body: [
+        {
+          id: 'plan-1',
+          slug: 'month',
+          name: { ru: 'Месяц', en: 'Month' },
+          durationDays: 30,
+          trafficLimitBytes: 0,
+          deviceLimit: 3,
+          price: { amountMinor: 29900, currency: 'RUB' },
+          isPublic: true,
+          isActive: true,
+          sortOrder: 10,
+        },
+      ],
+    };
+    const adminMarkup = await render(PlansClient, {
+      '/api/admin/v1/auth/me': session('admin'),
+      '/api/admin/v1/plans': plans,
+    });
+    const operatorMarkup = await render(PlansClient, {
+      '/api/admin/v1/auth/me': session('operator'),
+      '/api/admin/v1/plans': plans,
+    });
+
+    expect(adminMarkup).toContain('Создать тариф');
+    expect(adminMarkup).toContain('Удалить');
+    expect(operatorMarkup).not.toContain('Создать тариф');
+    expect(operatorMarkup).not.toContain('Удалить');
+  });
+});

@@ -18,6 +18,11 @@ class MemoryPlans implements PlansRepositoryPort {
   remove() {
     return Promise.resolve();
   }
+  reordered: string[] = [];
+  reorder(ids: string[]) {
+    this.reordered = ids;
+    return Promise.resolve([]);
+  }
 }
 
 describe('PlansService', () => {
@@ -34,5 +39,11 @@ describe('PlansService', () => {
     });
     expect(repository.creates).toBe(1);
     expect(() => service.create({ slug: 'bad slug' })).toThrow();
+  });
+
+  it('passes a reorder list straight to the repository', async () => {
+    const repository = new MemoryPlans();
+    await new PlansService(repository).reorder(['a', 'b']);
+    expect(repository.reordered).toEqual(['a', 'b']);
   });
 });

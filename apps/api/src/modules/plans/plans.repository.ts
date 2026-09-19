@@ -33,6 +33,7 @@ export interface PlansRepositoryPort {
   list(includeInactive: boolean): Promise<PlanView[]>;
   update(id: string, patch: PlanPatch): Promise<PlanView>;
   remove(id: string): Promise<void>;
+  reorder(ids: string[]): Promise<PlanView[]>;
 }
 
 export class PlansRepository implements PlansRepositoryPort {
@@ -115,6 +116,17 @@ export class PlansRepository implements PlansRepositoryPort {
     });
     await this.invalidate();
     return toView(plan);
+  }
+
+  /** Section 14.1: drag-and-drop ordering writes `sort_order` in one transaction. */
+  async reorder(ids: string[]): Promise<PlanView[]> {
+    await this.prisma.$transaction(
+      ids.map((id, index) =>
+        this.prisma.plan.update({ where: { id }, data: { sortOrder: (index + 1) * 10 } }),
+      ),
+    );
+    await this.invalidate();
+    return this.list(true);
   }
 
   async remove(id: string): Promise<void> {

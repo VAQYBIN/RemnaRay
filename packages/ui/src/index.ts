@@ -1,6 +1,7 @@
 export { Badge, type BadgeProps } from './badge';
 export { Button, buttonVariants, type ButtonProps } from './button';
 export { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from './card';
+export { CountChart, TrendChart, type SeriesPoint } from './chart';
 export { ConfirmDialog, type ConfirmDialogLabels } from './confirm-dialog';
 export { DataTable, type DataTableColumn, type DataTableLabels } from './data-table';
 export { DateRangePicker, lastDays, type DateRange } from './date-range-picker';

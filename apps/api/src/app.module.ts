@@ -15,6 +15,7 @@ import { BotModule } from './modules/bot/bot.module';
 import { AdminModule } from './modules/admin/admin.module';
 import { PublicModule } from './modules/public/public.module';
 import { MeModule } from './modules/me/me.module';
+import { AdminApiModule } from './modules/admin-api/admin-api.module';
 
 @Module({
   imports: [
@@ -31,6 +32,7 @@ import { MeModule } from './modules/me/me.module';
     AdminModule,
     PublicModule,
     MeModule,
+    AdminApiModule,
     LoggerModule.forRoot({
       pinoHttp: {
         level: process.env.RR_LOG_LEVEL ?? 'info',
