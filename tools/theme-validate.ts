@@ -1,7 +1,12 @@
 import { existsSync, readFileSync, readdirSync } from 'node:fs';
 import { resolve } from 'node:path';
 
-import { contrastWarnings, themeSchema } from '../packages/theme-schema/src/index.js';
+import {
+  bodyTextContrast,
+  contrastFailures,
+  contrastWarnings,
+  themeSchema,
+} from '../packages/theme-schema/src/index.js';
 
 const themeDirectory = resolve(process.argv[2] ?? 'themes/manta');
 const themePath = resolve(themeDirectory, 'theme.json');
@@ -30,7 +35,20 @@ if (!existsSync(themePath)) {
       throw new Error(`Missing theme assets: ${missing.join(', ')}`);
     }
 
+    const failures = contrastFailures(theme);
+    if (failures.length > 0) {
+      throw new Error(
+        `Body text contrast below AA: ${failures
+          .map((failure) => `${failure.pair} is ${failure.ratio.toFixed(2)}:1`)
+          .join(', ')}`,
+      );
+    }
+
+    const ratios = bodyTextContrast(theme);
     const warnings = contrastWarnings(theme);
+    console.log(
+      `Body text contrast: light ${ratios.light.toFixed(2)}:1, dark ${ratios.dark.toFixed(2)}:1 (AA 4.5:1).`,
+    );
     console.log(
       `Validated theme ${theme.slug} (${String(readdirSync(themeDirectory).length)} top-level entries).`,
     );

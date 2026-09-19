@@ -490,6 +490,56 @@
           }
         }
       }
+    },
+    "/api/v1/public/theme": {
+      "get": {
+        "operationId": "getPublicTheme",
+        "summary": "Active theme tokens and asset URLs (section 18.2)",
+        "parameters": [
+          {
+            "name": "If-None-Match",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Theme tokens",
+            "headers": {
+              "ETag": {
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "Cache-Control": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "304": {
+            "description": "Not modified"
+          }
+        }
+      }
+    },
+    "/api/admin/v1/themes": {
+      "get": {
+        "operationId": "listThemes",
+        "summary": "Themes available in the mounted themes directory",
+        "responses": {
+          "200": {
+            "description": "Theme list"
+          },
+          "401": {
+            "description": "UNAUTHENTICATED"
+          }
+        }
+      }
     }
   }
 }

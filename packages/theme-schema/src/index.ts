@@ -73,6 +73,20 @@ export const themeSchema = z.object({
   }),
 });
 
+export const themeTokensSchema = z.object({
+  slug: z.string(),
+  name: z.string(),
+  version: z.literal(1),
+  brand: z.object({ name: z.string().min(1), tagline: localeText }),
+  colors: themeColorsSchema,
+  typography: themeSchema.shape.typography,
+  radius: themeSchema.shape.radius,
+  landing: themeSchema.shape.landing,
+  assets: z.record(z.string(), z.string()),
+  etag: z.string(),
+});
+
+export type ThemeTokens = z.infer<typeof themeTokensSchema>;
 export type Theme = z.infer<typeof themeSchema>;
 export type ThemeColors = z.infer<typeof themeColorsSchema>;
 
@@ -112,7 +126,30 @@ export function contrastWarnings(theme: Theme): ContrastWarning[] {
   });
 }
 
-export function cssVariables(theme: Theme): Record<string, string> {
+export type ContrastFailure = { pair: string; ratio: number };
+
+/**
+ * Section 13.5 requires AA body-text contrast in both colour schemes:
+ * `foreground` on `background` (sea foam) and dark `foreground` on dark
+ * `background` (deep ocean). These pairs are hard failures, unlike the
+ * section 18.3 warnings.
+ */
+export function bodyTextContrast(theme: Theme): { light: number; dark: number } {
+  return {
+    light: contrastRatio(theme.colors.foreground, theme.colors.background),
+    dark: contrastRatio(theme.colors.dark.foreground, theme.colors.dark.background),
+  };
+}
+
+export function contrastFailures(theme: Theme): ContrastFailure[] {
+  const ratios = bodyTextContrast(theme);
+  return [
+    { pair: 'foreground on background', ratio: ratios.light },
+    { pair: 'dark.foreground on dark.background', ratio: ratios.dark },
+  ].filter((entry) => entry.ratio < 4.5);
+}
+
+export function cssVariables(theme: Pick<Theme, 'colors' | 'radius'>): Record<string, string> {
   const variables: Record<string, string> = {
     '--color-primary': theme.colors.primary,
     '--color-primary-foreground': theme.colors['primary-foreground'],

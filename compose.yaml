@@ -5,10 +5,15 @@ x-app-common: &app-common
   env_file: .env
   environment:
     TZ: UTC
+    RR_THEMES_DIR: /themes
+    RR_LOCALES_DIR: /locales
     DATABASE_URL: ${DATABASE_URL:-postgresql://${POSTGRES_USER:-remnaray}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-remnaray}}
     VALKEY_URL: ${VALKEY_URL:-redis://valkey:6379/0}
   networks: [rr_net]
   restart: unless-stopped
+  volumes:
+    - ./themes:/themes:ro
+    - ./locales:/locales:ro
   read_only: true
   tmpfs: [/tmp]
   security_opt: [no-new-privileges:true]
@@ -91,6 +96,8 @@ services:
     image: ${RR_WEB_IMAGE:-ghcr.io/remnaray/web:local}
     environment:
       INTERNAL_API_URL: http://api:3000
+      RR_THEMES_DIR: /themes
+      RR_LOCALES_DIR: /locales
       RR_DOMAIN: ${RR_DOMAIN}
       TZ: UTC
       PORT: 3001
@@ -104,6 +111,9 @@ services:
       retries: 6
     read_only: true
     tmpfs: [/tmp, /app/apps/web/.next/cache]
+    volumes:
+      - ./themes:/themes:ro
+      - ./locales:/locales:ro
 
 networks:
   rr_net:
