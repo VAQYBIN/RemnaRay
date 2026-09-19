@@ -5,5 +5,15 @@
   "scripts": {
     "lint": "eslint .",
     "typecheck": "tsc --noEmit -p tsconfig.json"
+  },
+  "dependencies": {
+    "@radix-ui/react-dialog": "~1.1.23",
+    "class-variance-authority": "~0.7.1",
+    "lucide-react": "~1.47.0",
+    "react": "~19.3.0",
+    "tailwind-merge": "~3.7.0"
+  },
+  "peerDependencies": {
+    "react": "~19.3.0"
   }
 }

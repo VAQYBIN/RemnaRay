@@ -1,0 +1,69 @@
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "extends": ["config:recommended"],
+  "dependencyDashboard": true,
+  "minimumReleaseAge": "7 days",
+  "vulnerabilityAlerts": {
+    "enabled": true,
+    "labels": ["security"],
+    "minimumReleaseAge": null
+  },
+  "ignoreDeps": ["pnpm", "prisma", "@prisma/client", "@prisma/adapter-pg", "grammy", "ioredis"],
+  "packageRules": [
+    {
+      "description": "Keep major updates behind an explicit maintainer decision",
+      "matchUpdateTypes": ["major"],
+      "minimumReleaseAge": "21 days",
+      "dependencyDashboardApproval": true,
+      "automerge": false
+    },
+    {
+      "description": "Automerge safe patch updates after the full CI gate",
+      "matchUpdateTypes": ["patch"],
+      "matchDepTypes": ["devDependencies"],
+      "matchPackageNames": ["!prisma", "!@prisma/*", "!bullmq", "!ioredis", "!@nestjs/*"],
+      "automerge": true,
+      "automergeType": "pr"
+    },
+    {
+      "description": "Group NestJS packages",
+      "matchPackageNames": ["@nestjs/*"],
+      "groupName": "nestjs"
+    },
+    {
+      "description": "Group Prisma packages",
+      "matchPackageNames": ["prisma", "@prisma/*"],
+      "groupName": "prisma"
+    },
+    {
+      "description": "Group grammY packages",
+      "matchPackageNames": ["grammy", "@grammyjs/*"],
+      "groupName": "grammy"
+    },
+    {
+      "description": "Group Next and React packages",
+      "matchPackageNames": ["next", "next-intl", "react", "react-dom"],
+      "groupName": "next"
+    },
+    {
+      "description": "Group Tailwind packages",
+      "matchPackageNames": ["tailwindcss", "tailwind-merge"],
+      "groupName": "tailwind"
+    },
+    {
+      "description": "Group ESLint packages",
+      "matchPackageNames": ["eslint", "@eslint/*", "typescript-eslint"],
+      "groupName": "eslint"
+    },
+    {
+      "description": "Group container image updates",
+      "matchDatasources": ["docker"],
+      "groupName": "docker-images"
+    },
+    {
+      "description": "Never automerge money movement and provider clients",
+      "matchPackageNames": ["prisma", "@prisma/*", "bullmq", "ioredis", "@nestjs/*", "undici"],
+      "automerge": false
+    }
+  ]
+}

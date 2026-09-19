@@ -5,5 +5,8 @@
   "scripts": {
     "lint": "eslint .",
     "typecheck": "tsc --noEmit -p tsconfig.json"
+  },
+  "dependencies": {
+    "undici": "~8.10.2"
   }
 }

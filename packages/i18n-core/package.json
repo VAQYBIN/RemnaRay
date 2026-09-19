@@ -5,5 +5,9 @@
   "scripts": {
     "lint": "eslint .",
     "typecheck": "tsc --noEmit -p tsconfig.json"
+  },
+  "dependencies": {
+    "dayjs": "~1.11.23",
+    "intl-messageformat": "~12.1.1"
   }
 }
