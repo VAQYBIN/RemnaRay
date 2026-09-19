@@ -1359,6 +1359,59 @@
         }
       }
     },
+    "/api/internal/v1/notify/alert": {
+      "post": {
+        "operationId": "sendAdminAlert",
+        "summary": "Administrator alert, one per type per hour",
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/internal/v1/notify/scan-expiring": {
+      "post": {
+        "operationId": "scanExpiringSubscriptions",
+        "summary": "Cron notify.scan-expiring",
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        }
+      }
+    },
+    "/api/internal/v1/notify/send": {
+      "post": {
+        "operationId": "sendNotification",
+        "summary": "Deliver one notification, deduplicated by (user, dedupKey)",
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object"
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/internal/v1/payments/expire": {
       "post": {
         "operationId": "expireInvoices",
@@ -1395,6 +1448,27 @@
         "responses": {
           "200": {
             "description": "Reconcile result"
+          }
+        }
+      }
+    },
+    "/api/internal/v1/remnawave/sync-user": {
+      "post": {
+        "operationId": "syncPanelUser",
+        "summary": "Queue consumer for panel.sync-user",
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object"
+              }
+            }
           }
         }
       }

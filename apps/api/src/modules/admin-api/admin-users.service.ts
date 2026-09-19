@@ -371,19 +371,27 @@ export class AdminUsersService {
   async message(id: string, body: unknown) {
     const input = messageSchema.parse(body);
     const user = await this.require(id);
+    const dedupKey = `admin.message:${id}:${Date.now().toString(36)}`;
     await this.infra.db.outboxJob.create({
       data: {
         queue: 'notify',
-        name: 'notify.admin-message',
+        name: 'notify.send',
         payload: {
+          event: 'admin.message',
           userId: id,
-          telegramId: user.telegramId.toString(),
-          text: input.text,
-          lang: input.lang ?? user.language,
+          dedupKey,
+          params: { text: input.text },
         },
+        jobId: `notify:${dedupKey}`,
       },
     });
-    return new Audited(null, { queued: true }, { queued: true });
+    return new Audited(
+      null,
+      { queued: true, language: input.lang ?? user.language },
+      {
+        queued: true,
+      },
+    );
   }
 
   async setNotes(id: string, body: unknown) {

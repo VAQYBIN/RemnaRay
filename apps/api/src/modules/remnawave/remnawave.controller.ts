@@ -1,10 +1,34 @@
-import { Body, Controller, Get, Headers, HttpCode, Post } from '@nestjs/common';
+import {
+  BadRequestException,
+  Body,
+  Controller,
+  Get,
+  Headers,
+  HttpCode,
+  Post,
+} from '@nestjs/common';
+import { z } from 'zod';
 
 import { RemnawaveService } from './remnawave.service';
+
+const syncUserSchema = z.object({ userId: z.uuid(), reason: z.string().max(64).default('queue') });
 
 @Controller('api/internal/v1/remnawave')
 export class RemnawaveInternalController {
   constructor(private readonly panel: RemnawaveService) {}
+
+  /** Queue consumer for `panel.sync-user` (section 7.3). */
+  @Post('sync-user')
+  @HttpCode(200)
+  async syncUser(@Body() body: unknown) {
+    const input = syncUserSchema.parse(body);
+    try {
+      const result = await this.panel.syncUser(input.userId, input.reason);
+      return { synced: result !== null };
+    } catch (error) {
+      throw new BadRequestException(`PANEL_UNAVAILABLE: ${String(error)}`);
+    }
+  }
 
   @Get('health')
   health() {

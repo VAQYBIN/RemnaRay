@@ -45,7 +45,7 @@ describe('I18nService', () => {
     const messages = await service().instance.messages('en');
 
     expect(messages['bot.commands.start']).toBe('Start the bot');
-    expect(messages['notify.subscription.expired']).toBeTypeOf('string');
+    expect(messages['notify.sub.expired']).toBeTypeOf('string');
   });
 
   it('reports the shipped default next to the active override', async () => {

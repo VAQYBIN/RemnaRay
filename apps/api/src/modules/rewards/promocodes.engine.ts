@@ -17,6 +17,19 @@ export async function applyReservedPromocode(tx: Tx, invoiceId: string): Promise
     where: { id: redemption.promocodeId },
     data: { usedCount: { increment: 1 } },
   });
+  await tx.outboxJob.create({
+    data: {
+      queue: 'notify',
+      name: 'notify.send',
+      payload: {
+        event: 'promo.applied',
+        userId: redemption.userId,
+        dedupKey: `promo.applied:${redemption.id}`,
+        params: {},
+      },
+      jobId: `notify:promo.applied:${redemption.id}`,
+    },
+  });
 }
 
 /** A canceled or expired invoice frees the reserved slot again. */

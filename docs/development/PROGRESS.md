@@ -6,8 +6,8 @@ M4
 
 ## Current task
 
-TASK-M4-006 is complete and committed. Next: TASK-M4-007 (notifications,
-templates, notification_log, cron and alerts). Do not start M5.
+TASK-M4-007 is complete and committed. Next: TASK-M4-008 (broadcasts: segment
+DSL, editor, worker and report). Do not start M5.
 
 ## Current handoff correction
 
@@ -611,6 +611,31 @@ Verified on 2026-09-20.
 - Checks: api 91 tests, web 18 tests, workspace tests, `pnpm lint`,
   `pnpm -r typecheck`, `pnpm format`, full `pnpm build`, `pnpm i18n-check`, and
   the M1, M2 and M4 integration gates.
+
+## M4-007 verification
+
+Verified on 2026-09-20.
+
+- Added `NotifyService` with the complete section 16.1 event table, section 16.2
+  delivery rules and the `notify.scan-expiring` cron. Emitters write outbox jobs
+  inside the transaction that caused the change, so a notification cannot exist
+  without its cause.
+- `notification_log` is immutable, so a row is written once with its final
+  status; a short Valkey lock on the dedup key serialises concurrent workers and
+  the unique index is the backstop. Migration `0003_notification_log_status`
+  adds the `skipped` status section 16.2 needs for a banned recipient.
+- Administrator alerts deliver to every active admin with a Telegram id in
+  `settings.admin.language` and deduplicate on `rr:alert:<type>` for an hour.
+  `payment.late`, `payment.underpaid` and `referral.daily_cap` already emit.
+- The worker now consumes the `notify`, `panel` and `maintenance` queues as well
+  as `payments`, and ticks the expiry scan and referral release every ten
+  minutes. Added `POST /api/internal/v1/remnawave/sync-user`, which the
+  `panel.sync-user` jobs had been queued against with no consumer.
+- AC-160 and AC-163 are covered by `test/m4.notify.integration.test.mjs` on
+  PostgreSQL 18, plus five `NotifyService` unit tests.
+- Checks: api 96 tests, workspace tests, `pnpm lint`, `pnpm -r typecheck`,
+  `pnpm format`, full `pnpm build`, `pnpm i18n-check`, and the M1, M2 and M4
+  integration gates after the new migration.
 
 ## M4-003 decisions
 

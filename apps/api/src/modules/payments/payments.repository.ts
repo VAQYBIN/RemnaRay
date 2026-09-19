@@ -45,6 +45,31 @@ export type InvoiceInput = {
 
 export type StoredEvent = { id: string; duplicate: boolean };
 
+/** Money formatting for notification parameters, in exact minor units. */
+function formatMinorRub(amountMinor: bigint): string {
+  const units = (amountMinor / 100n).toString();
+  const cents = (amountMinor % 100n).toString().padStart(2, '0');
+  return `${cents === '00' ? units : `${units},${cents}`} \u20bd`;
+}
+
+async function queueNotification(
+  tx: Prisma.TransactionClient,
+  event: string,
+  userId: string,
+  dedupKey: string,
+  params: Record<string, string> = {},
+  subscriptionId?: string,
+): Promise<void> {
+  await tx.outboxJob.create({
+    data: {
+      queue: 'notify',
+      name: 'notify.send',
+      payload: { event, userId, dedupKey, params, ...(subscriptionId ? { subscriptionId } : {}) },
+      jobId: `notify:${dedupKey}`,
+    },
+  });
+}
+
 export class PaymentsRepository {
   constructor(
     private readonly prisma: PrismaClient,
@@ -202,6 +227,13 @@ export class PaymentsRepository {
       });
       if (invoice.planId)
         await this.activateSubscription(tx, invoice.userId, invoice.planId, false);
+      await queueNotification(
+        tx,
+        'payment.succeeded',
+        invoice.userId,
+        `payment.succeeded:${invoice.id}`,
+        { amount: formatMinorRub(invoice.amountMinor) },
+      );
       await this.rewards?.onInvoiceSettled(tx, invoice.id);
       await this.rewards?.onPaid(tx, {
         id: transaction.id,
@@ -391,6 +423,35 @@ export class PaymentsRepository {
             },
           });
         }
+        if (underpaid || late || invoice.kind === 'topup')
+          await queueNotification(
+            tx,
+            'payment.to_balance',
+            invoice.userId,
+            `payment.to_balance:${invoice.id}`,
+            { amount: formatMinorRub(credit) },
+          );
+        else
+          await queueNotification(
+            tx,
+            'payment.succeeded',
+            invoice.userId,
+            `payment.succeeded:${invoice.id}`,
+            { amount: formatMinorRub(invoice.amountMinor) },
+          );
+        if (underpaid || late) {
+          await tx.outboxJob.create({
+            data: {
+              queue: 'notify',
+              name: 'notify.alert',
+              payload: {
+                type: underpaid ? 'payment.underpaid' : 'payment.late',
+                details: invoice.id,
+              },
+              jobId: `alert:${underpaid ? 'payment.underpaid' : 'payment.late'}:${invoice.id}`,
+            },
+          });
+        }
         if (underpaid) await this.rewards?.onInvoiceReleased(tx, invoice.id);
         else await this.rewards?.onInvoiceSettled(tx, invoice.id);
         await this.rewards?.onPaid(tx, {
@@ -497,7 +558,16 @@ export class PaymentsRepository {
       squads: plan.squads,
       trafficResetStrategy: plan.trafficResetStrategy,
     };
-    if (live) await tx.subscription.update({ where: { id: live.id }, data });
-    else await tx.subscription.create({ data: { userId, ...data } });
+    const subscription = live
+      ? await tx.subscription.update({ where: { id: live.id }, data })
+      : await tx.subscription.create({ data: { userId, ...data } });
+    await queueNotification(
+      tx,
+      'sub.activated',
+      userId,
+      `sub.activated:${subscription.id}:${subscription.expiresAt.toISOString()}`,
+      { until: subscription.expiresAt.toISOString().slice(0, 10) },
+      subscription.id,
+    );
   }
 }

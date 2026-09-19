@@ -139,8 +139,9 @@ export async function accrueReferralReward(
     await tx.outboxJob.create({
       data: {
         queue: 'notify',
-        name: 'notify.admin-alert',
-        payload: { alert: 'referral.daily_cap', referrerId: attribution.referrerId },
+        name: 'notify.alert',
+        payload: { type: 'referral.daily_cap', details: attribution.referrerId },
+        jobId: `alert:referral.daily_cap:${attribution.referrerId}`,
       },
     });
     return null;
@@ -180,12 +181,14 @@ export async function accrueReferralReward(
   await tx.outboxJob.create({
     data: {
       queue: 'notify',
-      name: 'notify.referral-reward',
+      name: 'notify.send',
       payload: {
+        event: 'referral.reward',
         userId: attribution.referrerId,
-        amountMinor: amount.toString(),
-        rewardId: reward.id,
+        dedupKey: `referral.reward:${reward.id}`,
+        params: { amount: formatMinorRub(amount) },
       },
+      jobId: `notify:referral.reward:${reward.id}`,
     },
   });
 
@@ -232,6 +235,14 @@ export async function reverseReferralReward(
 }
 
 /** Section 15.2 invitee bonus: extra days on a live subscription, or balance. */
+function formatMinorRub(amountMinor: bigint): string {
+  const negative = amountMinor < 0n;
+  const absolute = negative ? -amountMinor : amountMinor;
+  const units = (absolute / 100n).toString();
+  const cents = (absolute % 100n).toString().padStart(2, '0');
+  return `${negative ? '-' : ''}${cents === '00' ? units : `${units},${cents}`} \u20bd`;
+}
+
 export async function grantInviteeBonus(
   tx: Tx,
   config: ReferralConfig,
@@ -240,6 +251,19 @@ export async function grantInviteeBonus(
   now = new Date(),
 ): Promise<void> {
   if (config.inviteeBonus.type === 'none' || config.inviteeBonus.value <= 0) return;
+  await tx.outboxJob.create({
+    data: {
+      queue: 'notify',
+      name: 'notify.send',
+      payload: {
+        event: 'referral.invitee_bonus',
+        userId,
+        dedupKey: `referral.invitee_bonus:${userId}`,
+        params: {},
+      },
+      jobId: `notify:referral.invitee_bonus:${userId}`,
+    },
+  });
   if (config.inviteeBonus.type === 'balance') {
     await post(tx, {
       userId,

@@ -17,6 +17,7 @@ import { PublicModule } from './modules/public/public.module';
 import { MeModule } from './modules/me/me.module';
 import { AdminApiModule } from './modules/admin-api/admin-api.module';
 import { RewardsModule } from './modules/rewards/rewards.module';
+import { NotifyModule } from './modules/notify/notify.module';
 
 @Module({
   imports: [
@@ -35,6 +36,7 @@ import { RewardsModule } from './modules/rewards/rewards.module';
     MeModule,
     AdminApiModule,
     RewardsModule,
+    NotifyModule,
     LoggerModule.forRoot({
       pinoHttp: {
         level: process.env.RR_LOG_LEVEL ?? 'info',
