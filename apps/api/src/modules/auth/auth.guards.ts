@@ -62,6 +62,8 @@ export class AuthGuard implements CanActivate {
     const path = req.routeOptions.url ?? req.url.split('?')[0] ?? '';
     if (path.startsWith('/api/internal/')) return new InternalTokenGuard().canActivate(context);
     if (path.startsWith('/api/admin/')) {
+      if (path.startsWith('/api/admin/v1/auth/login') || path.startsWith('/api/admin/v1/auth/totp'))
+        return true;
       const sid = readCookie(req.headers.cookie, 'rr_asid');
       const raw = sid ? await this.infra.redis.get(`rr:asess:${sid}`) : null;
       const session = raw
@@ -112,6 +114,7 @@ export class CsrfGuard implements CanActivate {
     )
       return true;
     const site = req.headers['sec-fetch-site'];
+    if (path.startsWith('/api/admin/v1/auth/')) return true;
     const expectedOrigin = `https://${process.env.RR_DOMAIN ?? ''}`;
     if (
       req.headers['x-requested-with'] !== 'RemnaRay' ||

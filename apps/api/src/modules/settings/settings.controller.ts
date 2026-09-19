@@ -2,6 +2,7 @@ import { Body, Controller, Get, Post, Put, Req } from '@nestjs/common';
 import type { FastifyRequest } from 'fastify';
 
 import { SettingsService } from './settings.service';
+import { Roles } from '../admin/admin.rbac';
 
 type ActorRequest = FastifyRequest & { user?: { id?: string } };
 
@@ -11,6 +12,7 @@ function actorFrom(request: ActorRequest) {
 }
 
 @Controller('api/admin/v1/settings')
+@Roles('admin')
 export class SettingsController {
   constructor(private readonly settings: SettingsService) {}
 

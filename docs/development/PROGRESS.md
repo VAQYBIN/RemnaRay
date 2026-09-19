@@ -6,8 +6,8 @@ M4
 
 ## Current task
 
-TASK-M4-002 — M4-001 is complete and verified. Continue with admin
-authentication, RBAC, and audit interception; do not start M5.
+TASK-M4-003 — M4-002 is complete and verified. Continue with the public
+landing/legal/SEO/i18n pages; do not start M5.
 
 ## Completed tasks
 
@@ -193,6 +193,9 @@ blocker is resolved.
   CVA variants, loading/empty/error states, runtime Tailwind CSS variables,
   Zod theme schema and contrast validation, `_admin` and `manta` themes, and
   the complete Manta asset set.
+- TASK-M4-002 — added password + Argon2id/TOTP admin authentication, 12-hour
+  `rr_asid` sessions with CSRF tokens, five-failure lockouts, shared RBAC
+  permissions, and sanitized immutable audit interception.
 
 ## Verification correction
 
@@ -284,8 +287,8 @@ No credentials or external infrastructure were required for TASK-M4-001.
 
 ## Next
 
-TASK-M4-002 — admin password + TOTP authentication, lockouts, RBAC, and
-AuditInterceptor. M4-001 is complete; M5 remains unopened.
+TASK-M4-003 — landing, legal, SEO, and next-intl i18n pages. M4-002 is
+complete; M5 remains unopened.
 
 ## M3 acceptance reconciliation
 
@@ -377,3 +380,16 @@ are included in M3; M4 remains unopened.
   a rebuild.
 - The generated Manta OG asset is stored at 1200×630, with the required bot
   avatar at 512×512 and Apple touch icon at 180×180.
+
+## M4-002 verification
+
+- Context7 documentation was checked for Argon2id options, OTPAuth TOTP/URI
+  handling, NestJS metadata/interceptors, and Prisma transactional writes.
+- Added 2 domain RBAC tests, 3 admin API auth/audit/RBAC test files covering
+  the fifth-failure `423` lock, TOTP enrollment, session creation, role and
+  permission checks, and secret masking. API suite: 37 tests passed.
+- `@remnaray/domain` and `@remnaray/api` lint/typecheck passed. OpenAPI now
+  includes the admin auth routes; no migration was needed because M0-007
+  already created `admins` and immutable `audit_log`.
+- Added `docs/admin.md` and `.changeset/m4-002-admin-auth.md`. Password and
+  TOTP secrets are encrypted or masked and are not written to audit rows.

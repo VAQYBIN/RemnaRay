@@ -412,6 +412,84 @@
           }
         }
       }
+    },
+    "/api/admin/v1/auth/login": {
+      "post": {
+        "operationId": "adminLogin",
+        "responses": {
+          "200": {
+            "description": "Password challenge"
+          },
+          "401": {
+            "description": "Invalid credentials"
+          },
+          "423": {
+            "description": "Admin locked"
+          }
+        }
+      }
+    },
+    "/api/admin/v1/auth/totp/setup": {
+      "post": {
+        "operationId": "adminTotpSetup",
+        "responses": {
+          "200": {
+            "description": "TOTP setup QR"
+          },
+          "401": {
+            "description": "Invalid challenge"
+          }
+        }
+      }
+    },
+    "/api/admin/v1/auth/totp": {
+      "post": {
+        "operationId": "adminTotpLogin",
+        "responses": {
+          "200": {
+            "description": "Authenticated admin session"
+          },
+          "401": {
+            "description": "Invalid TOTP"
+          }
+        }
+      }
+    },
+    "/api/admin/v1/auth/totp/confirm": {
+      "post": {
+        "operationId": "adminTotpConfirm",
+        "responses": {
+          "200": {
+            "description": "Authenticated first admin session"
+          },
+          "401": {
+            "description": "Invalid TOTP"
+          }
+        }
+      }
+    },
+    "/api/admin/v1/auth/me": {
+      "get": {
+        "operationId": "adminMe",
+        "responses": {
+          "200": {
+            "description": "Current admin and CSRF token"
+          },
+          "401": {
+            "description": "Unauthenticated"
+          }
+        }
+      }
+    },
+    "/api/admin/v1/auth/logout": {
+      "post": {
+        "operationId": "adminLogout",
+        "responses": {
+          "204": {
+            "description": "Logged out"
+          }
+        }
+      }
     }
   }
 }

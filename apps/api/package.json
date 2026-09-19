@@ -12,6 +12,7 @@
   },
   "dependencies": {
     "@remnaray/db": "workspace:*",
+    "@remnaray/domain": "workspace:*",
     "@remnaray/i18n-core": "workspace:*",
     "@remnaray/payments-mock": "workspace:*",
     "@remnaray/remnawave-sdk": "workspace:*",
@@ -34,12 +35,15 @@
     "otpauth": "~9.5.2",
     "pino": "~10.3.1",
     "pino-http": "~11.0.0",
+    "qrcode": "~1.5.4",
+    "rxjs": "~7.8.2",
     "sharp": "~0.35.4",
     "undici": "~8.10.2",
     "zod": "~4.6.5"
   },
   "devDependencies": {
     "@nestjs/testing": "12.0.3",
+    "@types/qrcode": "~1.5.6",
     "vitest": "~5.0.1"
   }
 }
