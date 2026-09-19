@@ -670,6 +670,130 @@
           }
         }
       }
+    },
+    "/api/v1/public/config": {
+      "get": {
+        "operationId": "getPublicConfig",
+        "summary": "Brand, locales, features and legal revision dates",
+        "responses": {
+          "200": {
+            "description": "Public configuration"
+          }
+        }
+      }
+    },
+    "/api/v1/public/i18n/{lang}/{namespace}": {
+      "get": {
+        "operationId": "getPublicMessages",
+        "summary": "Merged messages for one namespace (overrides applied)",
+        "parameters": [
+          {
+            "name": "lang",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "enum": ["ru", "en"]
+            }
+          },
+          {
+            "name": "namespace",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "If-None-Match",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Messages",
+            "headers": {
+              "ETag": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "304": {
+            "description": "Not modified"
+          },
+          "404": {
+            "description": "NOT_FOUND"
+          }
+        }
+      }
+    },
+    "/api/v1/public/legal/{doc}": {
+      "get": {
+        "operationId": "getPublicLegal",
+        "summary": "Legal document markdown with brand substitutions",
+        "parameters": [
+          {
+            "name": "doc",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "enum": ["terms", "privacy", "offer"]
+            }
+          },
+          {
+            "name": "lang",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "enum": ["ru", "en"]
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Legal document"
+          },
+          "404": {
+            "description": "NOT_FOUND"
+          }
+        }
+      }
+    },
+    "/api/v1/r/{code}": {
+      "get": {
+        "operationId": "followReferralLink",
+        "summary": "Stores the referral code for 30 days and redirects to the site",
+        "parameters": [
+          {
+            "name": "code",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "302": {
+            "description": "Redirect to /",
+            "headers": {
+              "Set-Cookie": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        }
+      }
     }
   }
 }

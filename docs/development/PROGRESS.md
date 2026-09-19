@@ -6,9 +6,9 @@ M4
 
 ## Current task
 
-M4 acceptance reconciliation. TASK-M4-001 and TASK-M4-002 reconciliation are
-complete and committed. Next: TASK-M4-003 reconciliation, then TASK-M4-004.
-Do not start M5.
+M4 acceptance reconciliation. TASK-M4-001, TASK-M4-002 and TASK-M4-003
+reconciliation are complete and committed. Next: repair the CI quality gates,
+then TASK-M4-004. Do not start M5.
 
 ## Current handoff correction
 
@@ -17,10 +17,8 @@ Do not start M5.
   milestone acceptance. Preserve their history; fix gaps in follow-up commits.
 - M4-001 gaps are now closed (see "M4-001 reconciliation" below).
 - M4-002 gaps are now closed (see "M4-002 reconciliation" below).
-- M4-003 gaps still open: Russian landing text contains English copy;
-  CTA links point to legal pages; public config, language selector,
-  complete legal text and Lighthouse acceptance are missing. Money is displayed
-  as raw minor units. Key parity alone is not an ICU/placeholder check.
+- M4-003 gaps are now closed except the Lighthouse ≥ 90/90/95 measurement,
+  which needs the reference server and stays an external gate.
 - M4-004 partial UI is saved on disk, uncommitted, and will be rewritten:
   it expects API response shapes that do not exist, prints raw minor units, and
   has no 15-second cache, payment deadline or page-state tests.
@@ -494,6 +492,43 @@ Verified on 2026-09-20.
 - Known gap moved to TASK-M4-009: `POST /api/admin/v1/settings/import` still
   answers `{ diff: [] }` for `dryRun`, and `PUT /settings` always answers
   `restartRequired: []` instead of the section 17.6 matrix.
+
+## M4-003 reconciliation
+
+Verified on 2026-09-20.
+
+- Locales are data again. The bot catalog moved out of TypeScript into
+  `locales/{ru,en}/bot.json` and `notify.json`; `@remnaray/i18n-core` now reads
+  the mounted directory and no process ships a compiled-in copy.
+- Added `I18nService`: `locale_overrides` → `<lang>` file → `en` file → key,
+  cached in Valkey under `rr:i18n:<lang>:<ns>` and dropped on
+  `rr:i18n.changed`. It serves `GET /api/v1/public/i18n/:lang/:namespace` with
+  an ETag and backs `GET /api/internal/v1/i18n/:lang` and the bot command
+  descriptions.
+- Added `GET /api/v1/public/config`, `GET /api/v1/public/legal/:doc?lang=` with
+  `{brand}`/`{domain}`/`{support}` substitution, and `GET /api/v1/r/:code`
+  plus the web `/r/[code]` handler, both storing `rr_ref` for 30 days.
+- `GET /api/v1/public/plans` now returns the `PlanPublic` projection only;
+  squads and internal flags no longer leak.
+- Russian copy is real Russian. Landing, common, SEO, error and legal catalogs
+  were rewritten in both languages, and the legal documents are complete.
+- The landing follows section 13.2: brand and theme from the API, plans hidden
+  when the list is empty or fails, features/steps/clients/FAQ from the catalog,
+  CTA to `t.me/<bot>` plus the Login Widget, footer with legal links, support
+  contact, language switcher and the `hide_powered_by` attribution.
+- Money is formatted with `formatMoneyLocale`, which builds the decimal string
+  from exact minor units before handing it to `Intl`.
+- `pnpm i18n-check` now verifies ICU compilation, placeholder parity, array and
+  object leaves, untranslated Russian copy and the legal documents.
+- The site reads config, catalogs and theme with a five-second revalidation
+  window, so AC-181 holds for the site side.
+- Fixed workspace typechecks that had never run: `@remnaray/config` and
+  `@remnaray/logger` were CommonJS packages compiled under `verbatimModuleSyntax`,
+  and three shell packages failed on TS18003.
+- Checks: api 69 tests (19 files), workspace tests, `pnpm lint`,
+  `pnpm -r typecheck`, `pnpm format`, full `pnpm build`, `pnpm i18n-check`,
+  `pnpm theme-validate`, and a CommonJS load of the compiled `AppModule`.
+- Remaining external gate: Lighthouse ≥ 90/90/95 on the reference server.
 
 ## M4-003 decisions
 

@@ -1,1 +1,5 @@
-{}
+{
+  "notify.payment.succeeded": "Payment received. Subscription activated.",
+  "notify.subscription.expiring": "Your subscription ends {until}.",
+  "notify.subscription.expired": "Your subscription has expired."
+}

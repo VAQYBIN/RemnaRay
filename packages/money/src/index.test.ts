@@ -5,11 +5,13 @@ import {
   compare,
   createMoney,
   formatMoney,
+  formatMoneyLocale,
   fromDecimal,
   negate,
   parseMinor,
   subtract,
-} from './index';
+  toDecimalString,
+} from './index.js';
 
 describe('money', () => {
   it('uses bigint minor units and exact decimal parsing', () => {
@@ -40,5 +42,22 @@ describe('money', () => {
     expect(formatMoney(createMoney(29900n))).toBe('299.00 RUB');
     expect(formatMoney(createMoney(-5n))).toBe('-0.05 RUB');
     expect(formatMoney(createMoney(9007199254740993n, 'USD'))).toBe('90071992547409.93 USD');
+  });
+});
+
+describe('display formatting', () => {
+  it('renders exact decimals without floating point error', () => {
+    expect(toDecimalString(createMoney(29900n))).toBe('299.00');
+    expect(toDecimalString(createMoney(-7n))).toBe('-0.07');
+    expect(toDecimalString(createMoney(123456789012345n))).toBe('1234567890123.45');
+  });
+
+  it('formats money for the requested locale', () => {
+    const plain = (value: string) => value.replace(/\u00a0|\u202f/gu, ' ');
+
+    expect(plain(formatMoneyLocale(createMoney(29900n), 'ru'))).toBe('299 \u20bd');
+    expect(plain(formatMoneyLocale(createMoney(129950n), 'ru'))).toBe('1 299,50 \u20bd');
+    expect(plain(formatMoneyLocale(createMoney(-5000n), 'ru'))).toBe('-50 \u20bd');
+    expect(plain(formatMoneyLocale(createMoney(29900n, 'USD'), 'en'))).toBe('$299');
   });
 });

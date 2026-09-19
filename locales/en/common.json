@@ -1,5 +1,15 @@
 {
   "common.brand": "RemnaRay",
-  "common.language.ru": "Russian",
-  "common.language.en": "English"
+  "common.language.ru": "Русский",
+  "common.language.en": "English",
+  "common.loading": "Loading…",
+  "common.retry": "Try again",
+  "common.copy": "Copy",
+  "common.copied": "Copied",
+  "common.cancel": "Cancel",
+  "common.confirm": "Confirm",
+  "common.save": "Save",
+  "common.close": "Close",
+  "common.back": "Back",
+  "common.more": "Show more"
 }

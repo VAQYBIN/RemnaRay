@@ -1,7 +1,9 @@
 {
-  "seo.title": "RemnaRay — магазин подписок для Remnawave",
-  "seo.description": "Telegram-first магазин подписок для Remnawave.",
-  "seo.termsTitle": "Условия — RemnaRay",
-  "seo.privacyTitle": "Конфиденциальность — RemnaRay",
-  "seo.offerTitle": "Оферта — RemnaRay"
+  "seo.title": "{brand} — подписки для Remnawave",
+  "seo.description": "Telegram-first магазин подписок для панели Remnawave: тарифы, оплата и одна понятная ссылка подписки.",
+  "seo.termsTitle": "Условия — {brand}",
+  "seo.privacyTitle": "Конфиденциальность — {brand}",
+  "seo.offerTitle": "Оферта — {brand}",
+  "seo.accountTitle": "Кабинет — {brand}",
+  "seo.payTitle": "Оплата — {brand}"
 }

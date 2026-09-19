@@ -6,6 +6,7 @@ import { PaymentsModule } from '../payments/payments.module';
 import { PlansModule } from '../plans/plans.module';
 import { SubscriptionsModule } from '../subscriptions/subscriptions.module';
 import { RemnawaveModule } from '../remnawave/remnawave.module';
+import { PublicModule } from '../public/public.module';
 import {
   BotInternalController,
   BotAdminController,
@@ -14,7 +15,14 @@ import {
 } from './bot.controller';
 
 @Module({
-  imports: [SettingsModule, PaymentsModule, PlansModule, SubscriptionsModule, RemnawaveModule],
+  imports: [
+    SettingsModule,
+    PaymentsModule,
+    PlansModule,
+    SubscriptionsModule,
+    RemnawaveModule,
+    PublicModule,
+  ],
   controllers: [
     TelegramWebhookController,
     BotInternalController,

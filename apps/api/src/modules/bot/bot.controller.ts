@@ -13,7 +13,7 @@ import {
   Post,
   UseGuards,
 } from '@nestjs/common';
-import { botCatalogs, SUPPORTED_LOCALES, type Locale } from '@remnaray/i18n-core';
+import { SUPPORTED_LOCALES, type Locale } from '@remnaray/i18n-core';
 
 import { Infrastructure } from '../../infra/infra.module';
 import { InternalTokenGuard, equalToken } from '../auth/auth.guards';
@@ -22,6 +22,7 @@ import { PlansService } from '../plans/plans.service';
 import { SettingsService } from '../settings/settings.service';
 import { SubscriptionsService } from '../subscriptions/subscriptions.service';
 import { RemnawaveService, RevokeRateLimitError } from '../remnawave/remnawave.service';
+import { I18nService } from '../public/i18n.service';
 
 const appendUpdate = `
 if redis.call('EXISTS', KEYS[2]) == 1 then return 0 end
@@ -91,12 +92,13 @@ export class BotInternalController {
   constructor(
     private readonly infra: Infrastructure,
     private readonly settings: SettingsService,
+    private readonly i18n: I18nService,
   ) {}
 
   @Get('i18n/:lang')
-  messages(@Param('lang') lang: string) {
+  async messages(@Param('lang') lang: string) {
     const locale = SUPPORTED_LOCALES.includes(lang as Locale) ? (lang as Locale) : 'ru';
-    return { lang: locale, messages: botCatalogs[locale] };
+    return { lang: locale, messages: await this.i18n.messages(locale) };
   }
 
   @Post('users/:telegramId/bot-blocked')
@@ -129,22 +131,25 @@ export class BotInternalController {
       where: { isActive: true, deletedAt: null, telegramId: { not: null } },
       select: { telegramId: true },
     });
+    const catalogs = Object.fromEntries(
+      await Promise.all(
+        SUPPORTED_LOCALES.map(
+          async (locale) => [locale, await this.i18n.messages(locale)] as const,
+        ),
+      ),
+    );
+    const describe = (locale: Locale, command: string) =>
+      catalogs[locale]?.[`bot.commands.${command}`] ?? command;
     const commands = Object.fromEntries(
       SUPPORTED_LOCALES.map((locale) => [
         locale,
-        publicCommandNames.map((command) => ({
-          command,
-          description: botCatalogs[locale][`bot.commands.${command}`] ?? command,
-        })),
+        publicCommandNames.map((command) => ({ command, description: describe(locale, command) })),
       ]),
     );
     const adminCommands = Object.fromEntries(
       SUPPORTED_LOCALES.map((locale) => [
         locale,
-        adminCommandNames.map((command) => ({
-          command,
-          description: botCatalogs[locale][`bot.commands.${command}`] ?? command,
-        })),
+        adminCommandNames.map((command) => ({ command, description: describe(locale, command) })),
       ]),
     );
     return {

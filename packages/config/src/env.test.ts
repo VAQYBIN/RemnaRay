@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { loadEnv } from './env';
+import { loadEnv } from './env.js';
 
 const valid = {
   RR_DOMAIN: 'shop.example.com',

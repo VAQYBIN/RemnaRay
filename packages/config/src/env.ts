@@ -55,7 +55,7 @@ const envSchema = z
 export type Env = z.infer<typeof envSchema>;
 
 export function loadEnv(source?: Record<string, string | undefined>): Env {
-  const input = source ?? (processEnv as Record<string, string | undefined>);
+  const input = source ?? processEnv;
   const result = envSchema.safeParse(input);
   if (!result.success) {
     const fields = result.error.issues.map((issue) => issue.path.join('.')).join(', ');

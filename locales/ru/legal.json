@@ -1,3 +1,7 @@
 {
-  "legal.back": "Назад"
+  "legal.back": "Назад",
+  "legal.updatedAt": "Обновлено {date}",
+  "legal.terms.title": "Условия использования",
+  "legal.privacy.title": "Конфиденциальность",
+  "legal.offer.title": "Публичная оферта"
 }

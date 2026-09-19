@@ -1,1 +1,5 @@
-{}
+{
+  "notify.payment.succeeded": "Оплата получена. Подписка активирована.",
+  "notify.subscription.expiring": "Подписка заканчивается {until}.",
+  "notify.subscription.expired": "Подписка истекла."
+}

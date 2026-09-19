@@ -1,3 +1,6 @@
+import { existsSync, readFileSync } from 'node:fs';
+import { join } from 'node:path';
+
 import IntlMessageFormat from 'intl-messageformat';
 
 export const SUPPORTED_LOCALES = ['ru', 'en'] as const;
@@ -5,175 +8,68 @@ export type Locale = (typeof SUPPORTED_LOCALES)[number];
 
 export type MessageCatalog = Record<string, string>;
 
-export const botCatalogs: Record<Locale, MessageCatalog> = {
-  ru: {
-    'bot.commands.start': 'Запустить бота',
-    'bot.commands.menu': 'Главное меню',
-    'bot.commands.sub': 'Моя подписка',
-    'bot.commands.buy': 'Купить подписку',
-    'bot.commands.balance': 'Баланс',
-    'bot.commands.ref': 'Рефералы',
-    'bot.commands.promo': 'Применить промокод',
-    'bot.commands.lang': 'Язык',
-    'bot.commands.notifications': 'Уведомления',
-    'bot.commands.help': 'Помощь',
-    'bot.commands.support': 'Поддержка',
-    'bot.commands.admin_stats': 'Статистика',
-    'bot.commands.admin_user': 'Пользователь',
-    'bot.commands.admin_extend': 'Продлить подписку',
-    'bot.commands.admin_broadcast_status': 'Статус рассылки',
-    'bot.btn.trial': '🎁 Получить триал',
-    'bot.btn.buy': '🛒 Купить',
-    'bot.btn.sub': '🔐 Подписка',
-    'bot.btn.renew': '🔄 Продлить',
-    'bot.btn.profile': '👤 Профиль',
-    'bot.btn.balance': '💳 Баланс',
-    'bot.btn.topup': '➕ Пополнить',
-    'bot.btn.ref': '👥 Рефералы',
-    'bot.btn.support': '🆘 Поддержка',
-    'bot.btn.lang': '🌐 Язык',
-    'bot.btn.back': '◀️ Назад',
-    'bot.btn.menu': '🏠 В меню',
-    'bot.btn.check': '🔎 Проверить оплату',
-    'bot.btn.pay': '💰 Оплатить',
-    'bot.btn.skip': 'Пропустить',
-    'bot.btn.clients': '📱 Клиенты',
-    'bot.btn.qr': '▦ QR-код',
-    'bot.btn.revoke': '♻️ Сбросить ссылку',
-    'bot.btn.confirm': 'Подтвердить',
-    'bot.lang.ru': 'Русский',
-    'bot.lang.en': 'English',
-    'bot.screen.home.welcome': 'Добро пожаловать в {brand}!',
-    'bot.screen.home.noSubscription': 'Активной подписки нет.',
-    'bot.screen.home.subscription': 'Подписка активна до {until}.',
-    'bot.screen.home.blocked': 'Бот заблокирован. Обратитесь в поддержку.',
-    'bot.screen.trial.confirm':
-      'Триал: {days, plural, one {# день} few {# дня} many {# дней} other {# дня}}, трафик {traffic}.',
-    'bot.screen.sub.empty': 'У вас нет активной подписки.',
-    'bot.screen.sub.details': 'Подписка до {until}. Ссылка: <code>{link}</code>',
-    'bot.screen.plans.title': 'Выберите тариф:',
-    'bot.screen.plan.details':
-      '{plan}: {price} на {days, plural, one {# день} few {# дня} many {# дней} other {# дней}}.',
-    'bot.screen.pay.wait': 'Счёт на {price} создан до {until}.',
-    'bot.screen.pay.ok': 'Оплата прошла. Ваша подписка готова.',
-    'bot.screen.balance.details': 'Баланс: {balance}.',
-    'bot.screen.balance.transactions': 'Последние операции:',
-    'bot.screen.topup.title': 'Выберите сумму пополнения:',
-    'bot.screen.ref.details': 'Ваша ссылка: {link}\nПриглашено: {invited}, оплатили: {converted}.',
-    'bot.screen.lang.title': 'Выберите язык:',
-    'bot.screen.support.details': 'Поддержка: {contact}',
-    'bot.screen.notifications.enabled': 'Маркетинговые уведомления включены.',
-    'bot.screen.notifications.disabled': 'Маркетинговые уведомления выключены.',
-    'bot.screen.email.ask': 'Введите email для чека или нажмите «Пропустить».',
-    'bot.screen.email.saved': 'Email сохранён.',
-    'bot.screen.promo.ask': 'Введите промокод.',
-    'bot.screen.promo.accepted': 'Промокод применён к следующей покупке.',
-    'bot.screen.topup.ask': 'Введите сумму в рублях.',
-    'bot.screen.support.ask': 'Напишите сообщение оператору.',
-    'bot.screen.support.sent': 'Сообщение передано оператору.',
-    'bot.screen.help.text': 'Выберите действие в меню. Для навигации используйте кнопки.',
-    'bot.error.panel_unavailable': 'Панель временно недоступна. Попробуйте позже.',
-    'bot.error.too_many_attempts': 'Слишком много неверных вводов. Диалог завершён.',
-    'bot.error.bot_blocked': 'Не удалось отправить сообщение: пользователь заблокировал бота.',
-    'bot.error.invoice_expired': 'Счёт истёк. Создайте новый.',
-    'bot.error.invalid_amount': 'Сумма вне допустимого диапазона.',
-    'bot.error.provider_unavailable': 'Способ оплаты временно недоступен.',
-    'bot.error.invalid_input': 'Неверный формат. Попробуйте ещё раз.',
-    'bot.error.conversation_timeout': 'Время ожидания истекло.',
-    'bot.error.generic': 'Произошла ошибка. Код: {incidentId}',
-    'bot.error.revoke_rate_limited': 'Ссылку можно сбросить только один раз за 24 часа.',
-    'bot.admin.stats': 'Статистика пока недоступна.',
-    'bot.admin.user': 'Пользователь: {id}',
-    'bot.admin.extended': 'Подписка продлена на {days} дн.',
-    'bot.admin.broadcast': 'Активная рассылка не найдена.',
-    'notify.payment.succeeded': 'Оплата получена. Подписка активирована.',
-    'notify.subscription.expiring': 'Подписка заканчивается {until}.',
-    'notify.subscription.expired': 'Подписка истекла.',
-  },
-  en: {
-    'bot.commands.start': 'Start the bot',
-    'bot.commands.menu': 'Main menu',
-    'bot.commands.sub': 'My subscription',
-    'bot.commands.buy': 'Buy subscription',
-    'bot.commands.balance': 'Balance',
-    'bot.commands.ref': 'Referrals',
-    'bot.commands.promo': 'Apply promo code',
-    'bot.commands.lang': 'Language',
-    'bot.commands.notifications': 'Notifications',
-    'bot.commands.help': 'Help',
-    'bot.commands.support': 'Support',
-    'bot.commands.admin_stats': 'Statistics',
-    'bot.commands.admin_user': 'User',
-    'bot.commands.admin_extend': 'Extend subscription',
-    'bot.commands.admin_broadcast_status': 'Broadcast status',
-    'bot.btn.trial': '🎁 Start trial',
-    'bot.btn.buy': '🛒 Buy',
-    'bot.btn.sub': '🔐 Subscription',
-    'bot.btn.renew': '🔄 Renew',
-    'bot.btn.profile': '👤 Profile',
-    'bot.btn.balance': '💳 Balance',
-    'bot.btn.topup': '➕ Top up',
-    'bot.btn.ref': '👥 Referrals',
-    'bot.btn.support': '🆘 Support',
-    'bot.btn.lang': '🌐 Language',
-    'bot.btn.back': '◀️ Back',
-    'bot.btn.menu': '🏠 Main menu',
-    'bot.btn.check': '🔎 Check payment',
-    'bot.btn.pay': '💰 Pay',
-    'bot.btn.skip': 'Skip',
-    'bot.btn.clients': '📱 Clients',
-    'bot.btn.qr': '▦ QR code',
-    'bot.btn.revoke': '♻️ Reset link',
-    'bot.btn.confirm': 'Confirm',
-    'bot.lang.ru': 'Russian',
-    'bot.lang.en': 'English',
-    'bot.screen.home.welcome': 'Welcome to {brand}!',
-    'bot.screen.home.noSubscription': 'You have no active subscription.',
-    'bot.screen.home.subscription': 'Your subscription is active until {until}.',
-    'bot.screen.home.blocked': 'The bot is blocked. Contact support.',
-    'bot.screen.trial.confirm':
-      'Trial: {days, plural, one {# day} other {# days}}, traffic {traffic}.',
-    'bot.screen.sub.empty': 'You have no active subscription.',
-    'bot.screen.sub.details': 'Subscription until {until}. Link: <code>{link}</code>',
-    'bot.screen.plans.title': 'Choose a plan:',
-    'bot.screen.plan.details': '{plan}: {price} for {days, plural, one {# day} other {# days}}.',
-    'bot.screen.pay.wait': 'Invoice for {price} is valid until {until}.',
-    'bot.screen.pay.ok': 'Payment received. Your subscription is ready.',
-    'bot.screen.balance.details': 'Balance: {balance}.',
-    'bot.screen.balance.transactions': 'Recent transactions:',
-    'bot.screen.topup.title': 'Choose a top-up amount:',
-    'bot.screen.ref.details': 'Your link: {link}\nInvited: {invited}, paid: {converted}.',
-    'bot.screen.lang.title': 'Choose a language:',
-    'bot.screen.support.details': 'Support: {contact}',
-    'bot.screen.notifications.enabled': 'Marketing notifications are enabled.',
-    'bot.screen.notifications.disabled': 'Marketing notifications are disabled.',
-    'bot.screen.email.ask': 'Enter an email for the receipt or press “Skip”.',
-    'bot.screen.email.saved': 'Email saved.',
-    'bot.screen.promo.ask': 'Enter a promo code.',
-    'bot.screen.promo.accepted': 'The promo code is reserved for your next purchase.',
-    'bot.screen.topup.ask': 'Enter an amount in RUB.',
-    'bot.screen.support.ask': 'Write a message to support.',
-    'bot.screen.support.sent': 'Your message was sent to support.',
-    'bot.screen.help.text': 'Choose an action from the menu. Use the buttons to navigate.',
-    'bot.error.panel_unavailable': 'The panel is temporarily unavailable. Try again later.',
-    'bot.error.too_many_attempts': 'Too many invalid inputs. The dialog was closed.',
-    'bot.error.bot_blocked': 'The message could not be delivered because the bot is blocked.',
-    'bot.error.invoice_expired': 'The invoice has expired. Create a new one.',
-    'bot.error.invalid_amount': 'The amount is outside the allowed range.',
-    'bot.error.provider_unavailable': 'Payment methods are temporarily unavailable.',
-    'bot.error.invalid_input': 'Invalid format. Try again.',
-    'bot.error.conversation_timeout': 'The input timed out.',
-    'bot.error.generic': 'Something went wrong. Code: {incidentId}',
-    'bot.error.revoke_rate_limited': 'The subscription link can be reset only once every 24 hours.',
-    'bot.admin.stats': 'Statistics are unavailable.',
-    'bot.admin.user': 'User: {id}',
-    'bot.admin.extended': 'Subscription extended by {days} days.',
-    'bot.admin.broadcast': 'No active broadcast found.',
-    'notify.payment.succeeded': 'Payment received. Subscription activated.',
-    'notify.subscription.expiring': 'Your subscription ends {until}.',
-    'notify.subscription.expired': 'Your subscription has expired.',
-  },
-};
+export const namespaces = [
+  'common',
+  'landing',
+  'account',
+  'admin',
+  'setup',
+  'bot',
+  'notify',
+  'errors',
+  'seo',
+  'legal',
+] as const;
+export type Namespace = (typeof namespaces)[number];
+
+/** Resolves the mounted `locales/` directory (compose mounts it at `/locales`). */
+export function localeDirectory(cwd = process.cwd()): string {
+  const candidates = [
+    process.env.RR_LOCALES_DIR,
+    '/locales',
+    join(cwd, 'locales'),
+    join(cwd, '..', '..', 'locales'),
+  ].filter((value): value is string => Boolean(value));
+  return candidates.find((candidate) => existsSync(candidate)) ?? '/locales';
+}
+
+/** Reads one shipped namespace file. Missing files are an empty catalog. */
+export function readNamespace(root: string, lang: string, namespace: string): MessageCatalog {
+  const file = join(root, lang, `${namespace}.json`);
+  if (!existsSync(file)) return {};
+  const parsed: unknown = JSON.parse(readFileSync(file, 'utf8'));
+  if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return {};
+  const catalog: MessageCatalog = {};
+  for (const [key, value] of Object.entries(parsed)) {
+    catalog[key] = typeof value === 'string' ? value : JSON.stringify(value);
+  }
+  return catalog;
+}
+
+/** Whole shipped catalog for a language, every namespace merged. */
+export function readCatalog(root: string, lang: string): MessageCatalog {
+  const catalog: MessageCatalog = {};
+  for (const namespace of namespaces) Object.assign(catalog, readNamespace(root, lang, namespace));
+  return catalog;
+}
+
+/** Throws when a template is not valid ICU for the locale. */
+export function assertIcu(locale: Locale, key: string, template: string): void {
+  try {
+    new IntlMessageFormat(template, locale, undefined, { ignoreTag: true });
+  } catch (error) {
+    throw new Error(`Invalid ICU message ${key} (${locale})`, { cause: error });
+  }
+}
+
+/** Named `{placeholders}` referenced by an ICU template. */
+export function placeholdersOf(template: string): string[] {
+  return [
+    ...new Set([...template.matchAll(/\{\s*([A-Za-z0-9_]+)/gu)].map((match) => match[1] ?? '')),
+  ]
+    .filter(Boolean)
+    .sort();
+}
 
 export function formatMessage(
   locale: Locale,
@@ -181,7 +77,7 @@ export function formatMessage(
   key: string,
   values: Record<string, unknown> = {},
 ): string {
-  const template = messages[key] ?? botCatalogs[locale][key] ?? botCatalogs.ru[key] ?? key;
+  const template = messages[key] ?? key;
   return String(
     new IntlMessageFormat(template, locale, undefined, { ignoreTag: true }).format(
       Object.fromEntries(

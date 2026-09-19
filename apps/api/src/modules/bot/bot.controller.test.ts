@@ -42,18 +42,26 @@ describe('bot ingress boundary', () => {
       'bot.webhook_secret_token': 'header-secret',
       'brand.support_forward_chat_id': null,
     };
+    const catalogs: Record<string, Record<string, string>> = {
+      en: { 'bot.btn.buy': '🛒 Buy', 'bot.commands.start': 'Start the bot' },
+      ru: { 'bot.btn.buy': '🛒 Купить', 'bot.commands.start': 'Запустить бота' },
+    };
     const controller = new BotInternalController(
       { db: { admin: { findMany: () => Promise.resolve([{ telegramId: 123n }]) } } } as never,
       { get: (key: string) => Promise.resolve(settings[key]) } as never,
+      { messages: (lang: string) => Promise.resolve(catalogs[lang] ?? {}) } as never,
     );
-    expect(
-      (controller.messages('en') as { messages: Record<string, string> }).messages['bot.btn.buy'],
-    ).toBe('🛒 Buy');
-    await expect(controller.config()).resolves.toMatchObject({
+    await expect(controller.messages('en')).resolves.toMatchObject({
+      lang: 'en',
+      messages: { 'bot.btn.buy': '🛒 Buy' },
+    });
+    const config = await controller.config();
+    expect(config).toMatchObject({
       mode: 'webhook',
       webhookUrl: 'https://shop.example.test/tg/webhook/path-secret',
       admins: ['123'],
     });
+    expect(config.commands.en?.[0]).toEqual({ command: 'start', description: 'Start the bot' });
   });
 
   it('returns state used to choose the home menu', async () => {

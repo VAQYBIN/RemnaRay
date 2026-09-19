@@ -1,37 +1,118 @@
-import { readFileSync, readdirSync } from 'node:fs';
+import { existsSync, readFileSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';
 
+import {
+  assertIcu,
+  namespaces,
+  placeholdersOf,
+  SUPPORTED_LOCALES,
+  type Locale,
+} from '../packages/i18n-core/src/index.js';
+
 const root = join(process.cwd(), 'locales');
+const base: Locale = 'en';
 const locales = readdirSync(root).filter((entry) => !entry.startsWith('.'));
-const namespaces = [
-  'common',
-  'landing',
-  'account',
-  'admin',
-  'setup',
-  'bot',
-  'notify',
-  'errors',
-  'seo',
-  'legal',
-];
+const legalDocuments = ['terms', 'privacy', 'offer'];
+/** Keys whose Russian value is intentionally not Cyrillic (brands, endonyms). */
+const nonCyrillicRussianKeys = new Set([
+  'common.brand',
+  'common.language.en',
+  'bot.lang.en',
+  'account.email',
+]);
+const cyrillic = /[\u0400-\u04FF]/u;
+const failures: string[] = [];
 
-function read(locale: string, namespace: string): Record<string, unknown> {
-  return JSON.parse(readFileSync(join(root, locale, `${namespace}.json`), 'utf8')) as Record<
-    string,
-    unknown
-  >;
-}
-
-const base = 'en';
-for (const namespace of namespaces) {
-  const expected = Object.keys(read(base, namespace)).sort();
-  for (const locale of locales) {
-    const actual = Object.keys(read(locale, namespace)).sort();
-    if (expected.join('\n') !== actual.join('\n'))
-      throw new Error(`Locale keys differ: ${namespace} (${locale})`);
+/** Flattens the JSON namespace file, expanding arrays and objects into leaf keys. */
+function flatten(value: unknown, prefix: string, into: Map<string, string>): void {
+  if (typeof value === 'string') {
+    into.set(prefix, value);
+    return;
+  }
+  if (Array.isArray(value)) {
+    value.forEach((item, index) => {
+      flatten(item, `${prefix}[${String(index)}]`, into);
+    });
+    return;
+  }
+  if (value && typeof value === 'object') {
+    for (const [key, item] of Object.entries(value)) flatten(item, `${prefix}.${key}`, into);
   }
 }
+
+function read(locale: string, namespace: string): Map<string, string> {
+  const file = join(root, locale, `${namespace}.json`);
+  const parsed = JSON.parse(readFileSync(file, 'utf8')) as Record<string, unknown>;
+  const leaves = new Map<string, string>();
+  for (const [key, value] of Object.entries(parsed)) flatten(value, key, leaves);
+  return leaves;
+}
+
+function isSupported(locale: string): locale is Locale {
+  return SUPPORTED_LOCALES.includes(locale as Locale);
+}
+
+let checked = 0;
+for (const namespace of namespaces) {
+  const expected = read(base, namespace);
+  for (const locale of locales) {
+    const actual = read(locale, namespace);
+    for (const key of expected.keys())
+      if (!actual.has(key)) failures.push(`${locale}/${namespace}: missing key ${key}`);
+    for (const key of actual.keys())
+      if (!expected.has(key)) failures.push(`${locale}/${namespace}: key ${key} is not in ${base}`);
+
+    for (const [key, template] of actual) {
+      checked += 1;
+      if (isSupported(locale)) {
+        try {
+          assertIcu(locale, `${namespace}.${key}`, template);
+        } catch (error) {
+          failures.push(String(error));
+        }
+      }
+      const reference = expected.get(key);
+      if (reference === undefined) continue;
+      const left = placeholdersOf(reference).join(',');
+      const right = placeholdersOf(template).join(',');
+      if (left !== right)
+        failures.push(
+          `${locale}/${namespace}: placeholders differ for ${key} (${base}: ${left || '—'}, ${locale}: ${right || '—'})`,
+        );
+    }
+  }
+}
+
+for (const namespace of namespaces) {
+  for (const [key, template] of read('ru', namespace)) {
+    if (nonCyrillicRussianKeys.has(key)) continue;
+    if (!/[A-Za-z]{4}/u.test(template)) continue;
+    if (!cyrillic.test(template))
+      failures.push(`ru/${namespace}: ${key} still reads as English copy`);
+  }
+}
+
+for (const locale of locales) {
+  for (const document of legalDocuments) {
+    const file = join(root, locale, 'legal', `${document}.md`);
+    if (!existsSync(file)) {
+      failures.push(`${locale}: missing legal/${document}.md`);
+      continue;
+    }
+    const markdown = readFileSync(file, 'utf8');
+    if (!markdown.trim().startsWith('# '))
+      failures.push(`${locale}/legal/${document}.md must start with a level-one heading`);
+    for (const token of ['{brand}', '{domain}', '{support}'])
+      if (!markdown.includes(token))
+        failures.push(`${locale}/legal/${document}.md never uses ${token}`);
+  }
+}
+
+if (failures.length > 0) {
+  for (const failure of failures) console.error(failure);
+  throw new Error(`i18n check failed with ${String(failures.length)} problem(s).`);
+}
+
 console.log(
-  `Checked ${String(locales.length)} locales and ${String(namespaces.length)} namespaces.`,
+  `Checked ${String(locales.length)} locales, ${String(namespaces.length)} namespaces, ${String(checked)} messages and ${String(locales.length * legalDocuments.length)} legal documents.`,
 );

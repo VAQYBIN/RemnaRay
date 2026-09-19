@@ -9,7 +9,7 @@ export default getRequestConfig(async () => {
   const locale = routing.locales.includes(requested as Locale)
     ? (requested as Locale)
     : routing.defaultLocale;
-  return { locale, messages: loadLocaleMessages(locale) };
+  return { locale, messages: await loadLocaleMessages(locale) };
 });
 
 type Locale = (typeof routing.locales)[number];

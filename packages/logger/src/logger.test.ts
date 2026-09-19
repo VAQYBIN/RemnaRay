@@ -2,7 +2,7 @@ import { Writable } from 'node:stream';
 
 import { describe, expect, it } from 'vitest';
 
-import { createLogger, REDACT_PATHS } from './index';
+import { createLogger, REDACT_PATHS } from './index.js';
 
 describe('logger redaction', () => {
   it('covers every secret category required by section 19.6', () => {
