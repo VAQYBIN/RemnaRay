@@ -51,12 +51,18 @@ function configure(): Promise<void> {
 subscriber.on('error', () => {
   ready = false;
 });
-subscriber.on('message', () => {
+subscriber.on('message', (channel: string) => {
+  if (channel === 'rr:i18n.changed') {
+    runtime?.i18n.invalidate();
+    return;
+  }
   void configure();
 });
-void subscriber.subscribe('rr:bot.reconfigure', 'rr:settings.changed').catch(() => {
-  console.error('Bot settings subscription unavailable');
-});
+void subscriber
+  .subscribe('rr:bot.reconfigure', 'rr:settings.changed', 'rr:i18n.changed')
+  .catch(() => {
+    console.error('Bot settings subscription unavailable');
+  });
 void configure();
 // Reconcile after missed Pub/Sub messages or an initial API outage.
 const timer = setInterval(() => {

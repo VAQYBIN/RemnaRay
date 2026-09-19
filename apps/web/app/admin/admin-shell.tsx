@@ -24,7 +24,7 @@ const adminMeSchema = z.object({
 
 export type AdminMe = z.infer<typeof adminMeSchema>['admin'];
 
-const links: { href: string; key: string; permission: Permission }[] = [
+const links: { href: string; key: string; permission: Permission | Permission[] }[] = [
   { href: '/admin', key: 'dashboard', permission: 'dashboard.read' },
   { href: '/admin/users', key: 'users', permission: 'users.read' },
   { href: '/admin/subscriptions', key: 'subscriptions', permission: 'subscriptions.read' },
@@ -33,6 +33,10 @@ const links: { href: string; key: string; permission: Permission }[] = [
   { href: '/admin/promocodes', key: 'promocodes', permission: 'promocodes.read' },
   { href: '/admin/referrals', key: 'referrals', permission: 'referrals.read' },
   { href: '/admin/broadcasts', key: 'broadcasts', permission: 'broadcasts.read' },
+  { href: '/admin/settings', key: 'settings', permission: 'settings.read' },
+  { href: '/admin/admins', key: 'admins', permission: 'admins.write' },
+  { href: '/admin/audit', key: 'audit', permission: ['audit.read', 'audit.read.self'] },
+  { href: '/admin/system', key: 'system', permission: 'system.read' },
 ];
 
 /**
@@ -81,7 +85,11 @@ export function AdminShell({ children }: { children: (me: AdminMe) => ReactNode 
         <nav>
           <ul className="flex flex-wrap gap-1">
             {links
-              .filter((link) => granted.has(link.permission))
+              .filter((link) =>
+                (Array.isArray(link.permission) ? link.permission : [link.permission]).some(
+                  (permission) => granted.has(permission),
+                ),
+              )
               .map((link) => (
                 <li key={link.href}>
                   <Link

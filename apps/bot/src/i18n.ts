@@ -14,6 +14,11 @@ export class BotI18n {
     private readonly ttlMs = 60_000,
   ) {}
 
+  /** Section 18.5: `rr:i18n.changed` drops the cache before the 60 s TTL. */
+  invalidate(): void {
+    this.cache.clear();
+  }
+
   async catalog(locale: Locale): Promise<Record<string, string>> {
     const cached = this.cache.get(locale);
     if (cached && cached.expiresAt > Date.now()) return cached.messages;

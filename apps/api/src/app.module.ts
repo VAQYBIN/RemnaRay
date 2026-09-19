@@ -19,6 +19,7 @@ import { AdminApiModule } from './modules/admin-api/admin-api.module';
 import { RewardsModule } from './modules/rewards/rewards.module';
 import { NotifyModule } from './modules/notify/notify.module';
 import { BroadcastsModule } from './modules/broadcasts/broadcasts.module';
+import { AdminSettingsModule } from './modules/admin-settings/admin-settings.module';
 
 @Module({
   imports: [
@@ -39,6 +40,7 @@ import { BroadcastsModule } from './modules/broadcasts/broadcasts.module';
     RewardsModule,
     NotifyModule,
     BroadcastsModule,
+    AdminSettingsModule,
     LoggerModule.forRoot({
       pinoHttp: {
         level: process.env.RR_LOG_LEVEL ?? 'info',

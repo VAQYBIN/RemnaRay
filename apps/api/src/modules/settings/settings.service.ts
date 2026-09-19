@@ -115,6 +115,52 @@ export class SettingsService implements OnModuleInit, OnModuleDestroy {
     await this.eventBus.publish({ keys: changedKeys, version: Date.now() });
   }
 
+  /**
+   * Section 17.6 reaction matrix. Every key invalidates the shared cache; these
+   * prefixes additionally ask another process to reconfigure itself.
+   */
+  static sideEffects(keys: string[]): { channels: string[]; restartRequired: string[] } {
+    const channels = new Set<string>();
+    for (const key of keys) {
+      if (key.startsWith('bot.')) channels.add('rr:bot.reconfigure');
+      if (key.startsWith('domain.')) channels.add('rr:proxy.reload');
+      if (key.startsWith('theme.')) channels.add('rr:theme.changed');
+      if (key.startsWith('locale.')) channels.add('rr:i18n.changed');
+    }
+    // Nothing in the section 17.3 registry needs a restart in v1.
+    return { channels: [...channels], restartRequired: [] };
+  }
+
+  /** Diff between the stored settings and an import snapshot, for `dryRun`. */
+  async diff(value: unknown): Promise<{ key: string; from: unknown; to: unknown }[]> {
+    const parsed = settingsImportSchema.parse(value);
+    const current = await this.flat(false);
+    const diff: { key: string; from: unknown; to: unknown }[] = [];
+    for (const [group, values] of Object.entries(parsed.settings)) {
+      for (const [name, next] of Object.entries(values)) {
+        const key = `${group}.${name}`;
+        const definition = settingDefinitions.get(key);
+        if (!definition) continue;
+        const from = current[key];
+        if (JSON.stringify(from) !== JSON.stringify(next))
+          diff.push({
+            key,
+            from: definition.secret ? { set: Boolean(from) } : from,
+            to: definition.secret ? { set: true } : next,
+          });
+      }
+    }
+    return diff;
+  }
+
+  /** Publishes the section 17.6 channels for the keys that just changed. */
+  async announce(keys: string[], publish: (channel: string, payload: string) => Promise<unknown>) {
+    const { channels } = SettingsService.sideEffects(keys);
+    for (const channel of channels)
+      await publish(channel, JSON.stringify({ keys, at: Date.now() })).catch(() => undefined);
+    return channels;
+  }
+
   async exportSnapshot(): Promise<{
     version: 1;
     settings: Record<string, Record<string, unknown>>;

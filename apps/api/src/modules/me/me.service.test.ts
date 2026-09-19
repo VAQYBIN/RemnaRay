@@ -219,6 +219,25 @@ describe('MeService', () => {
     });
   });
 
+  it('never offers a provider that has no successful healthcheck (AC-061)', async () => {
+    const test = service({
+      paymentProvider: {
+        findMany: vi
+          .fn()
+          .mockResolvedValue([
+            { code: 'never-checked', displayName: { ru: 'New' }, lastHealthcheckOk: null },
+          ]),
+      },
+    });
+    const methods = await test.instance.paymentMethods('user-1');
+
+    expect(methods.items[1]).toMatchObject({
+      code: 'never-checked',
+      available: false,
+      unavailableReason: 'PROVIDER_UNAVAILABLE',
+    });
+  });
+
   it('offers balance and healthy providers only', async () => {
     const test = service({
       paymentProvider: {
@@ -235,6 +254,7 @@ describe('MeService', () => {
       ['yookassa', true],
       ['lava', false],
     ]);
+    expect(methods.items[2]).toMatchObject({ unavailableReason: 'PROVIDER_UNAVAILABLE' });
   });
 
   it('applies the section 15.5 promocode rules', async () => {

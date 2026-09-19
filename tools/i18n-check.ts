@@ -24,6 +24,12 @@ const nonCyrillicRussianKeys = new Set([
   'admin.users.username',
   'notify.admin.message',
   'alerts.title',
+  'admin.bot.username',
+  'admin.bot.test',
+  'admin.legal.markdown',
+  'admin.admins.email',
+  'admin.admins.totp',
+  'admin.providers.health',
 ]);
 const cyrillic = /[\u0400-\u04FF]/u;
 const failures: string[] = [];

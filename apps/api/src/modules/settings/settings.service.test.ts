@@ -115,3 +115,25 @@ describe('SettingsService', () => {
     expect(await service.get('brand.name')).toBe('Updated');
   });
 });
+
+describe('section 17.6 reaction matrix', () => {
+  it('asks the right process to reconfigure for each key prefix', () => {
+    expect(SettingsService.sideEffects(['bot.token']).channels).toEqual(['rr:bot.reconfigure']);
+    expect(SettingsService.sideEffects(['domain.main']).channels).toEqual(['rr:proxy.reload']);
+    expect(SettingsService.sideEffects(['theme.slug']).channels).toEqual(['rr:theme.changed']);
+    expect(SettingsService.sideEffects(['locale.enabled']).channels).toEqual(['rr:i18n.changed']);
+    expect(SettingsService.sideEffects(['brand.name']).channels).toEqual([]);
+  });
+
+  it('deduplicates channels and reports no restart for v1 keys', () => {
+    const result = SettingsService.sideEffects([
+      'bot.token',
+      'bot.mode',
+      'theme.slug',
+      'invoice.ttl_minutes',
+    ]);
+
+    expect(result.channels).toEqual(['rr:bot.reconfigure', 'rr:theme.changed']);
+    expect(result.restartRequired).toEqual([]);
+  });
+});

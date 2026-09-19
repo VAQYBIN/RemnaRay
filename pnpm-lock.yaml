@@ -113,6 +113,9 @@ importers:
       '@remnaray/payments-mock':
         specifier: workspace:*
         version: link:../../packages/payments-mock
+      '@remnaray/queues':
+        specifier: workspace:*
+        version: link:../../packages/queues
       '@remnaray/remnawave-sdk':
         specifier: workspace:*
         version: link:../../packages/remnawave-sdk
@@ -122,6 +125,9 @@ importers:
       '@scalar/nestjs-api-reference':
         specifier: ~1.2.19
         version: 1.2.19
+      bullmq:
+        specifier: ~6.3.7
+        version: 6.3.7(ioredis@5.11.1)(pg@8.16.3)
       dayjs:
         specifier: ~1.11.23
         version: 1.11.23

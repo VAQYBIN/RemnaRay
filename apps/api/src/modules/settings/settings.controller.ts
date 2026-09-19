@@ -1,6 +1,7 @@
 import { Body, Controller, Get, Post, Put, Req } from '@nestjs/common';
 import type { FastifyRequest } from 'fastify';
 
+import { Infrastructure } from '../../infra/infra.module';
 import { SettingsService } from './settings.service';
 import { Permissions, Roles } from '../admin/admin.rbac';
 
@@ -15,7 +16,10 @@ function actorFrom(request: ActorRequest) {
 @Roles('admin')
 @Permissions('settings.read')
 export class SettingsController {
-  constructor(private readonly settings: SettingsService) {}
+  constructor(
+    private readonly settings: SettingsService,
+    private readonly infra: Infrastructure,
+  ) {}
 
   @Get()
   getSettings() {
@@ -42,7 +46,12 @@ export class SettingsController {
       grouped[group][name] = value;
     }
     await this.settings.set(grouped, actorFrom(request));
-    return { applied: Object.keys(patch), restartRequired: [] };
+    const applied = Object.keys(patch);
+    const channels = await this.settings.announce(applied, (channel, payload) =>
+      this.infra.redis.publish(channel, payload),
+    );
+    const { restartRequired } = SettingsService.sideEffects(applied);
+    return { applied, restartRequired, reconfigured: channels };
   }
 
   @Get('schema')
@@ -64,10 +73,13 @@ export class SettingsController {
     const payload = body as { json: unknown; dryRun?: unknown };
     const input = payload.json;
     const dryRun = payload.dryRun === true;
-    if (dryRun) {
-      return { diff: [], dryRun: true };
-    }
+    const diff = await this.settings.diff(input);
+    if (dryRun) return { diff, dryRun: true };
     await this.settings.importSnapshot(input, actorFrom(request));
-    return { diff: [], dryRun: false };
+    await this.settings.announce(
+      diff.map((row) => row.key),
+      (channel, payload) => this.infra.redis.publish(channel, payload),
+    );
+    return { diff, dryRun: false };
   }
 }

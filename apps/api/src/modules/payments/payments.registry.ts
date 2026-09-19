@@ -17,6 +17,10 @@ export class PaymentProviderRegistry {
     return provider;
   }
 
+  has(code: string): boolean {
+    return this.providers.has(code as ProviderCode);
+  }
+
   list(): PaymentProvider[] {
     return [...this.providers.values()];
   }

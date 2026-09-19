@@ -6,9 +6,8 @@ M4
 
 ## Current task
 
-TASK-M4-008 is complete and committed. Next: TASK-M4-009 (admin settings,
-providers with healthcheck, panel, bot, theme, locales, legal texts, admins,
-journal, system). Do not start M5.
+TASK-M4-009 is complete and committed. Next: TASK-M4-010 (Playwright e2e for
+the site, account and administration). Do not start M5.
 
 ## Current handoff correction
 
@@ -488,9 +487,8 @@ Verified on 2026-09-20.
   the login challenge `DEL` is the atomic commit point for issuing a session.
 - Checks: api 56 tests (17 files), domain 5 tests, all workspace tests,
   `pnpm lint`, `pnpm typecheck`, `pnpm format`, full `pnpm build`.
-- Known gap moved to TASK-M4-009: `POST /api/admin/v1/settings/import` still
-  answers `{ diff: [] }` for `dryRun`, and `PUT /settings` always answers
-  `restartRequired: []` instead of the section 17.6 matrix.
+- The settings import diff and the section 17.6 reaction matrix were completed
+  in TASK-M4-009.
 
 ## M4-003 reconciliation
 
@@ -661,6 +659,33 @@ Verified on 2026-09-20.
 - Checks: api 101 tests, domain 12 tests, workspace tests, `pnpm lint`,
   `pnpm -r typecheck`, `pnpm format`, full `pnpm build`, `pnpm i18n-check`, and
   the M4 broadcast and notification integration gates.
+
+## M4-009 verification
+
+Verified on 2026-09-20.
+
+- AC-061: `GET /api/admin/v1/providers` reports `offeredToUsers` as
+  `enabled && lastHealthcheckOk === true`, and `GET /api/v1/me/payment-methods`
+  now uses the same rule, so a provider that was never checked or failed its
+  last check is never offered. Saving a provider configuration runs a
+  healthcheck immediately. Five `ProvidersService` tests cover it.
+- AC-181: `PUT /settings` publishes the section 17.6 channels for the changed
+  keys and answers with `applied`, `restartRequired` and `reconfigured`. The
+  site revalidates config, catalogs and theme every five seconds and the bot
+  caches catalogs for sixty seconds, dropping them immediately on
+  `rr:i18n.changed`. Both windows are asserted by tests.
+- AC-146: `GET /api/admin/v1/system` reports version, images, last panel
+  reconciliation, outbox depth, database size, bot mode, TLS and backup markers
+  and the health endpoint; `GET /system/queues` plus `retry-failed` complete the
+  page.
+- Added panel, bot, theme, locale and legal administration, the action journal
+  with the operator-only scope, and the administrators screen on top of the
+  FR-143 API from TASK-M4-002.
+- `POST /settings/import` now returns a real diff for `dryRun`, and every value
+  patched into `locale_overrides` is ICU-compiled before it is stored.
+- Checks: api 109 tests, bot 12 tests, web 19 tests, workspace tests,
+  `pnpm lint`, `pnpm -r typecheck`, `pnpm format`, full `pnpm build`,
+  `pnpm i18n-check`.
 
 ## M4-003 decisions
 

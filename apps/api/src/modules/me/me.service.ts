@@ -229,14 +229,15 @@ export class MeService {
           available: Boolean(topupEnabled),
           balance: money(account?.balanceMinor ?? 0n),
         },
+        // AC-061: a provider is offered only after a successful healthcheck.
         ...providers.map((provider) => ({
           code: provider.code,
           displayName: provider.displayName,
           kind: provider.code === 'stars' ? ('stars' as const) : ('redirect' as const),
-          available: provider.lastHealthcheckOk !== false,
-          ...(provider.lastHealthcheckOk === false
-            ? { unavailableReason: 'PROVIDER_UNAVAILABLE' }
-            : {}),
+          available: provider.lastHealthcheckOk === true,
+          ...(provider.lastHealthcheckOk === true
+            ? {}
+            : { unavailableReason: 'PROVIDER_UNAVAILABLE' }),
         })),
       ],
     };

@@ -94,3 +94,48 @@ AC-141 audited actions.
 `settings.operator.max_credit_minor` caps an operator's daily total credit and
 `settings.operator.max_refund_minor` caps a single refund. An operator can never
 debit a balance, run a bulk extension, anonymize a user or edit plans.
+
+## Settings, providers and system (TASK-M4-009)
+
+`/admin/settings` renders the store settings from `GET /settings/schema`, and the
+tabs for providers, theme, locales and legal texts. `/admin/admins`,
+`/admin/audit` and `/admin/system` complete the section 14.1 list.
+
+### AC-061 — a provider is offered only after a successful healthcheck
+
+`GET /api/admin/v1/providers` reports `offeredToUsers`, which is
+`enabled && lastHealthcheckOk === true`. `GET /api/v1/me/payment-methods` uses
+the same rule, so a provider that has never been checked, or whose last check
+failed, is never offered. Saving a provider configuration runs a healthcheck
+immediately, and the console has an explicit «Проверить» action.
+
+### AC-181 — an override reaches the surfaces in time
+
+`PUT /settings` publishes the section 17.6 channels for the keys that changed
+(`rr:bot.reconfigure`, `rr:proxy.reload`, `rr:theme.changed`, `rr:i18n.changed`)
+and answers with `applied`, `restartRequired` and `reconfigured`. The site
+revalidates config, catalogs and theme every five seconds; the bot caches
+catalogs for sixty seconds and drops them immediately on `rr:i18n.changed`.
+
+### AC-146 — system page
+
+`GET /api/admin/v1/system` reports the application version, image tags, the last
+panel reconciliation, the unpublished outbox depth, the database size, the bot
+mode, TLS and backup markers and the health endpoint. `GET /system/queues` gives
+waiting/active/failed/delayed per queue and `POST
+/system/queues/:name/retry-failed` re-queues failures.
+
+### Journal
+
+`GET /api/admin/v1/audit` filters by actor, action, entity and period. An
+operator is restricted to their own rows by the RBAC matrix, and the response
+says which scope it returned.
+
+### Locales and legal texts
+
+`GET/PUT /api/admin/v1/i18n/:lang/:namespace` lists the shipped default next to
+the active override and applies a patch where `null` clears an override. Every
+value is compiled as ICU before it is stored. `GET/PUT
+/api/admin/v1/i18n/legal/:doc/:lang` edits a legal document as a whole. Both
+invalidate the catalogs, so the site and bot pick the change up inside their
+windows.

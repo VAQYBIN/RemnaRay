@@ -135,6 +135,17 @@
         }
       }
     },
+    "/api/admin/v1/audit": {
+      "get": {
+        "operationId": "listAuditLog",
+        "summary": "Action journal; an operator only sees their own rows",
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        }
+      }
+    },
     "/api/admin/v1/auth/login": {
       "post": {
         "operationId": "adminLogin",
@@ -209,6 +220,64 @@
           },
           "401": {
             "description": "Invalid challenge"
+          }
+        }
+      }
+    },
+    "/api/admin/v1/bot": {
+      "get": {
+        "operationId": "getBotSettings",
+        "summary": "Bot settings",
+        "responses": {
+          "200": {
+            "description": "OK"
+          },
+          "403": {
+            "description": "FORBIDDEN"
+          }
+        }
+      },
+      "put": {
+        "operationId": "updateBotSettings",
+        "summary": "Update the bot and ask it to reconfigure",
+        "responses": {
+          "200": {
+            "description": "OK"
+          },
+          "403": {
+            "description": "FORBIDDEN"
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/admin/v1/bot/sync-commands": {
+      "post": {
+        "operationId": "syncBotCommands",
+        "summary": "Ask the bot to re-register its commands",
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        }
+      }
+    },
+    "/api/admin/v1/bot/test": {
+      "post": {
+        "operationId": "testBot",
+        "summary": "Telegram getMe",
+        "responses": {
+          "200": {
+            "description": "OK"
           }
         }
       }
@@ -576,6 +645,153 @@
         ]
       }
     },
+    "/api/admin/v1/i18n/legal/{doc}/{lang}": {
+      "get": {
+        "operationId": "getLegalDocument",
+        "summary": "Legal markdown, override or shipped",
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        },
+        "parameters": [
+          {
+            "name": "doc",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "enum": ["terms", "privacy", "offer"]
+            }
+          },
+          {
+            "name": "lang",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "enum": ["ru", "en"]
+            }
+          }
+        ]
+      },
+      "put": {
+        "operationId": "setLegalDocument",
+        "summary": "Replace a legal document",
+        "responses": {
+          "200": {
+            "description": "OK"
+          },
+          "403": {
+            "description": "FORBIDDEN"
+          }
+        },
+        "parameters": [
+          {
+            "name": "doc",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "enum": ["terms", "privacy", "offer"]
+            }
+          },
+          {
+            "name": "lang",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "enum": ["ru", "en"]
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/admin/v1/i18n/{lang}/{namespace}": {
+      "get": {
+        "operationId": "listLocaleEntries",
+        "summary": "Shipped default and active override per key",
+        "responses": {
+          "200": {
+            "description": "OK"
+          },
+          "403": {
+            "description": "FORBIDDEN"
+          }
+        },
+        "parameters": [
+          {
+            "name": "lang",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "enum": ["ru", "en"]
+            }
+          },
+          {
+            "name": "namespace",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ]
+      },
+      "put": {
+        "operationId": "patchLocaleEntries",
+        "summary": "Set or clear overrides; every value is ICU-compiled first",
+        "responses": {
+          "200": {
+            "description": "OK"
+          },
+          "403": {
+            "description": "FORBIDDEN"
+          }
+        },
+        "parameters": [
+          {
+            "name": "lang",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "enum": ["ru", "en"]
+            }
+          },
+          {
+            "name": "namespace",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object"
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/admin/v1/invoices": {
       "get": {
         "operationId": "listAdminInvoices",
@@ -650,6 +866,64 @@
             }
           }
         ]
+      }
+    },
+    "/api/admin/v1/panel": {
+      "get": {
+        "operationId": "getPanelSettings",
+        "summary": "Panel settings and health",
+        "responses": {
+          "200": {
+            "description": "OK"
+          },
+          "403": {
+            "description": "FORBIDDEN"
+          }
+        }
+      },
+      "put": {
+        "operationId": "updatePanelSettings",
+        "summary": "Update the panel connection",
+        "responses": {
+          "200": {
+            "description": "OK"
+          },
+          "403": {
+            "description": "FORBIDDEN"
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/admin/v1/panel/reconcile": {
+      "post": {
+        "operationId": "reconcilePanel",
+        "summary": "Reconcile users with the panel",
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        }
+      }
+    },
+    "/api/admin/v1/panel/test": {
+      "post": {
+        "operationId": "testPanel",
+        "summary": "Check the panel connection",
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        }
       }
     },
     "/api/admin/v1/plans": {
@@ -857,6 +1131,96 @@
         ]
       }
     },
+    "/api/admin/v1/providers": {
+      "get": {
+        "operationId": "listProviders",
+        "summary": "Providers with their healthcheck state",
+        "responses": {
+          "200": {
+            "description": "OK"
+          },
+          "403": {
+            "description": "FORBIDDEN"
+          }
+        }
+      }
+    },
+    "/api/admin/v1/providers/reorder": {
+      "post": {
+        "operationId": "reorderProviders",
+        "summary": "Persist the provider order",
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/admin/v1/providers/{code}": {
+      "put": {
+        "operationId": "updateProvider",
+        "summary": "Update a provider and run a healthcheck",
+        "responses": {
+          "200": {
+            "description": "OK"
+          },
+          "403": {
+            "description": "FORBIDDEN"
+          }
+        },
+        "parameters": [
+          {
+            "name": "code",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/admin/v1/providers/{code}/healthcheck": {
+      "post": {
+        "operationId": "healthcheckProvider",
+        "summary": "Run a provider healthcheck (AC-061)",
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        },
+        "parameters": [
+          {
+            "name": "code",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ]
+      }
+    },
     "/api/admin/v1/referral/program": {
       "get": {
         "operationId": "getReferralProgram",
@@ -1037,6 +1401,66 @@
         }
       }
     },
+    "/api/admin/v1/system": {
+      "get": {
+        "operationId": "getSystemOverview",
+        "summary": "FR-146 health page",
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        }
+      }
+    },
+    "/api/admin/v1/system/queues": {
+      "get": {
+        "operationId": "getQueueCounts",
+        "summary": "Queue depths",
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        }
+      }
+    },
+    "/api/admin/v1/system/queues/{name}/retry-failed": {
+      "post": {
+        "operationId": "retryFailedJobs",
+        "summary": "Retry failed jobs in one queue",
+        "responses": {
+          "200": {
+            "description": "OK"
+          },
+          "403": {
+            "description": "FORBIDDEN"
+          }
+        },
+        "parameters": [
+          {
+            "name": "name",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ]
+      }
+    },
+    "/api/admin/v1/system/reconcile": {
+      "post": {
+        "operationId": "systemReconcile",
+        "summary": "Reconcile with the panel from the system page",
+        "responses": {
+          "200": {
+            "description": "OK"
+          },
+          "403": {
+            "description": "FORBIDDEN"
+          }
+        }
+      }
+    },
     "/api/admin/v1/themes": {
       "get": {
         "operationId": "listThemes",
@@ -1049,6 +1473,51 @@
             "description": "UNAUTHENTICATED"
           }
         }
+      }
+    },
+    "/api/admin/v1/themes/active": {
+      "put": {
+        "operationId": "setActiveTheme",
+        "summary": "Select the active theme and revalidate the site",
+        "responses": {
+          "200": {
+            "description": "OK"
+          },
+          "403": {
+            "description": "FORBIDDEN"
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/admin/v1/themes/{slug}": {
+      "get": {
+        "operationId": "getThemeTokens",
+        "summary": "Theme tokens and asset URLs",
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        },
+        "parameters": [
+          {
+            "name": "slug",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ]
       }
     },
     "/api/admin/v1/transactions": {
