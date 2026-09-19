@@ -213,6 +213,293 @@
         }
       }
     },
+    "/api/admin/v1/broadcasts": {
+      "get": {
+        "operationId": "listBroadcasts",
+        "summary": "Broadcasts",
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        }
+      },
+      "post": {
+        "operationId": "createBroadcast",
+        "summary": "Create a broadcast",
+        "responses": {
+          "201": {
+            "description": "Created"
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/admin/v1/broadcasts/{id}": {
+      "get": {
+        "operationId": "getBroadcast",
+        "summary": "One broadcast",
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ]
+      },
+      "patch": {
+        "operationId": "updateBroadcast",
+        "summary": "Edit a draft or paused broadcast",
+        "responses": {
+          "200": {
+            "description": "OK"
+          },
+          "409": {
+            "description": "CONFLICT"
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object"
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "operationId": "deleteBroadcast",
+        "summary": "Soft-delete a broadcast",
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ]
+      }
+    },
+    "/api/admin/v1/broadcasts/{id}/cancel": {
+      "post": {
+        "operationId": "cancelBroadcast",
+        "summary": "Cancel a broadcast",
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ]
+      }
+    },
+    "/api/admin/v1/broadcasts/{id}/pause": {
+      "post": {
+        "operationId": "pauseBroadcast",
+        "summary": "Pause a running broadcast",
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ]
+      }
+    },
+    "/api/admin/v1/broadcasts/{id}/preview-segment": {
+      "post": {
+        "operationId": "previewBroadcastSegment",
+        "summary": "Audience count and masked sample",
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ]
+      }
+    },
+    "/api/admin/v1/broadcasts/{id}/report": {
+      "get": {
+        "operationId": "getBroadcastReport",
+        "summary": "Counts, duration and failures",
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ]
+      }
+    },
+    "/api/admin/v1/broadcasts/{id}/report.csv": {
+      "get": {
+        "operationId": "getBroadcastFailuresCsv",
+        "summary": "Failed deliveries as CSV",
+        "responses": {
+          "200": {
+            "description": "CSV",
+            "content": {
+              "text/csv": {}
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ]
+      }
+    },
+    "/api/admin/v1/broadcasts/{id}/resume": {
+      "post": {
+        "operationId": "resumeBroadcast",
+        "summary": "Resume, skipping delivered recipients",
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ]
+      }
+    },
+    "/api/admin/v1/broadcasts/{id}/start": {
+      "post": {
+        "operationId": "startBroadcast",
+        "summary": "Materialize the audience and queue chunks",
+        "responses": {
+          "200": {
+            "description": "OK"
+          },
+          "409": {
+            "description": "CONFLICT"
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ]
+      }
+    },
+    "/api/admin/v1/broadcasts/{id}/test": {
+      "post": {
+        "operationId": "testBroadcast",
+        "summary": "Send to the administrator's own account",
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ]
+      }
+    },
     "/api/admin/v1/dashboard": {
       "get": {
         "operationId": "getDashboard",
@@ -1334,6 +1621,27 @@
         "responses": {
           "200": {
             "description": "Bot JWT"
+          }
+        }
+      }
+    },
+    "/api/internal/v1/broadcasts/chunk": {
+      "post": {
+        "operationId": "sendBroadcastChunk",
+        "summary": "Queue consumer for broadcast.chunk",
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object"
+              }
+            }
           }
         }
       }

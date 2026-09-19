@@ -41,6 +41,14 @@ export class WorkerService implements OnModuleInit, OnModuleDestroy {
       ),
     );
     this.workers.push(
+      new Worker(
+        'broadcast',
+        async (job: Job<Record<string, unknown>>) =>
+          this.call({ path: '/api/internal/v1/broadcasts/chunk', body: job.data }),
+        { connection, concurrency: 1 },
+      ),
+    );
+    this.workers.push(
       new Worker('panel', async (job: Job<Record<string, unknown>>) => this.call(panelCall(job)), {
         connection,
       }),

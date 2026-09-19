@@ -6,8 +6,9 @@ M4
 
 ## Current task
 
-TASK-M4-007 is complete and committed. Next: TASK-M4-008 (broadcasts: segment
-DSL, editor, worker and report). Do not start M5.
+TASK-M4-008 is complete and committed. Next: TASK-M4-009 (admin settings,
+providers with healthcheck, panel, bot, theme, locales, legal texts, admins,
+journal, system). Do not start M5.
 
 ## Current handoff correction
 
@@ -636,6 +637,30 @@ Verified on 2026-09-20.
 - Checks: api 96 tests, workspace tests, `pnpm lint`, `pnpm -r typecheck`,
   `pnpm format`, full `pnpm build`, `pnpm i18n-check`, and the M1, M2 and M4
   integration gates after the new migration.
+
+## M4-008 verification
+
+Verified on 2026-09-20.
+
+- Added `packages/domain/segment.ts`: the section 16.3 DSL compiles to a plan
+  the repository executes, with all ten operators and `now±Nd/h` relative dates
+  covered by tests. A segment can never widen the mandatory exclusions.
+- Added the editor contract: one text per language, at most four buttons of the
+  three supported kinds, an optional photo, the four placeholders, and Telegram
+  HTML validation that rejects any tag outside the section 16.3 list.
+- `start` materializes the audience once as `pending` deliveries (migration
+  `0004_broadcast_delivery_pending`) and queues chunks of 500. Chunks skip
+  non-pending deliveries, throttle at 25 messages per second with
+  `concurrency: 1`, re-read the status every 50 messages, mark `403` as blocked
+  with `users.bot_blocked_at`, and back off on `429`.
+- Added the admin screen with presets, segment preview, test-on-myself,
+  start/pause/resume/cancel and the failures CSV.
+- AC-161 is covered by `test/m4.broadcast.integration.test.mjs`: a run is paused
+  mid-way, resumed, and every recipient receives exactly one message; blocked,
+  opted-out and anonymized users never enter the audience.
+- Checks: api 101 tests, domain 12 tests, workspace tests, `pnpm lint`,
+  `pnpm -r typecheck`, `pnpm format`, full `pnpm build`, `pnpm i18n-check`, and
+  the M4 broadcast and notification integration gates.
 
 ## M4-003 decisions
 
