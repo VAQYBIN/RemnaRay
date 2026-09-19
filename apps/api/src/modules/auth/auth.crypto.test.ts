@@ -45,6 +45,9 @@ describe('auth cryptography', () => {
     expect(() => {
       verifyTelegramWidget(signedWidget(1_700_000_000), botToken, 1_700_000_301);
     }).toThrow(new AuthFailure('AUTH_EXPIRED'));
+    expect(() => {
+      verifyTelegramWidget(signedWidget(1_700_000_101), botToken, 1_700_000_100);
+    }).toThrow(new AuthFailure('AUTH_EXPIRED'));
   });
 
   it('signs HS256 bot tokens with a one-hour expiry and rejects tampering', () => {

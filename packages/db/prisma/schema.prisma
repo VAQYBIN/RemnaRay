@@ -12,12 +12,14 @@ enum TrafficResetStrategy {
   DAY
   WEEK
   MONTH
+  @@map("traffic_reset_strategy")
 }
 enum SubscriptionSource {
   trial
   purchase
   admin
   promo
+  @@map("subscription_source")
 }
 enum SubscriptionStatus {
   provisioning
@@ -26,6 +28,7 @@ enum SubscriptionStatus {
   expired
   revoked
   provisioning_failed
+  @@map("subscription_status")
 }
 enum AccountKind {
   user
@@ -35,6 +38,7 @@ enum AccountKind {
   promo_expense
   refund_pool
   adjustment
+  @@map("account_kind")
 }
 enum TransactionType {
   purchase
@@ -45,15 +49,18 @@ enum TransactionType {
   promo_bonus
   adjustment
   plan_change_credit
+  @@map("transaction_type")
 }
 enum TransactionStatus {
   completed
   reversed
+  @@map("transaction_status")
 }
 enum InvoiceKind {
   purchase
   topup
   plan_change
+  @@map("invoice_kind")
 }
 enum InvoiceStatus {
   pending
@@ -61,21 +68,25 @@ enum InvoiceStatus {
   expired
   canceled
   underpaid
+  @@map("invoice_status")
 }
 enum ReferralStatus {
   pending
   converted
   rejected
+  @@map("referral_status")
 }
 enum PromocodeType {
   discount_percent
   discount_fixed
   bonus_days
   bonus_balance
+  @@map("promocode_type")
 }
 enum AdminRole {
   admin
   operator
+  @@map("admin_role")
 }
 enum BroadcastStatus {
   draft
@@ -85,6 +96,7 @@ enum BroadcastStatus {
   done
   canceled
   failed
+  @@map("broadcast_status")
 }
 
 model Setting {
@@ -171,7 +183,7 @@ model PanelUser {
   trafficLimitBytes BigInt @default(0) @map("traffic_limit_bytes")
   expireAtPanel DateTime? @map("expire_at_panel") @db.Timestamptz(6)
   hwidDeviceLimit Int? @map("hwid_device_limit")
-  squads String[] @default([])
+  squads String[] @db.Uuid @default([])
   conflict Boolean @default(false)
   syncedAt DateTime? @map("synced_at") @db.Timestamptz(6)
   syncError String? @map("sync_error")
@@ -190,7 +202,7 @@ model Plan {
   trafficLimitBytes BigInt @default(0) @map("traffic_limit_bytes")
   trafficResetStrategy TrafficResetStrategy @default(NO_RESET) @map("traffic_reset_strategy")
   deviceLimit Int @default(0) @map("device_limit")
-  squads String[]
+  squads String[] @db.Uuid
   priceMinor BigInt @map("price_minor")
   currency String @default("RUB") @db.Char(3)
   priceOverrides Json @default("{}") @map("price_overrides")
@@ -213,7 +225,7 @@ model Subscription {
   expiresAt DateTime @map("expires_at") @db.Timestamptz(6)
   trafficLimitBytes BigInt @map("traffic_limit_bytes")
   deviceLimit Int @map("device_limit")
-  squads String[]
+  squads String[] @db.Uuid
   trafficResetStrategy TrafficResetStrategy @map("traffic_reset_strategy")
   notified Json @default("{}")
   revokedReason String? @map("revoked_reason")
@@ -358,7 +370,7 @@ model Promocode {
   usedCount Int @default(0) @map("used_count")
   validFrom DateTime? @map("valid_from") @db.Timestamptz(6)
   validUntil DateTime? @map("valid_until") @db.Timestamptz(6)
-  planIds String[] @default([]) @map("plan_ids")
+  planIds String[] @db.Uuid @default([]) @map("plan_ids")
   firstPurchaseOnly Boolean @default(false) @map("first_purchase_only")
   minAmountMinor BigInt @default(0) @map("min_amount_minor")
   isActive Boolean @default(true) @map("is_active")

@@ -2,12 +2,14 @@ import { Module } from '@nestjs/common';
 import { LoggerModule } from 'nestjs-pino';
 
 import { HealthController } from './health/health.controller';
+import { InfraModule } from './infra/infra.module';
 import { AuthModule } from './modules/auth/auth.module';
 import { SettingsModule } from './modules/settings/settings.module';
 import { UsersModule } from './modules/users/users.module';
 
 @Module({
   imports: [
+    InfraModule,
     SettingsModule,
     UsersModule,
     AuthModule,

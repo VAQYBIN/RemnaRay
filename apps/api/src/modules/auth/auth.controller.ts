@@ -1,9 +1,9 @@
-import { Body, Controller, Get, Post, Query, Req, Res, UseGuards } from '@nestjs/common';
+import { Body, Controller, Get, HttpCode, Post, Query, Req, Res, UseGuards } from '@nestjs/common';
 import { Throttle } from '@nestjs/throttler';
 import type { FastifyReply } from 'fastify';
 
 import { AuthService } from './auth.service';
-import { AuthGuard, type AuthenticatedRequest, InternalTokenGuard } from './auth.guards';
+import { type AuthenticatedRequest, InternalTokenGuard } from './auth.guards';
 
 const SESSION_COOKIE_MAX_AGE = 30 * 24 * 60 * 60;
 
@@ -12,7 +12,8 @@ export class AuthController {
   constructor(private readonly auth: AuthService) {}
 
   @Post('auth/telegram')
-  @Throttle({ default: { limit: 5, ttl: 60_000 } })
+  @HttpCode(200)
+  @Throttle({ default: { limit: 10, ttl: 60_000 } })
   async telegram(
     @Body() body: unknown,
     @Req() request: AuthenticatedRequest,
@@ -34,7 +35,6 @@ export class AuthController {
   }
 
   @Post('auth/logout')
-  @UseGuards(AuthGuard)
   async logout(
     @Req() request: AuthenticatedRequest,
     @Res({ passthrough: true }) reply: FastifyReply,
@@ -45,9 +45,8 @@ export class AuthController {
   }
 
   @Get('me')
-  @UseGuards(AuthGuard)
   me(@Req() request: AuthenticatedRequest) {
-    return { userId: request.user?.id };
+    return this.auth.me(request.user?.id);
   }
 }
 
@@ -56,6 +55,7 @@ export class InternalAuthController {
   constructor(private readonly auth: AuthService) {}
 
   @Post('issue-token')
+  @HttpCode(200)
   @UseGuards(InternalTokenGuard)
   issueToken(@Body() body: unknown) {
     return this.auth.issueBotToken(body);

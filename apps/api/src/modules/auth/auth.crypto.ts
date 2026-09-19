@@ -43,7 +43,7 @@ export function verifyTelegramWidget(
   nowSeconds = Math.floor(Date.now() / 1000),
 ): void {
   const authDate = Number(input.auth_date);
-  if (!Number.isSafeInteger(authDate) || nowSeconds - authDate > 300) {
+  if (!Number.isSafeInteger(authDate) || nowSeconds - authDate > 300 || authDate > nowSeconds) {
     throw new AuthFailure('AUTH_EXPIRED');
   }
 
@@ -79,6 +79,8 @@ export function verifyJwt(
   appKey: string,
   nowSeconds = Math.floor(Date.now() / 1000),
 ): JwtClaims {
+  if (typeof token !== 'string' || token.split('.').length !== 3)
+    throw new AuthFailure('UNAUTHENTICATED');
   const [headerValue, payloadValue, signatureValue] = token.split('.');
   if (!headerValue || !payloadValue || !signatureValue) throw new AuthFailure('UNAUTHENTICATED');
   const content = `${headerValue}.${payloadValue}`;
@@ -96,6 +98,10 @@ export function verifyJwt(
       typeof payload.sub !== 'string' ||
       typeof payload.iat !== 'number' ||
       typeof payload.exp !== 'number' ||
+      !Number.isSafeInteger(payload.exp) ||
+      !Number.isSafeInteger(payload.iat) ||
+      payload.iat > nowSeconds ||
+      payload.exp - payload.iat !== 3600 ||
       payload.exp <= nowSeconds
     ) {
       throw new Error('invalid claims');

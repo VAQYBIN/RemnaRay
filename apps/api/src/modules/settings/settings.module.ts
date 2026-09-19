@@ -1,22 +1,27 @@
 import { Module } from '@nestjs/common';
 
-import { createPrismaClient } from '@remnaray/db';
+import { Infrastructure } from '../../infra/infra.module';
 
 import { RedisSettingsEventBus } from './settings.events';
 import { SettingsController } from './settings.controller';
 import { SettingsRepository } from './settings.repository';
 import { SettingsService } from './settings.service';
 
-const prisma = createPrismaClient();
-const repository = new SettingsRepository(prisma);
-const eventBus = new RedisSettingsEventBus();
-
 @Module({
   controllers: [SettingsController],
   providers: [
-    { provide: SettingsRepository, useValue: repository },
-    { provide: RedisSettingsEventBus, useValue: eventBus },
-    { provide: SettingsService, useFactory: () => new SettingsService(repository, eventBus) },
+    {
+      provide: SettingsRepository,
+      inject: [Infrastructure],
+      useFactory: (infra: Infrastructure) => new SettingsRepository(infra.db),
+    },
+    { provide: RedisSettingsEventBus, useFactory: () => new RedisSettingsEventBus() },
+    {
+      provide: SettingsService,
+      inject: [SettingsRepository, RedisSettingsEventBus],
+      useFactory: (repository: SettingsRepository, eventBus: RedisSettingsEventBus) =>
+        new SettingsService(repository, eventBus),
+    },
   ],
   exports: [SettingsService],
 })

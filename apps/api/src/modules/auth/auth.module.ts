@@ -21,7 +21,7 @@ const throttlerStorage = new ValkeyThrottlerStorage();
     UsersModule,
     ThrottlerModule.forRoot({
       storage: throttlerStorage,
-      throttlers: [{ name: 'default', ttl: 10_000, limit: 100 }],
+      throttlers: [{ name: 'default', ttl: 60_000, limit: 60 }],
     }),
   ],
   controllers: [AuthController, InternalAuthController],
@@ -33,17 +33,12 @@ const throttlerStorage = new ValkeyThrottlerStorage();
       useFactory: (settings: SettingsService, users: UsersService, sessions: SessionStorePort) =>
         new AuthService(settings, users, sessions, process.env.RR_APP_KEY ?? ''),
     },
-    {
-      provide: AuthGuard,
-      inject: ['SESSION_STORE'],
-      useFactory: (sessions: SessionStorePort) =>
-        new AuthGuard(sessions, process.env.RR_APP_KEY ?? ''),
-    },
+    { provide: APP_GUARD, useClass: AuthGuard },
     { provide: APP_GUARD, useClass: ThrottlerGuard },
     { provide: APP_GUARD, useClass: CsrfGuard },
     InternalTokenGuard,
   ],
-  exports: [AuthService, AuthGuard],
+  exports: [AuthService],
 })
 // eslint-disable-next-line @typescript-eslint/no-extraneous-class
 export class AuthModule {}

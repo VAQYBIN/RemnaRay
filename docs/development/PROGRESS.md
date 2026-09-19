@@ -142,6 +142,18 @@ blocker is resolved.
   and expiry checks cover AC-132; no migration was needed because M0-007
   already created session-independent user and admin tables.
 
+## Verification correction
+
+The M1-001..003 runtime correction added a CommonJS-compatible DB export,
+shared Prisma/Valkey infrastructure, Nest dependency wiring, flat settings API
+shape (`patch`, JSON schema, export/import), strict future-dated Telegram
+expiry, session sliding TTL, internal network/token guards, CSRF/admin checks,
+and retry-safe concurrent user upsert. Verified with a clean PostgreSQL 18
+migration, API startup against PostgreSQL/Valkey, `/api/v1/health` HTTP 200,
+internal token rejection outside the trusted CIDR, successful trusted internal
+user/token requests, 16 API tests, root tests, lint, typecheck, formatting, and
+Turbo build.
+
 ## Known blockers
 
 M1 implementation is in progress. Hosted GitHub Actions execution and

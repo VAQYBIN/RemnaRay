@@ -34,7 +34,7 @@ export class RedisSessionStore implements SessionStorePort {
   }
 
   async get(id: string): Promise<SessionRecord | undefined> {
-    const value = await this.redis.get(`rr:sess:${id}`);
+    const value = await this.redis.getex(`rr:sess:${id}`, 'EX', this.ttlSeconds);
     if (!value) return undefined;
     return JSON.parse(value) as SessionRecord;
   }

@@ -16,18 +16,34 @@ export class SettingsController {
 
   @Get()
   getSettings() {
-    return this.settings.getAll(false);
+    return this.settings.flat(false);
   }
 
   @Put()
   async updateSettings(@Body() body: unknown, @Req() request: ActorRequest) {
-    await this.settings.set(body, actorFrom(request));
-    return this.settings.getAll(false);
+    if (!body || typeof body !== 'object' || Array.isArray(body) || !('patch' in body)) {
+      throw new Error('Settings update requires a patch object');
+    }
+    const patch = body.patch;
+    if (!patch || typeof patch !== 'object' || Array.isArray(patch)) {
+      throw new Error('Settings patch must be an object');
+    }
+    const grouped: Record<string, Record<string, unknown>> = {};
+    for (const [key, value] of Object.entries(patch)) {
+      const separator = key.indexOf('.');
+      if (separator < 1) throw new Error(`Invalid setting key: ${key}`);
+      const group = key.slice(0, separator);
+      const name = key.slice(separator + 1);
+      grouped[group] ??= {};
+      grouped[group][name] = value;
+    }
+    await this.settings.set(grouped, actorFrom(request));
+    return { applied: Object.keys(patch), restartRequired: [] };
   }
 
   @Get('schema')
   getSchema() {
-    return { version: 1, settings: this.settings.schema() };
+    return this.settings.schemaJson();
   }
 
   @Get('export')
@@ -37,7 +53,16 @@ export class SettingsController {
 
   @Post('import')
   async importSettings(@Body() body: unknown, @Req() request: ActorRequest) {
-    await this.settings.importSnapshot(body, actorFrom(request));
-    return this.settings.getAll(false);
+    if (!body || typeof body !== 'object' || Array.isArray(body) || !('json' in body)) {
+      throw new Error('Settings import requires json');
+    }
+    const payload = body as { json: unknown; dryRun?: unknown };
+    const input = payload.json;
+    const dryRun = payload.dryRun === true;
+    if (dryRun) {
+      return { diff: [], dryRun: true };
+    }
+    await this.settings.importSnapshot(input, actorFrom(request));
+    return { diff: [], dryRun: false };
   }
 }

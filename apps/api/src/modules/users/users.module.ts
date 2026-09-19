@@ -1,6 +1,6 @@
 import { Module } from '@nestjs/common';
 
-import { createPrismaClient } from '@remnaray/db';
+import { Infrastructure } from '../../infra/infra.module';
 
 import { SettingsModule } from '../settings/settings.module';
 import { SettingsService } from '../settings/settings.service';
@@ -9,19 +9,21 @@ import { UsersController } from './users.controller';
 import { UsersRepository } from './users.repository';
 import { UsersService } from './users.service';
 
-const prisma = createPrismaClient();
-const repository = new UsersRepository(prisma);
-
 @Module({
   imports: [SettingsModule],
   controllers: [UsersController],
   providers: [
     InternalTokenGuard,
-    { provide: UsersRepository, useValue: repository },
+    {
+      provide: UsersRepository,
+      inject: [Infrastructure],
+      useFactory: (infra: Infrastructure) => new UsersRepository(infra.db),
+    },
     {
       provide: UsersService,
-      inject: [SettingsService],
-      useFactory: (settings: SettingsService) => new UsersService(repository, settings),
+      inject: [UsersRepository, SettingsService],
+      useFactory: (repository: UsersRepository, settings: SettingsService) =>
+        new UsersService(repository, settings),
     },
   ],
   exports: [UsersService],

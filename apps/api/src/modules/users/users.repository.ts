@@ -69,117 +69,126 @@ export class UsersRepository implements UsersRepositoryPort {
     payload: ParsedStartPayload,
     defaultLanguage: string,
   ): Promise<UserUpsertResult> {
-    return this.prisma.$transaction(async (transaction) => {
-      const existing = await transaction.user.findUnique({
-        where: { telegramId: input.telegramId },
-      });
-      if (existing) {
-        let attributed = false;
-        let referrerId: string | null = null;
-        if (!existing.referrerId && payload.referralCode) {
-          const createdRecently = existing.createdAt.getTime() >= Date.now() - 24 * 60 * 60 * 1000;
-          const paidTransactions = await transaction.transaction.count({
-            where: { userId: existing.id, type: { in: ['purchase', 'topup'] } },
+    for (let attempt = 0; attempt < 2; attempt += 1) {
+      try {
+        return await this.prisma.$transaction(async (transaction) => {
+          const existing = await transaction.user.findUnique({
+            where: { telegramId: input.telegramId },
           });
-          if (createdRecently && paidTransactions === 0) {
-            const referrer = await transaction.user.findFirst({
-              where: { referralCode: payload.referralCode, isBanned: false },
-              select: { id: true },
-            });
-            if (referrer && referrer.id !== existing.id) {
-              referrerId = referrer.id;
-              attributed = true;
+          if (existing) {
+            let attributed = false;
+            let referrerId: string | null = null;
+            if (!existing.referrerId && payload.referralCode) {
+              const createdRecently =
+                existing.createdAt.getTime() >= Date.now() - 24 * 60 * 60 * 1000;
+              const paidTransactions = await transaction.transaction.count({
+                where: { userId: existing.id, type: { in: ['purchase', 'topup'] } },
+              });
+              if (createdRecently && paidTransactions === 0) {
+                const referrer = await transaction.user.findFirst({
+                  where: { referralCode: payload.referralCode, isBanned: false },
+                  select: { id: true },
+                });
+                if (referrer && referrer.id !== existing.id) {
+                  referrerId = referrer.id;
+                  attributed = true;
+                }
+              }
             }
+            const updated = await transaction.user.update({
+              where: { id: existing.id },
+              data: {
+                username: input.username ?? existing.username,
+                firstName: input.firstName ?? existing.firstName,
+                language:
+                  input.languageCode === 'ru' || input.languageCode === 'en'
+                    ? input.languageCode
+                    : existing.language,
+                ...(referrerId ? { referrerId } : {}),
+                lastSeenAt: new Date(),
+              },
+            });
+            await this.ensureTelegramIdentity(transaction, updated.id, input.telegramId.toString());
+            if (attributed && referrerId) {
+              await transaction.referralAttribution.create({
+                data: {
+                  refereeId: updated.id,
+                  referrerId,
+                  source: 'telegram',
+                  code: payload.referralCode ?? null,
+                  status: ReferralStatus.pending,
+                },
+              });
+            }
+            return {
+              user: summary(updated),
+              created: false,
+              attributed,
+              promoReserved: existing.pendingPromocodeId !== null,
+              ...(payload.planSlug ? { planSlug: payload.planSlug } : {}),
+            };
           }
-        }
-        const updated = await transaction.user.update({
-          where: { id: existing.id },
-          data: {
-            username: input.username ?? existing.username,
-            firstName: input.firstName ?? existing.firstName,
-            language:
-              input.languageCode === 'ru' || input.languageCode === 'en'
-                ? input.languageCode
-                : existing.language,
-            ...(referrerId ? { referrerId } : {}),
-            lastSeenAt: new Date(),
-          },
-        });
-        await this.ensureTelegramIdentity(transaction, updated.id, input.telegramId.toString());
-        if (attributed && referrerId) {
-          await transaction.referralAttribution.create({
+
+          const referrer = payload.referralCode
+            ? await transaction.user.findFirst({
+                where: { referralCode: payload.referralCode, isBanned: false },
+                select: { id: true },
+              })
+            : null;
+          const referralCode = await this.uniqueReferralCode(transaction);
+          const promo = payload.promoCode
+            ? await transaction.promocode.findFirst({
+                where: {
+                  code: { equals: payload.promoCode, mode: 'insensitive' },
+                  isActive: true,
+                  deletedAt: null,
+                },
+                select: { id: true },
+              })
+            : null;
+          const language =
+            input.languageCode === 'ru' || input.languageCode === 'en'
+              ? input.languageCode
+              : defaultLanguage;
+          const user = await transaction.user.create({
             data: {
-              refereeId: updated.id,
-              referrerId,
-              source: 'telegram',
-              code: payload.referralCode ?? null,
-              status: ReferralStatus.pending,
+              telegramId: input.telegramId,
+              username: input.username ?? null,
+              firstName: input.firstName ?? null,
+              language,
+              referralCode,
+              referrerId: referrer?.id ?? null,
+              pendingPromocodeId: promo?.id ?? null,
+              lastSeenAt: new Date(),
             },
           });
-        }
-        return {
-          user: summary(updated),
-          created: false,
-          attributed,
-          promoReserved: existing.pendingPromocodeId !== null,
-          ...(payload.planSlug ? { planSlug: payload.planSlug } : {}),
-        };
-      }
+          await this.ensureTelegramIdentity(transaction, user.id, input.telegramId.toString());
+          if (referrer && referrer.id !== user.id) {
+            await transaction.referralAttribution.create({
+              data: {
+                refereeId: user.id,
+                referrerId: referrer.id,
+                source: 'telegram',
+                code: payload.referralCode ?? null,
+                status: ReferralStatus.pending,
+              },
+            });
+          }
 
-      const referrer = payload.referralCode
-        ? await transaction.user.findFirst({
-            where: { referralCode: payload.referralCode, isBanned: false },
-            select: { id: true },
-          })
-        : null;
-      const referralCode = await this.uniqueReferralCode(transaction);
-      const promo = payload.promoCode
-        ? await transaction.promocode.findFirst({
-            where: {
-              code: { equals: payload.promoCode, mode: 'insensitive' },
-              isActive: true,
-              deletedAt: null,
-            },
-            select: { id: true },
-          })
-        : null;
-      const language =
-        input.languageCode === 'ru' || input.languageCode === 'en'
-          ? input.languageCode
-          : defaultLanguage;
-      const user = await transaction.user.create({
-        data: {
-          telegramId: input.telegramId,
-          username: input.username ?? null,
-          firstName: input.firstName ?? null,
-          language,
-          referralCode,
-          referrerId: referrer?.id ?? null,
-          pendingPromocodeId: promo?.id ?? null,
-          lastSeenAt: new Date(),
-        },
-      });
-      await this.ensureTelegramIdentity(transaction, user.id, input.telegramId.toString());
-      if (referrer && referrer.id !== user.id) {
-        await transaction.referralAttribution.create({
-          data: {
-            refereeId: user.id,
-            referrerId: referrer.id,
-            source: 'telegram',
-            code: payload.referralCode ?? null,
-            status: ReferralStatus.pending,
-          },
+          return {
+            user: summary(user),
+            created: true,
+            attributed: referrer !== null && referrer.id !== user.id,
+            promoReserved: promo !== null,
+            ...(payload.planSlug ? { planSlug: payload.planSlug } : {}),
+          };
         });
+      } catch (error) {
+        if (attempt === 0 && isUniqueConstraintError(error)) continue;
+        throw error;
       }
-
-      return {
-        user: summary(user),
-        created: true,
-        attributed: referrer !== null && referrer.id !== user.id,
-        promoReserved: promo !== null,
-        ...(payload.planSlug ? { planSlug: payload.planSlug } : {}),
-      };
-    });
+    }
+    throw new Error('User upsert retry limit exceeded');
   }
 
   private async uniqueReferralCode(transaction: Prisma.TransactionClient): Promise<string> {
@@ -209,4 +218,8 @@ export class UsersRepository implements UsersRepositoryPort {
       });
     }
   }
+}
+
+function isUniqueConstraintError(error: unknown): boolean {
+  return typeof error === 'object' && error !== null && 'code' in error && error.code === 'P2002';
 }

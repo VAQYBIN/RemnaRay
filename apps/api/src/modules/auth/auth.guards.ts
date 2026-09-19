@@ -1,100 +1,125 @@
+import { timingSafeEqual } from 'node:crypto';
+import { BlockList, isIP } from 'node:net';
 import {
-  CanActivate,
-  ExecutionContext,
+  type CanActivate,
+  type ExecutionContext,
   ForbiddenException,
+  Inject,
   Injectable,
   UnauthorizedException,
 } from '@nestjs/common';
 import type { FastifyRequest } from 'fastify';
-
-import { AuthFailure, verifyJwt } from './auth.crypto';
-import type { SessionStorePort } from './auth.session';
+import { Infrastructure } from '../../infra/infra.module';
+import { verifyJwt } from './auth.crypto';
 
 export type AuthenticatedRequest = FastifyRequest & {
-  user?: { id: string; sessionId?: string; session?: unknown };
+  user?: { id: string; sessionId?: string };
+  admin?: { id: string; csrf: string; role: string };
 };
-
-function headerValue(value: string | string[] | undefined): string | undefined {
-  return Array.isArray(value) ? value[0] : value;
+export function readCookie(header: string | undefined, name: string): string | undefined {
+  const value = header
+    ?.split(';')
+    .map((item) => item.trim())
+    .find((item) => item.startsWith(`${name}=`))
+    ?.slice(name.length + 1);
+  return value && /^[A-Za-z0-9_-]{43}$/.test(value) ? value : undefined;
 }
-
+export function equalToken(actual: unknown, expected: string | undefined): boolean {
+  if (typeof actual !== 'string' || !expected) return false;
+  const a = Buffer.from(actual);
+  const b = Buffer.from(expected);
+  return a.length === b.length && timingSafeEqual(a, b);
+}
+export function trustedInternal(address: string): boolean {
+  const ip = address.replace(/^::ffff:/, '');
+  const family = isIP(ip) === 4 ? 'ipv4' : 'ipv6';
+  const list = new BlockList();
+  for (const cidr of (process.env.RR_TRUSTED_INTERNAL_CIDR ?? '172.28.0.0/16').split(',')) {
+    const [subnet, bits] = cidr.trim().split('/');
+    if (!subnet || !bits || !isIP(subnet)) continue;
+    list.addSubnet(subnet, Number(bits), isIP(subnet) === 4 ? 'ipv4' : 'ipv6');
+  }
+  return list.check(ip, family);
+}
 @Injectable()
-export class AuthGuard implements CanActivate {
-  constructor(
-    private readonly sessions: SessionStorePort,
-    private readonly appKey: string,
-  ) {}
-
-  async canActivate(context: ExecutionContext): Promise<boolean> {
-    const request = context.switchToHttp().getRequest<AuthenticatedRequest>();
-    const authorization = headerValue(request.headers.authorization);
-    if (authorization?.startsWith('Bearer ')) {
-      try {
-        const claims = verifyJwt(authorization.slice(7), this.appKey);
-        request.user = { id: claims.sub };
-        return true;
-      } catch (error) {
-        if (error instanceof AuthFailure) throw new UnauthorizedException(error.code);
-      }
+export class InternalTokenGuard implements CanActivate {
+  canActivate(context: ExecutionContext): boolean {
+    const req = context.switchToHttp().getRequest<FastifyRequest>();
+    if (
+      !trustedInternal(req.raw.socket.remoteAddress ?? '') ||
+      !equalToken(req.headers['x-internal-token'], process.env.RR_INTERNAL_TOKEN)
+    ) {
+      throw new UnauthorizedException('UNAUTHENTICATED');
     }
-
-    const sessionId = readCookie(request.headers.cookie, 'rr_sid');
-    if (!sessionId) throw new UnauthorizedException('UNAUTHENTICATED');
-    const session = await this.sessions.get(sessionId);
-    if (!session) throw new UnauthorizedException('UNAUTHENTICATED');
-    request.user = { id: session.userId, sessionId, session };
     return true;
   }
 }
-
+@Injectable()
+export class AuthGuard implements CanActivate {
+  constructor(@Inject(Infrastructure) private readonly infra: Infrastructure) {}
+  async canActivate(context: ExecutionContext): Promise<boolean> {
+    const req = context.switchToHttp().getRequest<AuthenticatedRequest>();
+    const path = req.routeOptions.url ?? req.url.split('?')[0] ?? '';
+    if (path.startsWith('/api/internal/')) return new InternalTokenGuard().canActivate(context);
+    if (path.startsWith('/api/admin/')) {
+      const sid = readCookie(req.headers.cookie, 'rr_asid');
+      const raw = sid ? await this.infra.redis.get(`rr:asess:${sid}`) : null;
+      const session = raw
+        ? (JSON.parse(raw) as { adminId?: string; totpVerified?: boolean; csrf?: string })
+        : null;
+      if (!session?.adminId || session.totpVerified !== true || !session.csrf)
+        throw new UnauthorizedException('UNAUTHENTICATED');
+      const admin = await this.infra.db.admin.findUnique({ where: { id: session.adminId } });
+      if (!admin?.isActive || admin.deletedAt || !admin.totpEnabled)
+        throw new ForbiddenException('FORBIDDEN');
+      if (path.startsWith('/api/admin/v1/settings') && admin.role !== 'admin')
+        throw new ForbiddenException('FORBIDDEN');
+      req.admin = { id: admin.id, csrf: session.csrf, role: admin.role };
+      return true;
+    }
+    if (!path.startsWith('/api/v1/me') && path !== '/api/v1/auth/logout') return true;
+    const bearer = req.headers.authorization;
+    let id: string | undefined;
+    if (bearer) {
+      if (!bearer.startsWith('Bearer ')) throw new UnauthorizedException('UNAUTHENTICATED');
+      id = verifyJwt(bearer.slice(7), process.env.RR_APP_KEY ?? '').sub;
+    } else {
+      const sid = readCookie(req.headers.cookie, 'rr_sid');
+      const raw = sid ? await this.infra.redis.getex(`rr:sess:${sid}`, 'EX', 2592000) : null;
+      if (raw && sid) {
+        const session = JSON.parse(raw) as { userId?: string };
+        id = session.userId;
+        if (id) req.user = { id, sessionId: sid };
+      }
+    }
+    if (!id) throw new UnauthorizedException('UNAUTHENTICATED');
+    const user = await this.infra.db.user.findUnique({ where: { id } });
+    if (!user || user.isBanned || user.anonymizedAt) throw new ForbiddenException('FORBIDDEN');
+    req.user ??= { id };
+    return true;
+  }
+}
 @Injectable()
 export class CsrfGuard implements CanActivate {
   canActivate(context: ExecutionContext): boolean {
-    const request = context.switchToHttp().getRequest<AuthenticatedRequest>();
-    if (['GET', 'HEAD', 'OPTIONS'].includes(request.method)) return true;
-    const path = request.url.split('?')[0] ?? request.url;
+    const req = context.switchToHttp().getRequest<AuthenticatedRequest>();
+    const path = req.routeOptions.url ?? req.url.split('?')[0] ?? '';
     if (
-      path.includes('/auth/telegram') ||
-      path.includes('/internal/') ||
-      path.includes('/webhooks/')
-    ) {
+      ['GET', 'HEAD', 'OPTIONS'].includes(req.method) ||
+      path.startsWith('/api/internal/') ||
+      path.startsWith('/webhooks/') ||
+      path.startsWith('/tg/webhook/')
+    )
       return true;
-    }
-    if (headerValue(request.headers['x-requested-with']) !== 'RemnaRay') {
+    const site = req.headers['sec-fetch-site'];
+    const expectedOrigin = `https://${process.env.RR_DOMAIN ?? ''}`;
+    if (
+      req.headers['x-requested-with'] !== 'RemnaRay' ||
+      !(site === 'same-origin' || site === 'none' || req.headers.origin === expectedOrigin)
+    )
       throw new ForbiddenException('FORBIDDEN');
-    }
-    const fetchSite = headerValue(request.headers['sec-fetch-site']);
-    if (fetchSite && !['same-origin', 'none'].includes(fetchSite)) {
+    if (req.admin && !equalToken(req.headers['x-csrf-token'], req.admin.csrf))
       throw new ForbiddenException('FORBIDDEN');
-    }
-    const origin = headerValue(request.headers.origin);
-    if (origin && !isConfiguredOrigin(origin)) throw new ForbiddenException('FORBIDDEN');
     return true;
-  }
-}
-
-export class InternalTokenGuard implements CanActivate {
-  canActivate(context: ExecutionContext): boolean {
-    const request = context.switchToHttp().getRequest<FastifyRequest>();
-    const token = headerValue(request.headers['x-internal-token']);
-    const expected = process.env.RR_INTERNAL_TOKEN;
-    if (!expected || token !== expected) throw new UnauthorizedException('UNAUTHENTICATED');
-    return true;
-  }
-}
-
-function readCookie(header: string | undefined, name: string): string | undefined {
-  return header
-    ?.split(';')
-    .map((item) => item.trim().split('='))
-    .find(([key]) => key === name)?.[1];
-}
-
-function isConfiguredOrigin(origin: string): boolean {
-  try {
-    const parsed = new URL(origin);
-    return parsed.hostname === process.env.RR_DOMAIN || parsed.hostname === 'localhost';
-  } catch {
-    return false;
   }
 }

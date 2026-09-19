@@ -145,6 +145,28 @@ export class SettingsService implements OnModuleInit, OnModuleDestroy {
     }));
   }
 
+  async flat(includeSecrets = false): Promise<Record<string, unknown>> {
+    const groups = await this.getAll(includeSecrets);
+    const result: Record<string, unknown> = {};
+    for (const [group, values] of Object.entries(groups)) {
+      for (const [name, value] of Object.entries(values)) result[`${group}.${name}`] = value;
+    }
+    return result;
+  }
+
+  schemaJson(): { version: 1; type: 'object'; properties: Record<string, unknown> } {
+    const properties: Record<string, unknown> = {};
+    for (const definition of settingRegistry) {
+      properties[settingKey(definition.group, definition.name)] = {
+        title: definition.name,
+        description: definition.description,
+        default: definition.secret ? { set: false } : definition.defaultValue,
+        'x-secret': definition.secret,
+      };
+    }
+    return { version: 1, type: 'object', properties };
+  }
+
   private async ensureLoaded(): Promise<void> {
     if (!this.loaded) await this.reload();
   }

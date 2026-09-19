@@ -7,8 +7,9 @@ export { Prisma } from './generated/prisma/client.js';
 export { ReferralStatus } from './generated/prisma/enums.js';
 
 export function createPrismaClient(databaseUrl = process.env.DATABASE_URL) {
+  if (!databaseUrl) throw new Error('DATABASE_URL is required');
   const adapter = new PrismaPg({
-    connectionString: databaseUrl ?? 'postgresql://postgres:postgres@127.0.0.1:5432/remnaray',
+    connectionString: databaseUrl,
   });
 
   return new PrismaClient({ adapter });
