@@ -6,7 +6,7 @@ M0
 
 ## Current task
 
-TASK-M0-004 — Remnawave version and OpenAPI contract verification.
+TASK-M0-005 — application process skeletons and health endpoints.
 
 ## Completed tasks
 
@@ -20,6 +20,9 @@ TASK-M0-004 — Remnawave version and OpenAPI contract verification.
   security bypasses, and major-version exceptions.
 - TASK-M0-003 — verified the official `caddy:2-alpine` image at Caddy
   `v2.11.4` and added a two-stage custom image with `caddy-ratelimit`.
+- TASK-M0-004 — verified Remnawave panel `v3.4.4` and its official OpenAPI
+  document; recorded the section 10.1 compatibility matrix and required
+  v3 identifier mapping in `docs/adr/ADR-010.md`.
 
 ## Verification
 
@@ -58,6 +61,11 @@ blocker is resolved.
   `sha256:de23def33b17fb5d1290b0f6c2add1d70780e52341896c00a4c8a2a2fe9d355e`.
   The custom build uses `caddy:2.11.4-builder-alpine` and embeds
   `github.com/mholt/caddy-ratelimit`.
+- Remnawave verification on 2026-09-19: official release `v3.4.4`, backend
+  image `ghcr.io/remnawave/backend:3.4.4`, OpenAPI SHA-256
+  `bebc345543b82c66ee1f956333e65cddfb8aec46099bf4427de38fb43df69396`.
+  The v3 contract uses numeric `userId` values and does not expose the
+  specified Telegram lookup route; ADR-010 records each affected row.
 
 ## Definition of Done review
 
@@ -71,6 +79,9 @@ blocker is resolved.
 - TASK-M0-003 acceptance checks passed: Docker build, runtime `caddy version`,
   runtime `http.handlers.rate_limit` module check, six tests, lint, typecheck,
   and formatting.
+- TASK-M0-004 acceptance checks passed: official release/OpenAPI retrieval,
+  endpoint and schema comparison, ADR-010 coverage test, seven tests, lint,
+  typecheck, and formatting.
 
 ## Known blockers
 

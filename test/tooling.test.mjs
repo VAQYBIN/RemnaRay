@@ -149,3 +149,20 @@ test('the Caddy proxy image pins the verified release and rate-limit module', as
   assert.match(dockerfile, /xcaddy build --with github\.com\/mholt\/caddy-ratelimit/);
   assert.match(dockerfile, /http\.handlers\.rate_limit/);
 });
+
+test('the Remnawave contract verification is recorded', async () => {
+  const adr = await readFile('docs/adr/ADR-010.md', 'utf8');
+  assert.match(adr, /Remnawave API v3\.4\.4/);
+  assert.match(adr, /bebc345543b82c66ee1f956333e65cddfb8aec46099bf4427de38fb43df69396/);
+  for (const method of [
+    'system.stats',
+    'users.create',
+    'users.update',
+    'users.getByTelegramId',
+    'squads.list',
+    'hwid.remove',
+  ]) {
+    const row = adr.split('\n').find((line) => line.includes(`\`${method}\``));
+    assert.ok(row?.includes('✓') || row?.includes('✗'), method);
+  }
+});
