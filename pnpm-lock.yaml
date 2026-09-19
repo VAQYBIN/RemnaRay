@@ -261,6 +261,10 @@ importers:
       prisma:
         specifier: 7.10.0
         version: 7.10.0(@types/react@19.3.0)(react-dom@19.3.0(react@19.3.0))(react@19.3.0)(typescript@7.0.2)
+    devDependencies:
+      '@types/node':
+        specifier: ~24.13.6
+        version: 24.13.6
 
   packages/domain:
     dependencies:

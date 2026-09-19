@@ -6,7 +6,7 @@ M0
 
 ## Current task
 
-TASK-M0-007 — Prisma schema and initial database migration.
+TASK-M0-008 — application/web Dockerfiles and development compose stack.
 
 ## Completed tasks
 
@@ -27,6 +27,8 @@ TASK-M0-007 — Prisma schema and initial database migration.
   Next.js/Tailwind web shells with their required local health endpoints.
 - TASK-M0-006 — added Zod environment validation, section 19.6 Pino redaction,
   and exact bigint minor-unit money helpers with package-level Vitest tests.
+- TASK-M0-007 — added the Prisma 7.10 schema, SQL `0001_init` migration,
+  immutable-table guards, transaction guard, and initial system seeds.
 
 ## Verification
 
@@ -77,6 +79,9 @@ blocker is resolved.
 - M0-006 keeps environment validation free of secret values in error messages,
   masks email as `a***@domain`, redacts all section 19.6 secret categories,
   and performs money operations with `bigint` only.
+- M0-007 keeps trigger-heavy PostgreSQL behavior in hand-reviewed SQL while
+  Prisma owns the typed schema/client; generation works with a safe local URL
+  fallback and deployment still requires the real `DATABASE_URL`.
 
 ## Definition of Done review
 
@@ -98,6 +103,9 @@ blocker is resolved.
   API, bot, worker, and web health endpoints.
 - TASK-M0-006 acceptance checks passed: config/logger/money Vitest suites
   (10 tests), root tests, lint, typecheck, and formatting.
+- TASK-M0-007 acceptance checks passed: Prisma generation, migration static
+  tests, clean PostgreSQL 18 `migrate deploy`, seed counts, immutable ledger
+  trigger check, root tests, lint, typecheck, and formatting.
 
 ## Known blockers
 

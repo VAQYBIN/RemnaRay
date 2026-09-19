@@ -1,0 +1,475 @@
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum TrafficResetStrategy {
+  NO_RESET
+  DAY
+  WEEK
+  MONTH
+}
+enum SubscriptionSource {
+  trial
+  purchase
+  admin
+  promo
+}
+enum SubscriptionStatus {
+  provisioning
+  active
+  grace
+  expired
+  revoked
+  provisioning_failed
+}
+enum AccountKind {
+  user
+  revenue
+  provider_clearing
+  referral_expense
+  promo_expense
+  refund_pool
+  adjustment
+}
+enum TransactionType {
+  purchase
+  topup
+  refund
+  referral_reward
+  referral_reversal
+  promo_bonus
+  adjustment
+  plan_change_credit
+}
+enum TransactionStatus {
+  completed
+  reversed
+}
+enum InvoiceKind {
+  purchase
+  topup
+  plan_change
+}
+enum InvoiceStatus {
+  pending
+  paid
+  expired
+  canceled
+  underpaid
+}
+enum ReferralStatus {
+  pending
+  converted
+  rejected
+}
+enum PromocodeType {
+  discount_percent
+  discount_fixed
+  bonus_days
+  bonus_balance
+}
+enum AdminRole {
+  admin
+  operator
+}
+enum BroadcastStatus {
+  draft
+  scheduled
+  running
+  paused
+  done
+  canceled
+  failed
+}
+
+model Setting {
+  key String @id @db.Text
+  value Json
+  isSecret Boolean @default(false) @map("is_secret")
+  updatedAt DateTime @default(now()) @map("updated_at") @db.Timestamptz(6)
+  updatedBy String? @map("updated_by") @db.Uuid
+  @@map("settings")
+}
+
+model Panel {
+  id Int @id @db.SmallInt
+  baseUrl String @map("base_url")
+  apiTokenEnc String @map("api_token_enc")
+  webhookSecretEnc String? @map("webhook_secret_enc")
+  lastOkAt DateTime? @map("last_ok_at") @db.Timestamptz(6)
+  lastError String? @map("last_error")
+  version String?
+  @@map("panels")
+}
+
+model Admin {
+  id String @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  email String @unique @db.Citext
+  passwordHash String @map("password_hash")
+  role AdminRole
+  totpSecretEnc String? @map("totp_secret_enc")
+  totpEnabled Boolean @default(false) @map("totp_enabled")
+  telegramId BigInt? @map("telegram_id")
+  isActive Boolean @default(true) @map("is_active")
+  lastLoginAt DateTime? @map("last_login_at") @db.Timestamptz(6)
+  failedLogins Int @default(0) @map("failed_logins")
+  lockedUntil DateTime? @map("locked_until") @db.Timestamptz(6)
+  deletedAt DateTime? @map("deleted_at") @db.Timestamptz(6)
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+  @@map("admins")
+}
+
+model User {
+  id String @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  telegramId BigInt @unique @map("telegram_id")
+  username String?
+  firstName String? @map("first_name")
+  language String @db.Char(2)
+  referralCode String @unique @map("referral_code") @db.Char(8)
+  referrerId String? @map("referrer_id") @db.Uuid
+  email String?
+  botBlockedAt DateTime? @map("bot_blocked_at") @db.Timestamptz(6)
+  marketingOptOut Boolean @default(false) @map("marketing_opt_out")
+  isBanned Boolean @default(false) @map("is_banned")
+  trialUsedAt DateTime? @map("trial_used_at") @db.Timestamptz(6)
+  lastSeenAt DateTime? @map("last_seen_at") @db.Timestamptz(6)
+  anonymizedAt DateTime? @map("anonymized_at") @db.Timestamptz(6)
+  firstConnectedAt DateTime? @map("first_connected_at") @db.Timestamptz(6)
+  pendingPromocodeId String? @map("pending_promocode_id") @db.Uuid
+  notes String?
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+  @@map("users")
+}
+
+model ChannelIdentity {
+  id String @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  userId String @map("user_id") @db.Uuid
+  channel String
+  externalId String @map("external_id")
+  meta Json
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  @@unique([channel, externalId], map: "ux_channel_identities_channel_external")
+  @@map("channel_identities")
+}
+
+model PanelUser {
+  userId String @id @map("user_id") @db.Uuid
+  panelId Int @default(1) @map("panel_id") @db.SmallInt
+  panelUuid String @map("panel_uuid") @db.Uuid
+  panelUsername String @map("panel_username")
+  shortUuid String @map("short_uuid")
+  subscriptionUrl String @map("subscription_url")
+  panelStatus String @map("panel_status")
+  usedTrafficBytes BigInt @default(0) @map("used_traffic_bytes")
+  trafficLimitBytes BigInt @default(0) @map("traffic_limit_bytes")
+  expireAtPanel DateTime? @map("expire_at_panel") @db.Timestamptz(6)
+  hwidDeviceLimit Int? @map("hwid_device_limit")
+  squads String[] @default([])
+  conflict Boolean @default(false)
+  syncedAt DateTime? @map("synced_at") @db.Timestamptz(6)
+  syncError String? @map("sync_error")
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+  @@unique([panelId, panelUuid], map: "ux_panel_users_panel_uuid")
+  @@map("panel_users")
+}
+
+model Plan {
+  id String @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  slug String @unique
+  name Json
+  description Json @default("{}")
+  durationDays Int @map("duration_days")
+  trafficLimitBytes BigInt @default(0) @map("traffic_limit_bytes")
+  trafficResetStrategy TrafficResetStrategy @default(NO_RESET) @map("traffic_reset_strategy")
+  deviceLimit Int @default(0) @map("device_limit")
+  squads String[]
+  priceMinor BigInt @map("price_minor")
+  currency String @default("RUB") @db.Char(3)
+  priceOverrides Json @default("{}") @map("price_overrides")
+  isPublic Boolean @default(true) @map("is_public")
+  isActive Boolean @default(true) @map("is_active")
+  sortOrder Int @default(100) @map("sort_order")
+  deletedAt DateTime? @map("deleted_at") @db.Timestamptz(6)
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+  @@map("plans")
+}
+
+model Subscription {
+  id String @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  userId String @map("user_id") @db.Uuid
+  planId String? @map("plan_id") @db.Uuid
+  source SubscriptionSource
+  status SubscriptionStatus
+  startsAt DateTime @map("starts_at") @db.Timestamptz(6)
+  expiresAt DateTime @map("expires_at") @db.Timestamptz(6)
+  trafficLimitBytes BigInt @map("traffic_limit_bytes")
+  deviceLimit Int @map("device_limit")
+  squads String[]
+  trafficResetStrategy TrafficResetStrategy @map("traffic_reset_strategy")
+  notified Json @default("{}")
+  revokedReason String? @map("revoked_reason")
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+  @@map("subscriptions")
+}
+
+model Account {
+  id String @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  kind AccountKind
+  userId String? @map("user_id") @db.Uuid
+  provider String?
+  currency String @db.Char(3)
+  balanceMinor BigInt @default(0) @map("balance_minor")
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  @@map("accounts")
+}
+
+model Invoice {
+  id String @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  userId String @map("user_id") @db.Uuid
+  kind InvoiceKind
+  planId String? @map("plan_id") @db.Uuid
+  provider String
+  status InvoiceStatus
+  amountMinor BigInt @map("amount_minor")
+  currency String @db.Char(3)
+  providerAmount Decimal? @map("provider_amount") @db.Decimal(20, 8)
+  providerCurrency String? @map("provider_currency")
+  fxRate Decimal? @map("fx_rate") @db.Decimal(20, 8)
+  discountMinor BigInt @default(0) @map("discount_minor")
+  promocodeId String? @map("promocode_id") @db.Uuid
+  providerInvoiceId String? @map("provider_invoice_id")
+  paymentUrl String? @map("payment_url")
+  providerPayload Json @default("{}") @map("provider_payload")
+  expiresAt DateTime @map("expires_at") @db.Timestamptz(6)
+  paidAt DateTime? @map("paid_at") @db.Timestamptz(6)
+  receipt Json?
+  idempotencyKey String @unique @map("idempotency_key")
+  numericId BigInt @unique @default(autoincrement()) @map("numeric_id")
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+  @@map("invoices")
+}
+
+model Transaction {
+  id String @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  userId String @map("user_id") @db.Uuid
+  type TransactionType
+  status TransactionStatus
+  amountMinor BigInt @map("amount_minor")
+  currency String @db.Char(3)
+  provider String?
+  invoiceId String? @map("invoice_id") @db.Uuid
+  parentId String? @map("parent_id") @db.Uuid
+  subscriptionId String? @map("subscription_id") @db.Uuid
+  planId String? @map("plan_id") @db.Uuid
+  refundedMinor BigInt @default(0) @map("refunded_minor")
+  reason String?
+  actorAdminId String? @map("actor_admin_id") @db.Uuid
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  @@map("transactions")
+}
+
+model LedgerEntry {
+  id String @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  transactionId String @map("transaction_id") @db.Uuid
+  debitAccountId String @map("debit_account_id") @db.Uuid
+  creditAccountId String @map("credit_account_id") @db.Uuid
+  amountMinor BigInt @map("amount_minor")
+  currency String @db.Char(3)
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  @@map("ledger_entries")
+}
+
+model PaymentEvent {
+  id String @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  provider String
+  externalId String @map("external_id")
+  invoiceId String? @map("invoice_id") @db.Uuid
+  type String
+  raw Json
+  headers Json
+  signatureOk Boolean @map("signature_ok")
+  processedAt DateTime? @map("processed_at") @db.Timestamptz(6)
+  processError String? @map("process_error")
+  receivedAt DateTime @default(now()) @map("received_at") @db.Timestamptz(6)
+  @@unique([provider, externalId], map: "ux_payment_events_provider_external")
+  @@map("payment_events")
+}
+
+model PaymentProvider {
+  code String @id
+  enabled Boolean @default(false)
+  displayName Json @map("display_name")
+  sortOrder Int @default(100) @map("sort_order")
+  configEnc String? @map("config_enc")
+  supportsReceipts Boolean @default(false) @map("supports_receipts")
+  lastHealthcheckAt DateTime? @map("last_healthcheck_at") @db.Timestamptz(6)
+  lastHealthcheckOk Boolean? @map("last_healthcheck_ok")
+  lastHealthcheckError String? @map("last_healthcheck_error")
+  updatedAt DateTime @default(now()) @map("updated_at") @db.Timestamptz(6)
+  updatedBy String? @map("updated_by") @db.Uuid
+  @@map("payment_providers")
+}
+
+model ReferralAttribution {
+  id String @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  refereeId String @unique @map("referee_id") @db.Uuid
+  referrerId String @map("referrer_id") @db.Uuid
+  source String
+  code String? @db.Char(8)
+  status ReferralStatus
+  convertedTransactionId String? @map("converted_transaction_id") @db.Uuid
+  rejectedReason String? @map("rejected_reason")
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  convertedAt DateTime? @map("converted_at") @db.Timestamptz(6)
+  @@map("referral_attributions")
+}
+
+model ReferralReward {
+  id String @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  attributionId String @map("attribution_id") @db.Uuid
+  transactionId String @map("transaction_id") @db.Uuid
+  sourceTransactionId String @unique @map("source_transaction_id") @db.Uuid
+  amountMinor BigInt @map("amount_minor")
+  holdUntil DateTime? @map("hold_until") @db.Timestamptz(6)
+  status String
+  reversalTransactionId String? @map("reversal_transaction_id") @db.Uuid
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  @@map("referral_rewards")
+}
+
+model Promocode {
+  id String @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  code String
+  type PromocodeType
+  value BigInt
+  maxUses Int? @map("max_uses")
+  maxUsesPerUser Int @default(1) @map("max_uses_per_user")
+  usedCount Int @default(0) @map("used_count")
+  validFrom DateTime? @map("valid_from") @db.Timestamptz(6)
+  validUntil DateTime? @map("valid_until") @db.Timestamptz(6)
+  planIds String[] @default([]) @map("plan_ids")
+  firstPurchaseOnly Boolean @default(false) @map("first_purchase_only")
+  minAmountMinor BigInt @default(0) @map("min_amount_minor")
+  isActive Boolean @default(true) @map("is_active")
+  deletedAt DateTime? @map("deleted_at") @db.Timestamptz(6)
+  createdBy String? @map("created_by") @db.Uuid
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+  @@map("promocodes")
+}
+
+model PromocodeRedemption {
+  id String @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  promocodeId String @map("promocode_id") @db.Uuid
+  userId String @map("user_id") @db.Uuid
+  invoiceId String? @map("invoice_id") @db.Uuid
+  transactionId String? @map("transaction_id") @db.Uuid
+  appliedValueMinor BigInt? @map("applied_value_minor")
+  appliedDays Int? @map("applied_days")
+  status String
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  @@map("promocode_redemptions")
+}
+
+model AuditLog {
+  id String @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  actorAdminId String? @map("actor_admin_id") @db.Uuid
+  actorType String @map("actor_type")
+  action String
+  entity String
+  entityId String? @map("entity_id")
+  before Json?
+  after Json?
+  reason String?
+  ip String? @db.Inet
+  userAgent String? @map("user_agent")
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  @@map("audit_log")
+}
+
+model NotificationLog {
+  id String @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  userId String @map("user_id") @db.Uuid
+  event String
+  subscriptionId String? @map("subscription_id") @db.Uuid
+  dedupKey String @map("dedup_key")
+  channel String @default("telegram")
+  status String
+  error String?
+  sentAt DateTime? @map("sent_at") @db.Timestamptz(6)
+  @@unique([userId, dedupKey], map: "ux_notification_log_user_dedup")
+  @@map("notification_log")
+}
+
+model Broadcast {
+  id String @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  title String
+  content Json
+  segment Json
+  scheduledAt DateTime? @map("scheduled_at") @db.Timestamptz(6)
+  status BroadcastStatus
+  totalCount Int @default(0) @map("total_count")
+  sentCount Int @default(0) @map("sent_count")
+  blockedCount Int @default(0) @map("blocked_count")
+  failedCount Int @default(0) @map("failed_count")
+  createdBy String @map("created_by") @db.Uuid
+  startedAt DateTime? @map("started_at") @db.Timestamptz(6)
+  finishedAt DateTime? @map("finished_at") @db.Timestamptz(6)
+  deletedAt DateTime? @map("deleted_at") @db.Timestamptz(6)
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+  @@map("broadcasts")
+}
+
+model BroadcastDelivery {
+  broadcastId String @map("broadcast_id") @db.Uuid
+  userId String @map("user_id") @db.Uuid
+  status String
+  error String?
+  sentAt DateTime? @map("sent_at") @db.Timestamptz(6)
+  @@id([broadcastId, userId])
+  @@map("broadcast_deliveries")
+}
+
+model LocaleOverride {
+  lang String @db.Char(2)
+  namespace String
+  key String
+  value String
+  updatedBy String? @map("updated_by") @db.Uuid
+  updatedAt DateTime @default(now()) @map("updated_at") @db.Timestamptz(6)
+  @@id([lang, namespace, key])
+  @@map("locale_overrides")
+}
+
+model OutboxJob {
+  id String @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  queue String
+  name String
+  payload Json
+  jobId String? @map("job_id")
+  publishedAt DateTime? @map("published_at") @db.Timestamptz(6)
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  @@map("outbox_jobs")
+}
+
+model SetupState {
+  id Int @id @db.SmallInt
+  completed Boolean @default(false)
+  currentStep String? @map("current_step")
+  data Json
+  tokenHash String? @map("token_hash")
+  updatedAt DateTime @default(now()) @map("updated_at") @db.Timestamptz(6)
+  @@map("setup_state")
+}

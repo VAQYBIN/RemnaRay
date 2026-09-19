@@ -41,3 +41,5 @@ docs/development/*
 !docs/development/PROGRESS.md
 
 .turbo/
+
+**/src/generated/
