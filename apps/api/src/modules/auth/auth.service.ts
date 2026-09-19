@@ -57,10 +57,6 @@ export class AuthService {
   async logout(sessionId: string | undefined): Promise<void> {
     if (sessionId) await this.sessions.delete(sessionId);
   }
-
-  me(userId: string | undefined) {
-    return { userId };
-  }
 }
 
 export function asTelegramWidgetInput(value: unknown): TelegramWidgetInput {

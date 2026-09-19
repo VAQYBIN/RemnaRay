@@ -33,6 +33,10 @@ lerna-debug.log*
 
 .temp
 .tmp
+test-results/
+playwright-report/
+e2e/.stack.json
+e2e/.auth/
 
 .codex
 AGENTS.md

@@ -1,7 +1,17 @@
-import { NextResponse } from 'next/server';
-
 import { INTERNAL_API_URL } from '../../../lib/api';
 import { routing } from '../../../i18n/routing';
+
+/**
+ * A relative `Location` keeps the redirect on whatever origin the visitor used.
+ * Deriving an absolute URL from the request would leak the internal host when
+ * the request arrives through the reverse proxy.
+ */
+function redirect(location: string, cookie?: string): Response {
+  return new Response(null, {
+    status: 302,
+    headers: { location, ...(cookie ? { 'set-cookie': cookie } : {}) },
+  });
+}
 
 /**
  * Section 13.3: the bot sends the user to `/auth/tg?token=<jwt>`. The API
@@ -9,14 +19,10 @@ import { routing } from '../../../i18n/routing';
  * before the redirect into the account.
  */
 export async function GET(request: Request) {
-  const url = new URL(request.url);
-  const token = url.searchParams.get('token');
-  const locale =
-    routing.locales.find((item) => item === request.headers.get('x-rr-locale')) ??
-    localeFromCookie(request.headers.get('cookie')) ??
-    routing.defaultLocale;
-  const loginUrl = new URL(`/${locale}?login=1`, url.origin);
-  if (!token) return NextResponse.redirect(loginUrl, 302);
+  const token = new URL(request.url).searchParams.get('token');
+  const locale = localeFromCookie(request.headers.get('cookie')) ?? routing.defaultLocale;
+  const login = `/${locale}?login=1`;
+  if (!token) return redirect(login);
 
   try {
     const response = await fetch(
@@ -24,12 +30,9 @@ export async function GET(request: Request) {
       { redirect: 'manual', signal: AbortSignal.timeout(10_000) },
     );
     const cookie = response.headers.get('set-cookie');
-    if (!cookie) return NextResponse.redirect(loginUrl, 302);
-    const result = NextResponse.redirect(new URL(`/${locale}/account`, url.origin), 302);
-    result.headers.set('set-cookie', cookie);
-    return result;
+    return cookie ? redirect(`/${locale}/account`, cookie) : redirect(login);
   } catch {
-    return NextResponse.redirect(loginUrl, 302);
+    return redirect(login);
   }
 }
 

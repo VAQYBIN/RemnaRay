@@ -1,0 +1,73 @@
+import { expect, test } from '@playwright/test';
+
+import { stackState } from '../setup/fixtures';
+
+test.describe('public site', () => {
+  test('landing shows the brand, the plan and both call-to-actions', async ({ page }) => {
+    await page.goto('/ru');
+
+    await expect(page.getByRole('heading', { level: 1 })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Выберите тариф' })).toBeVisible();
+    await expect(page.getByText('299')).toBeVisible();
+    await expect(page.getByText('30 дней')).toBeVisible();
+    await expect(
+      page.getByRole('link', { name: /t\.me|Открыть в Telegram/u }).first(),
+    ).toBeVisible();
+  });
+
+  test('the footer switches language and keeps the route', async ({ page }) => {
+    await page.goto('/ru');
+    await page.getByRole('button', { name: 'English' }).click();
+
+    await expect(page).toHaveURL(/\/en$/u);
+    await expect(page.getByRole('heading', { name: 'Choose a plan' })).toBeVisible();
+  });
+
+  test('legal pages render the localized document', async ({ page }) => {
+    await page.goto('/ru/terms');
+    await expect(page.getByRole('heading', { name: 'Условия использования' })).toBeVisible();
+
+    await page.goto('/en/privacy');
+    await expect(page.getByRole('heading', { name: 'Privacy policy' })).toBeVisible();
+  });
+
+  test('robots and sitemap expose the public routes only', async ({ request }) => {
+    const robots = await request.get('/robots.txt');
+    expect(robots.ok()).toBeTruthy();
+    const robotsBody = await robots.text();
+    expect(robotsBody).toContain('Disallow: /account');
+    expect(robotsBody).toContain('Disallow: /admin');
+
+    const sitemap = await request.get('/sitemap.xml');
+    expect(sitemap.ok()).toBeTruthy();
+    const sitemapBody = await sitemap.text();
+    expect(sitemapBody).toContain('/ru/terms');
+    expect(sitemapBody).toContain('/en/terms');
+  });
+
+  test('the public API serves config, theme and plans', async ({ request }) => {
+    const state = stackState();
+
+    const config = await request.get('/api/v1/public/config');
+    expect(config.ok()).toBeTruthy();
+    const configBody = (await config.json()) as { brand: { name: string } };
+    expect(configBody.brand.name).toBe('Manta E2E');
+
+    const theme = await request.get('/api/v1/public/theme');
+    expect(theme.ok()).toBeTruthy();
+    expect(theme.headers()['etag']).toBeTruthy();
+
+    const plans = await request.get('/api/v1/public/plans');
+    const body = (await plans.json()) as { items: { slug: string }[] };
+    expect(body.items).toHaveLength(1);
+    expect(body.items[0]?.slug).toBe(state.plan.slug);
+    expect(body.items[0]).not.toHaveProperty('squads');
+  });
+
+  test('a referral link stores the code and returns to the landing', async ({ page, context }) => {
+    await page.goto('/r/E2EUSER1');
+    await expect(page).toHaveURL(/\/(ru|en)$/u);
+    const cookies = await context.cookies();
+    expect(cookies.find((cookie) => cookie.name === 'rr_ref')?.value).toBe('E2EUSER1');
+  });
+});

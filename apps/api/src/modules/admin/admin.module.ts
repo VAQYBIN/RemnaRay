@@ -12,6 +12,7 @@ import { RbacGuard } from './admin.rbac';
   providers: [
     AdminAuthService,
     AdminsService,
+    RbacGuard,
     { provide: APP_GUARD, useClass: RbacGuard },
     { provide: APP_INTERCEPTOR, useClass: AuditInterceptor },
   ],

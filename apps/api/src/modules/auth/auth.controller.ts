@@ -33,7 +33,7 @@ export class AuthController {
   async telegramRedirect(@Query('token') token: string, @Res() reply: FastifyReply) {
     const sessionId = await this.auth.exchangeJwt(token);
     setSessionCookie(reply, sessionId);
-    return reply.redirect('/account');
+    return reply.redirect('/account', 302);
   }
 
   @Post('auth/logout')
@@ -44,11 +44,6 @@ export class AuthController {
     await this.auth.logout(request.user?.sessionId);
     clearSessionCookie(reply);
     reply.code(204);
-  }
-
-  @Get('me')
-  me(@Req() request: AuthenticatedRequest) {
-    return this.auth.me(request.user?.id);
   }
 }
 

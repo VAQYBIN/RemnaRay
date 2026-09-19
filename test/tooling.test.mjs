@@ -218,6 +218,8 @@ test('the CI workflow covers required quality and image gates', async () => {
   assert.match(workflow, /pnpm i18n-check/);
   assert.match(workflow, /pnpm theme-validate themes\/manta/);
   assert.match(workflow, /pnpm build/);
+  assert.match(workflow, /playwright install --with-deps chromium/);
+  assert.match(workflow, /pnpm test:e2e/);
   assert.match(workflow, /node: \['24\.21\.0', '26\.x'\]/);
   assert.match(workflow, /deploy\/docker\/app\.Dockerfile/);
   assert.match(workflow, /deploy\/docker\/web\.Dockerfile/);

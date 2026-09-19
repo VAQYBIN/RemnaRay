@@ -6,8 +6,9 @@ M4
 
 ## Current task
 
-TASK-M4-009 is complete and committed. Next: TASK-M4-010 (Playwright e2e for
-the site, account and administration). Do not start M5.
+TASK-M4-010 is complete and committed. M4 is finished; the milestone review is
+in "M4 Definition of Done review" below. Next: TASK-M5-001, which must not be
+started before the user opens M5.
 
 ## Current handoff correction
 
@@ -305,8 +306,7 @@ No credentials or external infrastructure were required for TASK-M4-001.
 
 ## Next
 
-TASK-M4-004 — customer account pages, payment status, Telegram auth flow, and
-loading/empty/error states. M4-003 is complete; M5 remains unopened.
+M4 is complete through TASK-M4-010. M5 remains unopened.
 
 ## M3 acceptance reconciliation
 
@@ -694,3 +694,83 @@ Verified on 2026-09-20.
   preserving the specification’s middleware behavior.
 - Flat catalog files are expanded into nested runtime messages only at the
   web request boundary, preserving the specification’s dotted-key data format.
+
+## M4-010 verification
+
+Verified on 2026-09-20.
+
+- `pnpm test:e2e` builds the workspace and runs 25 Playwright tests against a
+  real stack: PostgreSQL 18 and Valkey 9.1 in Testcontainers, the API from
+  `dist`, the site from its standalone build, and a reverse proxy that serves
+  both from one origin exactly as nginx or Caddy do in a deployment
+  (`e2e/setup/stack.mjs`). All 25 pass in under a minute.
+- The coverage follows the section 22.1 E2E row. Site: landing brand, plan and
+  call-to-actions, the language switch, legal pages, robots and sitemap, the
+  public API, the `/r/<code>` referral cookie. Account: the anonymous redirect,
+  the `/auth/tg` sign-in the bot performs, the empty subscription state, the
+  plan list with providers and the promo field, balance and history, saving
+  settings, sign-out, and a purchase with the `mock` provider that the provider
+  confirms with its signed webhook. Administration: a wrong password, the
+  password + TOTP flow, the dashboard widgets and charts, user search and the
+  card, the journal, creating a plan, the AC-061 provider gate, the system page,
+  a forged mutation and one with a wrong CSRF token, and `Disallow: /admin`.
+- An administrator TOTP code may be redeemed once, so the suite signs in once in
+  a `setup` project and the administration specs reuse that `storageState`.
+- CI gained an `e2e` job after `quality`: `pnpm typecheck:e2e`, Chromium with
+  its system dependencies, `pnpm test:e2e`, and the `test-results` artifact on
+  failure. `docs/e2e.md` documents the harness and the rootless local run.
+- Defects the suite found, each fixed in this task:
+  - Next.js 16 rejects a local `next/image` source carrying a query string
+    unless `images.localPatterns` allows the path. Section 18.2 serves theme
+    assets as `/themes/<slug>/<asset>?v=<version>`, so every landing render
+    after the build threw and the site kept serving its build-time fallback —
+    which also broke the AC-181 five-second window on the live site.
+    `apps/web/next.config.ts` now declares the patterns and a web test guards
+    them.
+  - `GET /api/v1/me` was declared by both `AuthController` and `MeController`,
+    so Fastify refused to start with `FST_ERR_DUPLICATED_ROUTE`. The duplicate
+    route and the service method it used are removed.
+  - `RbacGuard` was registered only through `APP_GUARD`, so the administration
+    module could not export it (`UnknownExportException`).
+  - `/auth/tg` and `/r/<code>` built an absolute redirect from the request URL,
+    which leaks the internal host behind a reverse proxy. Both now answer with a
+    relative `Location`.
+- Checks: 25 Playwright tests, `pnpm lint`, `pnpm typecheck`,
+  `pnpm typecheck:e2e`, `pnpm -r typecheck`, `pnpm test` (10),
+  `pnpm -r test` (api 109, web 20, bot 12, ui 8 and the remaining packages),
+  `pnpm format`, full `pnpm build`, `pnpm i18n-check` (1264 messages),
+  `pnpm theme-validate` for `manta` and `_admin`.
+
+## M4 Definition of Done review
+
+Section 25.9, reviewed on 2026-09-20 for TASK-M4-001 … TASK-M4-010.
+
+1. Conventions and gates: `pnpm lint`, `pnpm typecheck`, `pnpm -r typecheck`
+   and `pnpm typecheck:e2e` are green.
+2. Tests: unit and component tests per package, Testcontainers integration
+   suites (`test/m4.*.integration.test.mjs`) and the Playwright E2E suite. No
+   coverage threshold was lowered.
+3. Acceptance criteria with an executing test: AC-130 and AC-136 (M4-003),
+   AC-133 and AC-134 (M4-004), AC-140 … AC-142 (M4-005), AC-143 and AC-144
+   (M4-002), AC-150 … AC-156 (M4-006), AC-160 and AC-163 (M4-007), AC-161
+   (M4-008), AC-061, AC-146 and AC-181 (M4-009), the section 22.1 E2E row
+   (M4-010), and `theme-validate` with the AA contrast check (M4-001).
+4. Locales: every key exists in `ru` and `en`; `pnpm i18n-check` is green.
+5. OpenAPI: `apps/api/openapi.json` covers the M4 routes. It remains a
+   hand-maintained 3.0.3 document; the section 9.1 requirement to generate a
+   3.1 document from the Zod contracts is still open and is recorded in
+   "Current handoff correction".
+6. Migrations: `0003_notification_log_status` and
+   `0004_broadcast_delivery_pending` carry the `reversible` header and are
+   applied from scratch by every integration run.
+7. Documentation: `docs/theming.md`, `docs/admin.md`, `docs/i18n.md`,
+   `docs/account.md`, `docs/rewards.md`, `docs/notifications.md`,
+   `docs/broadcasts.md` and `docs/e2e.md`.
+8. Changesets: one per task, `m4-001-*` … `m4-010-e2e`.
+9. Secrets: the section 19.6 redaction tests pass and `Audited` never writes a
+   secret value into `audit_log`; provider and panel credentials are stored in
+   AES-256-GCM envelopes.
+10. External gates that remain outside this repository's control: maintainer
+    review, a full CI run on the hosted runners, the `proxy-smoke` job for both
+    profiles (its templates land with M5) and the Lighthouse ≥ 90/90/95
+    measurement for M4-003, which needs the reference server.
