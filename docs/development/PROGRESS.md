@@ -6,7 +6,7 @@ M3
 
 ## Current task
 
-TASK-M3-004 is next; TASK-M3-003 is implemented, verified, and ready to commit.
+TASK-M3-005 is next; TASK-M3-004 is implemented, verified, and ready to commit.
 M3-001 and M3-002 received runtime corrections in this commit series; their
 remaining acceptance gaps are tracked below.
 
@@ -297,7 +297,7 @@ No history has been rewritten. Confirmed gaps under repair:
 - M3-002: QR is generated in bot instead of API; client links and trial settings
   are hardcoded; missing device/plan-change/invoice-cancel/referral-list screens;
   no executing AC-042; OpenAPI has not been regenerated.
-- M3-003: uncommitted conversations are in progress and have not passed tests.
+- M3-003 is committed; its acceptance evidence is recorded below.
 - M3-005 depends explicitly on M4-002. M3-006 E2E-01 steps 3/6/8 depend on
   notification/referral modules scheduled in M4-007/M4-006. User was asked to
   resolve the milestone-order contradiction; independent M3 work continues.
@@ -318,3 +318,14 @@ accepting further tasks. Do not start M4 without resolving the ordering conflict
 - `@remnaray/api`: lint, typecheck, 31 tests, and build passed.
 - i18n lint/typecheck/tests, root tooling tests (10), full Turbo build, and
   Prettier passed.
+
+## M3-004 verification
+
+- Added `403` Telegram error handling that marks `users.bot_blocked_at`,
+  suppresses delivery errors, and sends an eight-character incident code for
+  handler failures. Added the unblocked endpoint used by `/start` flows.
+- `autoRetry` remains the 429 retry boundary; outgoing message methods now use
+  a serialized transformer with 30 messages/second global and 1 message/second
+  per-chat spacing.
+- `@remnaray/bot`: lint, typecheck, and 10 tests passed.
+- `@remnaray/api`: lint, typecheck, and 31 tests passed.

@@ -99,6 +99,24 @@ export class BotInternalController {
     return { lang: locale, messages: botCatalogs[locale] };
   }
 
+  @Post('users/:telegramId/bot-blocked')
+  @HttpCode(204)
+  async blocked(@Param('telegramId') telegramId: string) {
+    await this.infra.db.user.updateMany({
+      where: { telegramId: BigInt(telegramId) },
+      data: { botBlockedAt: new Date() },
+    });
+  }
+
+  @Post('users/:telegramId/bot-unblocked')
+  @HttpCode(204)
+  async unblocked(@Param('telegramId') telegramId: string) {
+    await this.infra.db.user.updateMany({
+      where: { telegramId: BigInt(telegramId) },
+      data: { botBlockedAt: null },
+    });
+  }
+
   @Get('bot/config')
   async config() {
     const mode = (await this.settings.get('bot.mode')) as 'webhook' | 'polling';

@@ -3,6 +3,8 @@ import { limit } from '@grammyjs/ratelimiter';
 import { RedisAdapter } from '@grammyjs/storage-redis';
 import { sequentialize } from '@grammyjs/runner';
 import { Bot, session } from 'grammy';
+import { GrammyError, HttpError, type Transformer } from 'grammy';
+import { randomBytes } from 'node:crypto';
 import Redis from 'ioredis';
 
 import { ApiClient } from './api-client.js';
@@ -17,6 +19,41 @@ export type BotRuntime = {
   redis: Redis;
   i18n: BotI18n;
 };
+
+const THROTTLED_METHODS = new Set(['sendMessage', 'editMessageText', 'sendPhoto', 'sendInvoice']);
+
+export function outgoingThrottle(): Transformer {
+  let chain = Promise.resolve();
+  let globalReadyAt = 0;
+  const chatReadyAt = new Map<string, number>();
+  return (prev, method, payload, signal) => {
+    if (!THROTTLED_METHODS.has(method)) return prev(method, payload, signal);
+    const value = payload as Record<string, unknown>;
+    const chatId =
+      typeof value.chat_id === 'number' || typeof value.chat_id === 'string'
+        ? String(value.chat_id)
+        : undefined;
+    const task = chain.then(async () => {
+      const now = Date.now();
+      const chatAt = chatId ? (chatReadyAt.get(chatId) ?? 0) : 0;
+      const wait = Math.max(globalReadyAt - now, chatAt - now);
+      if (wait > 0) await new Promise<void>((resolve) => setTimeout(resolve, wait));
+      const sentAt = Date.now();
+      globalReadyAt = sentAt + 34;
+      if (chatId) chatReadyAt.set(chatId, sentAt + 1000);
+      return prev(method, payload, signal);
+    });
+    chain = task.then(
+      () => undefined,
+      () => undefined,
+    );
+    return task;
+  };
+}
+
+export function incidentId(): string {
+  return randomBytes(6).toString('base64url').slice(0, 8);
+}
 
 const initialSession = (): BotSession => ({ lang: 'ru' });
 
@@ -40,6 +77,7 @@ export function createBot(options: {
   const i18n = new BotI18n(api);
 
   bot.api.config.use(autoRetry({ maxDelaySeconds: 60, maxRetryAttempts: 5 }));
+  bot.api.config.use(outgoingThrottle());
   bot.use(async (ctx, next) => {
     if (ctx.callbackQuery) await ctx.answerCallbackQuery();
     if (ctx.from) await next();
@@ -82,10 +120,30 @@ export function createBot(options: {
     await next();
   });
   installConversations(bot, redis, api);
-  bot.catch((error) => {
+  bot.catch(async (error) => {
     const updateId = error.ctx.update.update_id;
     const chatId = error.ctx.chat?.id;
-    console.error('Telegram update failed', { updateId, chatId, error: error.error });
+    const telegramError =
+      error.error instanceof GrammyError
+        ? {
+            code: error.error.error_code,
+            description: error.error.description,
+          }
+        : error.error instanceof HttpError
+          ? { code: undefined, description: 'http_error' }
+          : { code: undefined, description: 'handler_error' };
+    console.error('Telegram update failed', { updateId, chatId, ...telegramError });
+    if (telegramError.code === 403 && error.ctx.from) {
+      await api.markBlocked(error.ctx.from.id).catch(() => undefined);
+      return;
+    }
+    if (telegramError.code === 429) return;
+    if (error.ctx.from) {
+      const id = incidentId();
+      await error.ctx
+        .reply(error.ctx.t('bot.error.generic', { incidentId: id }))
+        .catch(() => undefined);
+    }
   });
   registerScreens(bot, api);
   return { bot, api, redis, i18n };
