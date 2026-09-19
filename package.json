@@ -16,6 +16,7 @@
     "prepare": "husky",
     "test": "node --test test/tooling.test.mjs",
     "test:m1": "pnpm build && node --test test/m1.integration.test.mjs",
+    "test:m2": "pnpm build && node --test test/m2.payment.integration.test.mjs",
     "typecheck": "tsc --noEmit"
   },
   "devDependencies": {

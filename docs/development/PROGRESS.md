@@ -2,11 +2,11 @@
 
 ## Current milestone
 
-M1
+M2
 
 ## Current task
 
-M1 complete — TASK-M1-009 verified and committed; M2 not started.
+M2 complete — TASK-M2-010 verified and committed; M3 not started.
 
 ## Completed tasks
 
@@ -158,6 +158,27 @@ blocker is resolved.
   gate covering migrations, concurrent ledger debits, trial, activation,
   renewal, and expiry.
 
+- TASK-M2-001 — added the PaymentProvider contract and registry, invoice and
+  payment-event repositories, idempotent webhook application, invoice expiry,
+  polling, Idempotency-Key handling, and the payments worker queue boundary.
+- TASK-M2-002 — added the deterministic `payments-mock` provider and payment
+  integration fixtures.
+- TASK-M2-003 — added YooKassa creation, IP allowlisting, receipts, webhooks,
+  and mandatory status re-fetching.
+- TASK-M2-004 — added Robokassa ResultURL signatures, `OK<InvId>` responses,
+  polling boundary, and fiscal receipt serialization.
+- TASK-M2-005 — added Lava invoice creation, additional-key HMAC verification,
+  and status polling.
+- TASK-M2-006 — added Platega transaction creation and polling-only settlement.
+- TASK-M2-007 — added Crypto Pay fiat-RUB invoices and
+  `crypto-pay-api-signature` verification.
+- TASK-M2-008 — added Telegram Stars invoice links, precheckout support, and
+  successful-payment normalization.
+- TASK-M2-009 — added balance topups and purchases, sorted account locking,
+  late-payment balance credit, partial refunds, and plan-change quote logic.
+- TASK-M2-010 — added `ReceiptData`, fiscal settings integration, and provider
+  receipt serialization with fallback email support.
+
 ## Verification correction
 
 The M1-001..003 runtime correction added a CommonJS-compatible DB export,
@@ -200,11 +221,29 @@ Turbo build.
 
 ## Known blockers
 
-M1 implementation is complete. Hosted GitHub Actions execution, maintainer
-review, and the later proxy-smoke/full e2e gates remain external gates. M2 is
-intentionally not started.
+M2 implementation is complete. Hosted GitHub Actions execution, maintainer
+review, provider credential healthchecks, and the later proxy-smoke/full e2e
+gates remain external gates. The specification lists M2-008 as depending on
+M3-001; the Stars provider boundary is complete while bot update wiring remains
+in the explicitly deferred M3 scope. No credentials were required for the
+deterministic contract tests.
+
+## M2 verification
+
+- PostgreSQL 18 integration: duplicate paid webhook produced one invoice
+  transaction and two ledger entries; late payment was credited to balance;
+  balance payment and partial refund assertions passed.
+- Provider contract tests: 28 API tests passed, including YooKassa IP ranges,
+  Robokassa signature and acknowledgement, Lava HMAC, CryptoBot signature,
+  Platega polling-only behavior, and Stars successful-payment normalization.
+- `pnpm test`, database migration tests, `pnpm test:m1`, and `pnpm test:m2`
+  passed.
+- `pnpm lint`, `pnpm typecheck`, `pnpm format`, and the full Turbo build passed.
+- Migration `0002_payment_event_processing` permits only processing markers on
+  payment events, fixing the immutable-event processing contract.
+- OpenAPI, provider documentation, ten Changesets, and the M2 integration
+  fixture are present.
 
 ## Next
 
-M2-001 is the next task after explicit milestone handoff; do not start M2 in
-this session.
+M3-001 is next. Do not start it in this session.

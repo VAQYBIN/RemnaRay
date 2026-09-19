@@ -10,6 +10,7 @@ import { RemnawaveModule } from './modules/remnawave/remnawave.module';
 import { SubscriptionsModule } from './modules/subscriptions/subscriptions.module';
 import { SettingsModule } from './modules/settings/settings.module';
 import { UsersModule } from './modules/users/users.module';
+import { PaymentsModule } from './modules/payments/payments.module';
 
 @Module({
   imports: [
@@ -21,6 +22,7 @@ import { UsersModule } from './modules/users/users.module';
     PlansModule,
     RemnawaveModule,
     SubscriptionsModule,
+    PaymentsModule,
     LoggerModule.forRoot({
       pinoHttp: {
         level: process.env.RR_LOG_LEVEL ?? 'info',
