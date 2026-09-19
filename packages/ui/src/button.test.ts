@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
-import { buttonVariants } from './button.js';
-import { cn } from './lib/utils.js';
+import { buttonVariants } from './button';
+import { cn } from './lib/utils';
 
 describe('ui class utilities', () => {
   it('provides stable accessible button variants', () => {

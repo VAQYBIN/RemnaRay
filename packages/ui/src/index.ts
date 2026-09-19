@@ -1,6 +1,6 @@
-export { Badge, type BadgeProps } from './badge.js';
-export { Button, buttonVariants, type ButtonProps } from './button.js';
-export { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from './card.js';
+export { Badge, type BadgeProps } from './badge';
+export { Button, buttonVariants, type ButtonProps } from './button';
+export { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from './card';
 export {
   Dialog,
   DialogClose,
@@ -12,8 +12,8 @@ export {
   DialogPortal,
   DialogTitle,
   DialogTrigger,
-} from './dialog.js';
-export { Input } from './input.js';
-export { Label } from './label.js';
-export { EmptyState, ErrorState, Skeleton } from './states.js';
-export { cn } from './lib/utils.js';
+} from './dialog';
+export { Input } from './input';
+export { Label } from './label';
+export { EmptyState, ErrorState, Skeleton } from './states';
+export { cn } from './lib/utils';

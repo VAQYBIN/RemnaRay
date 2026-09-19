@@ -1,7 +1,7 @@
 import type { ReactNode } from 'react';
 
-import { Button } from './button.js';
-import { cn } from './lib/utils.js';
+import { Button } from './button';
+import { cn } from './lib/utils';
 
 export function Skeleton({ className }: { className?: string }) {
   return <div aria-hidden="true" className={cn('animate-pulse rounded-md bg-muted', className)} />;

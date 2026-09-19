@@ -6,8 +6,8 @@ M4
 
 ## Current task
 
-TASK-M4-003 — M4-002 is complete and verified. Continue with the public
-landing/legal/SEO/i18n pages; do not start M5.
+TASK-M4-004 — M4-003 is complete and verified. Continue with the customer
+account pages and payment/auth flows; do not start M5.
 
 ## Completed tasks
 
@@ -196,6 +196,9 @@ blocker is resolved.
 - TASK-M4-002 — added password + Argon2id/TOTP admin authentication, 12-hour
   `rr_asid` sessions with CSRF tokens, five-failure lockouts, shared RBAC
   permissions, and sanitized immutable audit interception.
+- TASK-M4-003 — added localized public landing and legal pages, flat ru/en
+  catalog loading, next-intl locale negotiation, SEO metadata, robots/sitemap,
+  and cached theme asset delivery.
 
 ## Verification correction
 
@@ -287,8 +290,8 @@ No credentials or external infrastructure were required for TASK-M4-001.
 
 ## Next
 
-TASK-M4-003 — landing, legal, SEO, and next-intl i18n pages. M4-002 is
-complete; M5 remains unopened.
+TASK-M4-004 — customer account pages, payment status, Telegram auth flow, and
+loading/empty/error states. M4-003 is complete; M5 remains unopened.
 
 ## M3 acceptance reconciliation
 
@@ -393,3 +396,23 @@ are included in M3; M4 remains unopened.
   already created `admins` and immutable `audit_log`.
 - Added `docs/admin.md` and `.changeset/m4-002-admin-auth.md`. Password and
   TOTP secrets are encrypted or masked and are not written to audit rows.
+
+## M4-003 verification
+
+- Context7 documentation was checked for next-intl routing, request config,
+  server translations, Next.js metadata, robots/sitemap, and Next 16 root
+  parameters.
+- `pnpm i18n-check` passed for 2 locales and 10 namespaces. Web lint,
+  typecheck, production build, and the legal Markdown test passed. The build
+  prerenders `/ru`, `/en`, all six localized legal routes, robots, and sitemap.
+- Added `.changeset/m4-003-public-web.md`, `docs/i18n.md`, and the public web
+  route set. No database migration or API route was required; public plans
+  are read from the existing `GET /api/v1/public/plans` boundary.
+
+## M4-003 decisions
+
+- The current Next.js 16 `proxy.ts` convention is used for next-intl locale
+  negotiation; it replaces the deprecated `middleware.ts` filename while
+  preserving the specification’s middleware behavior.
+- Flat catalog files are expanded into nested runtime messages only at the
+  web request boundary, preserving the specification’s dotted-key data format.

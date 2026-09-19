@@ -1,0 +1,37 @@
+{
+  "landing.hero.eyebrow": "RemnaRay for Remnawave",
+  "landing.hero.title": "A calm, simple way to run your subscription store",
+  "landing.hero.description": "Sell access, accept payments, and give customers a clear subscription experience through Telegram and the web.",
+  "landing.hero.cta": "Read the terms",
+  "landing.hero.secondary": "Privacy",
+  "landing.hero.imageAlt": "Manta gliding through blue water",
+  "landing.featuresTitle": "Everything customers need",
+  "landing.features": [
+    "Telegram-first customer journey",
+    "Reliable payments and balance",
+    "Clear subscription links and help"
+  ],
+  "landing.plansTitle": "Choose a plan",
+  "landing.days": "дней",
+  "landing.stepsTitle": "How it works",
+  "landing.steps": [
+    "Choose a plan",
+    "Pay with a convenient method",
+    "Open your subscription in a client"
+  ],
+  "landing.faqTitle": "Questions",
+  "landing.faq": [
+    {
+      "question": "Do I need a card for the trial?",
+      "answer": "No. The trial is available when the store owner enables it."
+    },
+    {
+      "question": "Where do I get support?",
+      "answer": "Use the support contact shown by the store owner or open the Telegram bot."
+    }
+  ],
+  "landing.legal.terms": "Условия",
+  "landing.legal.privacy": "Конфиденциальность",
+  "landing.legal.offer": "Оферта",
+  "landing.footer": "Open-source commerce for Remnawave"
+}
