@@ -17,7 +17,7 @@ import { adminChallengeSchema, adminLoginSchema, adminTotpSchema } from './admin
 const ADMIN_SESSION_TTL = 12 * 60 * 60;
 const CHALLENGE_TTL = 5 * 60;
 
-type Challenge = { adminId: string; pendingSecret?: string };
+type Challenge = { adminId: string; pendingSecretEnc?: string };
 type AdminSession = { adminId: string; role: AdminRole; totpVerified: true; csrf: string };
 
 export class AdminAuthFailure extends HttpException {
@@ -75,12 +75,15 @@ export class AdminAuthService {
     const challenge = await this.challenge(challengeId);
     const admin = await this.infra.db.admin.findUnique({ where: { id: challenge.adminId } });
     if (!admin || admin.totpEnabled) throw new AdminAuthFailure('ADMIN_TOTP_REQUIRED');
-    const totp = challenge.pendingSecret
-      ? totpFromBase32(challenge.pendingSecret, admin.email)
+    const totp = challenge.pendingSecretEnc
+      ? totpFromBase32(decryptTotpSecret(challenge.pendingSecretEnc, this.appKey), admin.email)
       : createTotp(admin.email);
     await this.infra.redis.set(
       this.challengeKey(challengeId),
-      JSON.stringify({ adminId: admin.id, pendingSecret: totp.secret.base32 }),
+      JSON.stringify({
+        adminId: admin.id,
+        pendingSecretEnc: encryptTotpSecret(totp.secret.base32, this.appKey),
+      }),
       'EX',
       CHALLENGE_TTL,
     );
@@ -119,10 +122,11 @@ export class AdminAuthService {
   async confirm(value: unknown) {
     const input = adminTotpSchema.parse(value);
     const challenge = await this.challenge(input.challengeId);
-    if (!challenge.pendingSecret) throw new AdminAuthFailure('ADMIN_TOTP_REQUIRED');
+    if (!challenge.pendingSecretEnc) throw new AdminAuthFailure('ADMIN_TOTP_REQUIRED');
     const admin = await this.infra.db.admin.findUnique({ where: { id: challenge.adminId } });
     if (!admin) throw new AdminAuthFailure('ADMIN_INVALID_CREDENTIALS');
-    const totp = totpFromBase32(challenge.pendingSecret, admin.email);
+    const pendingSecret = decryptTotpSecret(challenge.pendingSecretEnc, this.appKey);
+    const totp = totpFromBase32(pendingSecret, admin.email);
     if (totp.validate({ token: input.code, window: 1 }) === null) {
       await this.auditFailure(admin.id, admin.email, 'totp-setup');
       throw new AdminAuthFailure('ADMIN_TOTP_INVALID');
@@ -130,7 +134,7 @@ export class AdminAuthService {
     await this.infra.db.admin.update({
       where: { id: admin.id },
       data: {
-        totpSecretEnc: encryptTotpSecret(challenge.pendingSecret, this.appKey),
+        totpSecretEnc: encryptTotpSecret(pendingSecret, this.appKey),
         totpEnabled: true,
       },
     });
@@ -165,6 +169,11 @@ export class AdminAuthService {
     challengeId: string,
     action = 'auth.login.totp',
   ) {
+    // Deleting the challenge is the atomic commit point: only the request whose
+    // DEL removed the key may issue a session, so a replayed code cannot mint a
+    // second one.
+    if ((await this.infra.redis.del(this.challengeKey(challengeId))) !== 1)
+      throw new AdminAuthFailure('ADMIN_INVALID_CREDENTIALS');
     const csrf = randomBytes(32).toString('base64url');
     const sessionId = randomBytes(32).toString('base64url');
     await this.infra.redis.set(
@@ -173,7 +182,6 @@ export class AdminAuthService {
       'EX',
       ADMIN_SESSION_TTL,
     );
-    await this.infra.redis.del(this.challengeKey(challengeId));
     const admin = await this.infra.db.admin.findUniqueOrThrow({ where: { id: adminId } });
     await this.infra.db.admin.update({ where: { id: adminId }, data: { lastLoginAt: new Date() } });
     await this.audit(adminId, action, 'admin', adminId, { role });
@@ -213,20 +221,22 @@ export class AdminAuthService {
     };
   }
 
-  private async recordPasswordFailure(admin: {
-    id: string;
-    email: string;
-    failedLogins: number;
-  }): Promise<boolean> {
-    const failedLogins = admin.failedLogins + 1;
-    const minutes = failedLogins >= 5 ? Math.min(24 * 60, 15 * 2 ** (failedLogins - 5)) : 0;
-    await this.infra.db.admin.update({
+  private async recordPasswordFailure(admin: { id: string; email: string }): Promise<boolean> {
+    // The counter is incremented by the database so parallel attempts cannot
+    // read the same value and overwrite each other's increment.
+    const updated = await this.infra.db.admin.update({
       where: { id: admin.id },
-      data: {
-        failedLogins,
-        lockedUntil: minutes ? new Date(Date.now() + minutes * 60_000) : null,
-      },
+      data: { failedLogins: { increment: 1 } },
+      select: { failedLogins: true },
     });
+    const minutes =
+      updated.failedLogins >= 5 ? Math.min(24 * 60, 15 * 2 ** (updated.failedLogins - 5)) : 0;
+    if (minutes > 0) {
+      await this.infra.db.admin.update({
+        where: { id: admin.id },
+        data: { lockedUntil: new Date(Date.now() + minutes * 60_000) },
+      });
+    }
     await this.auditFailure(admin.id, admin.email);
     return minutes > 0;
   }

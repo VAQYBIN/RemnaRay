@@ -1,6 +1,7 @@
 import { Controller, Get, Headers, Res } from '@nestjs/common';
 import type { FastifyReply } from 'fastify';
 
+import { Permissions } from '../admin/admin.rbac';
 import { ThemeService } from './theme.service';
 
 @Controller('api/v1/public')
@@ -24,6 +25,7 @@ export class PublicThemeController {
 }
 
 @Controller('api/admin/v1/themes')
+@Permissions('themes.read')
 export class AdminThemesController {
   constructor(private readonly themes: ThemeService) {}
 

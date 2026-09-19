@@ -42,15 +42,22 @@ function createFixture() {
       admin: {
         findUnique: () => Promise.resolve(admin),
         findUniqueOrThrow: () => Promise.resolve(admin),
-        update: ({ data }: { data: Partial<typeof admin> }) => {
-          Object.assign(admin, data);
+        update: ({ data }: { data: Record<string, unknown> }) => {
+          for (const [key, value] of Object.entries(data)) {
+            if (value && typeof value === 'object' && 'increment' in value) {
+              const current = admin[key as 'failedLogins'];
+              admin[key as 'failedLogins'] = current + (value as { increment: number }).increment;
+            } else {
+              Object.assign(admin, { [key]: value });
+            }
+          }
           return Promise.resolve(admin);
         },
       },
       auditLog: { create: vi.fn(() => Promise.resolve()) },
     },
   };
-  return { admin, infra, service: new AdminAuthService(infra as never) };
+  return { admin, infra, values, service: new AdminAuthService(infra as never) };
 }
 
 describe('admin authentication', () => {
@@ -89,6 +96,53 @@ describe('admin authentication', () => {
       expect(confirmed.sessionId).toHaveLength(43);
       expect(fixture.admin.totpEnabled).toBe(true);
       expect(fixture.infra.db.auditLog.create).toHaveBeenCalled();
+      expect(fixture.admin.totpSecretEnc).not.toBeNull();
+      expect(fixture.admin.totpSecretEnc).not.toContain(totp.secret.base32);
+    } finally {
+      if (previousKey === undefined) delete process.env.RR_APP_KEY;
+      else process.env.RR_APP_KEY = previousKey;
+    }
+  }, 30_000);
+
+  it('never writes the pending TOTP secret to Valkey in plaintext', async () => {
+    const previousKey = process.env.RR_APP_KEY;
+    process.env.RR_APP_KEY = Buffer.alloc(32, 7).toString('base64');
+    try {
+      const fixture = createFixture();
+      fixture.admin.passwordHash = await hashAdminPassword('correct');
+      const login = await fixture.service.login({
+        email: fixture.admin.email,
+        password: 'correct',
+      });
+      const setup = await fixture.service.setup({ challengeId: login.challengeId });
+      const secret = OTPAuth.URI.parse(setup.otpauthUrl).secret.base32;
+      const stored = [...fixture.values.values()].join('|');
+
+      expect(stored).not.toContain(secret);
+      expect(stored).toContain('pendingSecretEnc');
+    } finally {
+      if (previousKey === undefined) delete process.env.RR_APP_KEY;
+      else process.env.RR_APP_KEY = previousKey;
+    }
+  }, 30_000);
+
+  it('consumes the challenge so a replayed confirmation cannot mint a second session', async () => {
+    const previousKey = process.env.RR_APP_KEY;
+    process.env.RR_APP_KEY = Buffer.alloc(32, 7).toString('base64');
+    try {
+      const fixture = createFixture();
+      fixture.admin.passwordHash = await hashAdminPassword('correct');
+      const login = await fixture.service.login({
+        email: fixture.admin.email,
+        password: 'correct',
+      });
+      const setup = await fixture.service.setup({ challengeId: login.challengeId });
+      const totp = OTPAuth.URI.parse(setup.otpauthUrl);
+      await fixture.service.confirm({ challengeId: login.challengeId, code: totp.generate() });
+
+      await expect(
+        fixture.service.confirm({ challengeId: login.challengeId, code: totp.generate() }),
+      ).rejects.toMatchObject({ code: 'ADMIN_INVALID_CREDENTIALS' });
     } finally {
       if (previousKey === undefined) delete process.env.RR_APP_KEY;
       else process.env.RR_APP_KEY = previousKey;

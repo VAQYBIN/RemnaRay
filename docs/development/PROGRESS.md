@@ -6,36 +6,27 @@ M4
 
 ## Current task
 
-M4 acceptance reconciliation, then TASK-M4-004. The earlier M4-001..003
-completion statements below overstate acceptance: commits exist and the listed
-checks ran, but those checks did not establish complete specification compliance.
-TASK-M4-004 has uncommitted partial UI work. Do not start M5.
+M4 acceptance reconciliation. TASK-M4-001 and TASK-M4-002 reconciliation are
+complete and committed. Next: TASK-M4-003 reconciliation, then TASK-M4-004.
+Do not start M5.
 
 ## Current handoff correction
 
 - Committed implementation: `c56c5fc` (M4-001), `a52a91e` (M4-002),
   `e1cd614` (M4-003). These are implementation checkpoints, not verified
   milestone acceptance. Preserve their history; fix gaps in follow-up commits.
-- M4-001 gaps observed in code: the full section 14.4 component list is missing;
-  themes are imported at build time rather than loaded through ThemeService;
-  AA acceptance is not proved by the warning-only validator.
-- M4-002 gaps observed in code: LAST_ADMIN management/AC-143 is absent;
-  RBAC metadata covers settings only; auth routes bypass CSRF; password failure
-  increments and challenge consumption are not atomic; TOTP setup secrets are
-  plaintext in Valkey; audit before contains request data rather than prior state.
-- M4-003 gaps observed in code: Russian landing text contains English copy;
-  CTA links point to legal pages; public config, runtime theme, language selector,
+- M4-001 gaps are now closed (see "M4-001 reconciliation" below).
+- M4-002 gaps are now closed (see "M4-002 reconciliation" below).
+- M4-003 gaps still open: Russian landing text contains English copy;
+  CTA links point to legal pages; public config, language selector,
   complete legal text and Lighthouse acceptance are missing. Money is displayed
   as raw minor units. Key parity alone is not an ICU/placeholder check.
-- M4-004 partial UI is saved on disk, uncommitted. The last web build/typecheck
-  and single Markdown test passed, but AC-133/134 are not verified. The UI expects
-  API response shapes that differ from existing controllers; essential actions,
-  15-second cache/invalidation, payment deadlines, and page-state tests remain.
-- Exact next work: reconcile M4-001 and M4-002 acceptance gaps before extending
-  dependent work; keep the existing M4-004 draft intact. Recheck actual command
-  exit codes and runtime behavior, not just build output.
-- The user reported repeated model-capacity warnings. No service-side telemetry
-  is available here to establish their cause. Repository tool access still works.
+- M4-004 partial UI is saved on disk, uncommitted, and will be rewritten:
+  it expects API response shapes that do not exist, prints raw minor units, and
+  has no 15-second cache, payment deadline or page-state tests.
+- OpenAPI is maintained by hand (`apps/api/openapi.json`, 3.0.3). Section 9.1
+  requires a 3.1 document generated from Zod contracts; the generator is planned
+  with the `packages/domain/contracts` work in TASK-M4-004.
 
 ## Completed tasks
 
@@ -436,6 +427,73 @@ are included in M3; M4 remains unopened.
 - Added `.changeset/m4-003-public-web.md`, `docs/i18n.md`, and the public web
   route set. No database migration or API route was required; public plans
   are read from the existing `GET /api/v1/public/plans` boundary.
+
+## M4-001 reconciliation
+
+Verified on 2026-09-20.
+
+- `packages/ui` now exports the complete section 14.4 list: Button, Input,
+  Select, Dialog, Sheet, Table, Tabs, Badge, Toast, Form (react-hook-form +
+  zod), DataTable (cursor), MoneyInput, DateRangePicker, Stat, EmptyState,
+  ErrorState, Skeleton, ConfirmDialog(reason). A test asserts the export list
+  and renders the cursor table in loading/empty/error/ready states with
+  `react-dom/server`.
+- AA acceptance is now a hard gate: `contrastFailures()` fails the body-text
+  pairs from section 13.5 and `pnpm theme-validate` exits non-zero on them. The
+  section 18.3 warnings (including the specified 3.03:1 Manta primary/white
+  pair) stay warnings.
+- Themes load through `ThemeService` in `apps/api`: mounted directory scan,
+  Zod validation, fingerprinted asset URLs, `ETag` plus `Cache-Control:
+max-age=60` on `GET /api/v1/public/theme`, `GET /api/admin/v1/themes` rescan,
+  and a `rr:theme.changed` subscription. `apps/web` reads those tokens per
+  request with a five-second revalidation window (AC-181) and falls back to the
+  bundled manifest only when the API is unreachable.
+- Fixed a runtime defect found during this work: `@remnaray/domain` and
+  `@remnaray/theme-schema` had no `dist` build and no `require`-resolvable
+  export condition, so the compiled CommonJS API could not load
+  `@remnaray/domain/rbac` at all (`ERR_PACKAGE_PATH_NOT_EXPORTED`). Both now
+  build to `dist` like the other workspace packages; `@remnaray/payments-mock`
+  gained the missing `default` condition.
+- Added `packages/domain/client.ts` — the single typed fetch + Zod client
+  required by section 13.1 — with the section 9.3 error envelope.
+- `compose.yaml` now mounts `./themes:/themes:ro` and `./locales:/locales:ro`
+  into the app services and web, with `RR_THEMES_DIR`/`RR_LOCALES_DIR`.
+- Checks: ui 8 tests, theme-schema 5 tests, api 42 tests, all workspace tests,
+  `pnpm lint`, `pnpm typecheck`, `pnpm format`, full `pnpm build`, and
+  `pnpm theme-validate` for `themes/manta` and `themes/_admin`.
+
+## M4-002 reconciliation
+
+Verified on 2026-09-20.
+
+- AC-143: `AdminsService` adds the FR-143 CRUD (`GET/POST /api/admin/v1/admins`,
+  `PATCH /:id`, `/:id/reset-password`, `/:id/reset-totp`, `/:id/deactivate`).
+  Deactivating or demoting the last active `admin` answers `409 LAST_ADMIN`.
+  The survivor check runs inside the update transaction and locks the remaining
+  admin rows with `SELECT … FOR UPDATE`. Seven tests cover it, including
+  inactive and soft-deleted rows.
+- AC-144: `AuditInterceptor` now records the prior state the handler read.
+  Handlers return `Audited(before, after, body?)`; the interceptor writes both
+  sides, copies only `reason` from the request body, masks secrets and truncates
+  states above 16 KB.
+- RBAC metadata now covers every admin route that exists: settings
+  (`settings.read`/`settings.write`), plans (`plans.read`/`plans.write`),
+  themes (`themes.read`) and admins (`admins.write` + `@Roles('admin')`). The
+  hardcoded settings role check in `AuthGuard` was removed in favour of the
+  decorators. The matrix itself gained `legal.read`, `themes.read` and
+  `audit.read.self` so the section 14.2 operator row is represented exactly,
+  plus `operatorLimits`/`limitKeyFor` for the `@Limit` work in TASK-M4-005.
+- CSRF no longer exempts `/api/admin/v1/auth/*`. Login and TOTP have no session
+  yet and are checked by origin and `X-Requested-With`; once a session exists,
+  `X-CSRF-Token` is required too.
+- The password failure counter is incremented by the database, the TOTP
+  enrolment secret is encrypted with `RR_APP_KEY` before it reaches Valkey, and
+  the login challenge `DEL` is the atomic commit point for issuing a session.
+- Checks: api 56 tests (17 files), domain 5 tests, all workspace tests,
+  `pnpm lint`, `pnpm typecheck`, `pnpm format`, full `pnpm build`.
+- Known gap moved to TASK-M4-009: `POST /api/admin/v1/settings/import` still
+  answers `{ diff: [] }` for `dryRun`, and `PUT /settings` always answers
+  `restartRequired: []` instead of the section 17.6 matrix.
 
 ## M4-003 decisions
 

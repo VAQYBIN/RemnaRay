@@ -2,17 +2,18 @@ import { Body, Controller, Get, Post, Put, Req } from '@nestjs/common';
 import type { FastifyRequest } from 'fastify';
 
 import { SettingsService } from './settings.service';
-import { Roles } from '../admin/admin.rbac';
+import { Permissions, Roles } from '../admin/admin.rbac';
 
-type ActorRequest = FastifyRequest & { user?: { id?: string } };
+type ActorRequest = FastifyRequest & { admin?: { id?: string } };
 
 function actorFrom(request: ActorRequest) {
-  const id = request.user?.id;
+  const id = request.admin?.id;
   return id ? { id } : undefined;
 }
 
 @Controller('api/admin/v1/settings')
 @Roles('admin')
+@Permissions('settings.read')
 export class SettingsController {
   constructor(private readonly settings: SettingsService) {}
 
@@ -22,6 +23,7 @@ export class SettingsController {
   }
 
   @Put()
+  @Permissions('settings.write')
   async updateSettings(@Body() body: unknown, @Req() request: ActorRequest) {
     if (!body || typeof body !== 'object' || Array.isArray(body) || !('patch' in body)) {
       throw new Error('Settings update requires a patch object');
@@ -54,6 +56,7 @@ export class SettingsController {
   }
 
   @Post('import')
+  @Permissions('settings.write')
   async importSettings(@Body() body: unknown, @Req() request: ActorRequest) {
     if (!body || typeof body !== 'object' || Array.isArray(body) || !('json' in body)) {
       throw new Error('Settings import requires json');

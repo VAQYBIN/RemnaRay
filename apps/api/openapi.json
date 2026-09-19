@@ -540,6 +540,136 @@
           }
         }
       }
+    },
+    "/api/admin/v1/admins": {
+      "get": {
+        "operationId": "listAdmins",
+        "summary": "Administrators (FR-143)",
+        "responses": {
+          "200": {
+            "description": "Administrators"
+          },
+          "403": {
+            "description": "FORBIDDEN"
+          }
+        }
+      },
+      "post": {
+        "operationId": "createAdmin",
+        "responses": {
+          "201": {
+            "description": "Created"
+          },
+          "409": {
+            "description": "CONFLICT"
+          },
+          "403": {
+            "description": "FORBIDDEN"
+          }
+        }
+      }
+    },
+    "/api/admin/v1/admins/{id}": {
+      "patch": {
+        "operationId": "updateAdmin",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Updated"
+          },
+          "404": {
+            "description": "NOT_FOUND"
+          },
+          "409": {
+            "description": "LAST_ADMIN"
+          }
+        }
+      }
+    },
+    "/api/admin/v1/admins/{id}/reset-password": {
+      "post": {
+        "operationId": "resetAdminPassword",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Password reset"
+          },
+          "404": {
+            "description": "NOT_FOUND"
+          }
+        }
+      }
+    },
+    "/api/admin/v1/admins/{id}/reset-totp": {
+      "post": {
+        "operationId": "resetAdminTotp",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "TOTP enrolment cleared"
+          },
+          "404": {
+            "description": "NOT_FOUND"
+          }
+        }
+      }
+    },
+    "/api/admin/v1/admins/{id}/deactivate": {
+      "post": {
+        "operationId": "deactivateAdmin",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Deactivated"
+          },
+          "404": {
+            "description": "NOT_FOUND"
+          },
+          "409": {
+            "description": "LAST_ADMIN"
+          }
+        }
+      }
     }
   }
 }

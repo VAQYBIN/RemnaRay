@@ -74,8 +74,6 @@ export class AuthGuard implements CanActivate {
       const admin = await this.infra.db.admin.findUnique({ where: { id: session.adminId } });
       if (!admin?.isActive || admin.deletedAt || !admin.totpEnabled)
         throw new ForbiddenException('FORBIDDEN');
-      if (path.startsWith('/api/admin/v1/settings') && admin.role !== 'admin')
-        throw new ForbiddenException('FORBIDDEN');
       req.admin = { id: admin.id, csrf: session.csrf, role: admin.role };
       return true;
     }
@@ -114,7 +112,6 @@ export class CsrfGuard implements CanActivate {
     )
       return true;
     const site = req.headers['sec-fetch-site'];
-    if (path.startsWith('/api/admin/v1/auth/')) return true;
     const expectedOrigin = `https://${process.env.RR_DOMAIN ?? ''}`;
     if (
       req.headers['x-requested-with'] !== 'RemnaRay' ||

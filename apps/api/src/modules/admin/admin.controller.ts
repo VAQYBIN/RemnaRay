@@ -1,9 +1,12 @@
-import { Body, Controller, Get, HttpCode, Post, Req, Res } from '@nestjs/common';
+import { Body, Controller, Get, HttpCode, Param, Patch, Post, Req, Res } from '@nestjs/common';
 import { Throttle } from '@nestjs/throttler';
 import type { FastifyReply } from 'fastify';
 
 import { type AuthenticatedRequest, readCookie } from '../auth/auth.guards';
 import { AdminAuthService } from './admin.auth.service';
+import { AdminsService } from './admins.service';
+import { Audit } from './audit.interceptor';
+import { Permissions, Roles } from './admin.rbac';
 
 const ADMIN_COOKIE_MAX_AGE = 12 * 60 * 60;
 
@@ -61,4 +64,50 @@ function setAdminCookie(reply: FastifyReply, value: string): void {
     'set-cookie',
     `rr_asid=${encodeURIComponent(value)}; Max-Age=${String(ADMIN_COOKIE_MAX_AGE)}; Path=/; HttpOnly; Secure; SameSite=Lax`,
   );
+}
+
+@Controller('api/admin/v1/admins')
+@Roles('admin')
+@Permissions('admins.write')
+export class AdminsController {
+  constructor(private readonly admins: AdminsService) {}
+
+  @Get()
+  list() {
+    return this.admins.list();
+  }
+
+  @Post()
+  @HttpCode(201)
+  @Audit('admins.create', 'admin')
+  create(@Body() body: unknown) {
+    return this.admins.create(body);
+  }
+
+  @Patch(':id')
+  @Audit('admins.update', 'admin', 'id')
+  update(@Param('id') id: string, @Body() body: unknown) {
+    return this.admins.update(id, body);
+  }
+
+  @Post(':id/reset-password')
+  @HttpCode(200)
+  @Audit('admins.reset-password', 'admin', 'id')
+  resetPassword(@Param('id') id: string, @Body() body: unknown) {
+    return this.admins.resetPassword(id, body);
+  }
+
+  @Post(':id/reset-totp')
+  @HttpCode(200)
+  @Audit('admins.reset-totp', 'admin', 'id')
+  resetTotp(@Param('id') id: string) {
+    return this.admins.resetTotp(id);
+  }
+
+  @Post(':id/deactivate')
+  @HttpCode(200)
+  @Audit('admins.deactivate', 'admin', 'id')
+  deactivate(@Param('id') id: string, @Body() body: unknown) {
+    return this.admins.deactivate(id, body);
+  }
 }

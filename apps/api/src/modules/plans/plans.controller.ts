@@ -1,8 +1,10 @@
 import { Body, Controller, Delete, Get, Param, Patch, Post, Query } from '@nestjs/common';
 
 import { PlansService } from './plans.service';
+import { Permissions } from '../admin/admin.rbac';
 
 @Controller('api/admin/v1/plans')
+@Permissions('plans.read')
 export class PlansAdminController {
   constructor(private readonly plans: PlansService) {}
 
@@ -12,16 +14,19 @@ export class PlansAdminController {
   }
 
   @Post()
+  @Permissions('plans.write')
   create(@Body() body: unknown) {
     return this.plans.create(body);
   }
 
   @Patch(':id')
+  @Permissions('plans.write')
   update(@Param('id') id: string, @Body() body: unknown) {
     return this.plans.update(id, body);
   }
 
   @Delete(':id')
+  @Permissions('plans.write')
   async remove(@Param('id') id: string) {
     await this.plans.remove(id);
     return { deleted: true };
