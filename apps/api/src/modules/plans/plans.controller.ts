@@ -40,19 +40,6 @@ export class PublicPlansController {
   /** Section 9.4 exposes `PlanPublic` only: squads and flags stay internal. */
   @Get()
   async list() {
-    const items = await this.plans.list(false);
-    return {
-      items: items.map((plan) => ({
-        id: plan.id,
-        slug: plan.slug,
-        name: plan.name,
-        description: plan.description,
-        durationDays: plan.durationDays,
-        trafficLimitBytes: plan.trafficLimitBytes,
-        deviceLimit: plan.deviceLimit,
-        price: plan.price,
-        sortOrder: plan.sortOrder,
-      })),
-    };
+    return { items: await this.plans.publicList() };
   }
 }

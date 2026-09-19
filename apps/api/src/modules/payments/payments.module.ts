@@ -13,18 +13,14 @@ import {
   StarsProvider,
   YooKassaProvider,
 } from './builtin-providers';
-import {
-  PaymentsInternalController,
-  PaymentsUserController,
-  PaymentsWebhookController,
-} from './payments.controller';
+import { PaymentsInternalController, PaymentsWebhookController } from './payments.controller';
 import { PaymentsRepository } from './payments.repository';
 import { PaymentProviderRegistry } from './payments.registry';
 import { PaymentsService } from './payments.service';
 
 @Module({
   imports: [SettingsModule],
-  controllers: [PaymentsWebhookController, PaymentsUserController, PaymentsInternalController],
+  controllers: [PaymentsWebhookController, PaymentsInternalController],
   providers: [
     {
       provide: PaymentProviderRegistry,

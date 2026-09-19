@@ -1,12 +1,16 @@
 import { InlineKeyboard } from 'grammy';
 
-import type { ApiClient, HomeState } from '../api-client.js';
+import type { ApiClient, HomeState, SubscriptionState } from '../api-client.js';
 import type { RrContext } from '../types.js';
 import { backButton, button, formatDate, show } from './common.js';
 
-export function homeKeyboard(ctx: RrContext, state: HomeState): InlineKeyboard {
+export function homeKeyboard(
+  ctx: RrContext,
+  state: Pick<HomeState, 'trialAvailable'>,
+  subscription: SubscriptionState['subscription'],
+): InlineKeyboard {
   const keyboard = new InlineKeyboard();
-  if (!state.subscription) {
+  if (!subscription) {
     if (state.trialAvailable) keyboard.text(ctx.t('bot.btn.trial'), 'trial:confirm').row();
     keyboard.text(ctx.t('bot.btn.buy'), 'plans').row();
   } else {
@@ -25,14 +29,18 @@ export function homeKeyboard(ctx: RrContext, state: HomeState): InlineKeyboard {
 
 export async function showHome(ctx: RrContext, api: ApiClient): Promise<void> {
   if (!ctx.from) return;
-  const state = await api.getMe(ctx.from.id);
-  const status = state.subscription
-    ? ctx.t('bot.screen.home.subscription', { until: formatDate(state.subscription.expiresAt) })
+  const [state, subscriptionState] = await Promise.all([
+    api.getMe(ctx.from.id),
+    api.getSubscription(ctx.from.id),
+  ]);
+  const subscription = subscriptionState.subscription;
+  const status = subscription
+    ? ctx.t('bot.screen.home.subscription', { until: formatDate(subscription.expiresAt) })
     : ctx.t('bot.screen.home.noSubscription');
   await show(
     ctx,
     `${ctx.t('bot.screen.home.welcome', { brand: 'RemnaRay' })}\n\n${status}`,
-    homeKeyboard(ctx, state),
+    homeKeyboard(ctx, state, subscription),
   );
 }
 

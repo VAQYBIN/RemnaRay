@@ -6,9 +6,8 @@ M4
 
 ## Current task
 
-M4 acceptance reconciliation. TASK-M4-001, TASK-M4-002 and TASK-M4-003
-reconciliation are complete and committed. Next: repair the CI quality gates,
-then TASK-M4-004. Do not start M5.
+TASK-M4-004 is complete and committed. Next: TASK-M4-005 (admin dashboard,
+users, subscriptions, payments, plans). Do not start M5.
 
 ## Current handoff correction
 
@@ -19,9 +18,8 @@ then TASK-M4-004. Do not start M5.
 - M4-002 gaps are now closed (see "M4-002 reconciliation" below).
 - M4-003 gaps are now closed except the Lighthouse ≥ 90/90/95 measurement,
   which needs the reference server and stays an external gate.
-- M4-004 partial UI is saved on disk, uncommitted, and will be rewritten:
-  it expects API response shapes that do not exist, prints raw minor units, and
-  has no 15-second cache, payment deadline or page-state tests.
+- M4-004 is implemented and committed; the earlier uncommitted draft was
+  replaced.
 - OpenAPI is maintained by hand (`apps/api/openapi.json`, 3.0.3). Section 9.1
   requires a 3.1 document generated from Zod contracts; the generator is planned
   with the `packages/domain/contracts` work in TASK-M4-004.
@@ -529,6 +527,37 @@ Verified on 2026-09-20.
   `pnpm -r typecheck`, `pnpm format`, full `pnpm build`, `pnpm i18n-check`,
   `pnpm theme-validate`, and a CommonJS load of the compiled `AppModule`.
 - Remaining external gate: Lighthouse ≥ 90/90/95 on the reference server.
+
+## M4-004 verification
+
+Verified on 2026-09-20.
+
+- Added `MeService` with every section 9.4 `me/*` operation, exposed twice:
+  `/api/v1/me/*` resolves the user from `rr_sid`, `/api/internal/v1/me/*` from
+  `X-Acting-User` (section 9.5). The duplicated bot-only implementation was
+  removed, as were the legacy `/api/v1/me/subscription/change/*` routes that
+  section 9.4 does not define.
+- Money crosses the public API as JSON numbers, `PlanPublic` is the only plan
+  shape, transactions and referral lists are cursor-paginated, referral names are
+  masked, promo codes follow the section 15.5 rules, and AC-061 hides a provider
+  whose last healthcheck failed.
+- Added `GET /me/subscription/qr` (512×512 PNG), `GET/DELETE
+/me/subscription/devices`, `POST /me/invoices/:id/cancel`,
+  `GET /me/plan-change/quote` and `POST /me/anonymize-request` (section 19.5
+  records the request in `audit_log`; the admin alert belongs to TASK-M4-007).
+- Fixed `POST /api/internal/v1/support/forward`, which the bot had been calling
+  at a path the API never served.
+- Web: all seven section 13.4 pages plus `/pay/[invoiceId]`, the Telegram Login
+  Widget and `/auth/tg`. `useResource` caches reads for 15 seconds and mutations
+  invalidate instead of applying optimistically.
+- AC-133: `apps/web/test/account-pages.test.tsx` renders each page against a
+  mocked API and asserts loading, empty and error, including the localized error
+  message and the `requestId`. AC-134: `apps/web/test/pay-page.test.tsx` covers
+  the three-second polling window, the countdown, Stars deep links, the paid and
+  expired states and the error state.
+- Checks: api 81 tests (20 files), web 13 tests (3 files), bot 10 tests, all
+  workspace tests, `pnpm lint`, `pnpm -r typecheck`, `pnpm format`, full
+  `pnpm build`, `pnpm i18n-check`.
 
 ## M4-003 decisions
 

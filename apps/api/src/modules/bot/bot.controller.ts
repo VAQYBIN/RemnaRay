@@ -6,10 +6,7 @@ import {
   Get,
   Headers,
   HttpCode,
-  HttpException,
-  HttpStatus,
   Param,
-  Patch,
   Post,
   UseGuards,
 } from '@nestjs/common';
@@ -17,11 +14,7 @@ import { SUPPORTED_LOCALES, type Locale } from '@remnaray/i18n-core';
 
 import { Infrastructure } from '../../infra/infra.module';
 import { InternalTokenGuard, equalToken } from '../auth/auth.guards';
-import { PaymentsService } from '../payments/payments.service';
-import { PlansService } from '../plans/plans.service';
 import { SettingsService } from '../settings/settings.service';
-import { SubscriptionsService } from '../subscriptions/subscriptions.service';
-import { RemnawaveService, RevokeRateLimitError } from '../remnawave/remnawave.service';
 import { I18nService } from '../public/i18n.service';
 
 const appendUpdate = `
@@ -169,238 +162,15 @@ export class BotInternalController {
       ),
     };
   }
-}
 
-@Controller('api/internal/v1/me')
-@UseGuards(InternalTokenGuard)
-export class BotUserController {
-  constructor(
-    private readonly infra: Infrastructure,
-    private readonly settings: SettingsService,
-    private readonly plans: PlansService,
-    private readonly payments: PaymentsService,
-    private readonly subscriptions: SubscriptionsService,
-    private readonly remnawave: RemnawaveService,
-  ) {}
-
-  @Get()
-  async me(@Headers('x-acting-user') actingUser: string | undefined) {
-    const user = await this.user(actingUser);
-    const [account, subscription, purchases] = await Promise.all([
-      this.infra.db.account.findFirst({
-        where: { kind: 'user', userId: user.id, currency: 'RUB' },
-      }),
-      this.infra.db.subscription.findFirst({
-        where: { userId: user.id, status: { in: ['provisioning', 'active', 'grace'] } },
-        orderBy: { expiresAt: 'desc' },
-      }),
-      this.infra.db.transaction.count({
-        where: { userId: user.id, type: 'purchase', amountMinor: { gt: 0n } },
-      }),
-    ]);
-    return {
-      user: {
-        id: user.id,
-        telegramId: user.telegramId.toString(),
-        username: user.username,
-        firstName: user.firstName,
-        language: user.language,
-        referralCode: user.referralCode,
-        email: user.email,
-        marketingOptOut: user.marketingOptOut,
-      },
-      balance: { amountMinor: (account?.balanceMinor ?? 0n).toString(), currency: 'RUB' },
-      subscription: subscription ? toSubscriptionView(subscription) : null,
-      trialAvailable: !user.trialUsedAt && purchases === 0 && !subscription,
-    };
-  }
-
-  @Patch()
-  async patch(@Headers('x-acting-user') actingUser: string | undefined, @Body() body: unknown) {
-    const user = await this.user(actingUser);
-    if (!isRecord(body)) throw new BadRequestException('INVALID_BODY');
-    const data: { language?: string; email?: string | null; marketingOptOut?: boolean } = {};
-    if (typeof body.language === 'string' && ['ru', 'en'].includes(body.language))
-      data.language = body.language;
-    if (body.email === null || typeof body.email === 'string') data.email = body.email;
-    if (typeof body.marketingOptOut === 'boolean') data.marketingOptOut = body.marketingOptOut;
-    const updated = await this.infra.db.user.update({ where: { id: user.id }, data });
-    return {
-      language: updated.language,
-      email: updated.email,
-      marketingOptOut: updated.marketingOptOut,
-    };
-  }
-
-  @Get('plans')
-  plansList() {
-    return this.plans.list(false).then((items) => ({ items }));
-  }
-
-  @Get('subscription')
-  async subscription(@Headers('x-acting-user') actingUser: string | undefined) {
-    const user = await this.user(actingUser);
-    const [subscription, panelUser] = await Promise.all([
-      this.infra.db.subscription.findFirst({
-        where: { userId: user.id },
-        orderBy: { expiresAt: 'desc' },
-      }),
-      this.infra.db.panelUser.findUnique({ where: { userId: user.id } }),
-    ]);
-    return {
-      subscription: subscription ? toSubscriptionView(subscription) : null,
-      panel: panelUser
-        ? {
-            status: panelUser.panelStatus,
-            usedTrafficBytes: panelUser.usedTrafficBytes.toString(),
-            trafficLimitBytes: panelUser.trafficLimitBytes.toString(),
-            expireAt: panelUser.expireAtPanel?.toISOString() ?? null,
-            deviceLimit: panelUser.hwidDeviceLimit,
-            subscriptionUrl: panelUser.subscriptionUrl,
-          }
-        : null,
-    };
-  }
-
-  @Get('transactions')
-  async transactions(@Headers('x-acting-user') actingUser: string | undefined) {
-    const user = await this.user(actingUser);
-    const items = await this.infra.db.transaction.findMany({
-      where: { userId: user.id },
-      orderBy: { createdAt: 'desc' },
-      take: 5,
-      select: {
-        id: true,
-        type: true,
-        amountMinor: true,
-        currency: true,
-        status: true,
-        createdAt: true,
-        reason: true,
-      },
-    });
-    return {
-      items: items.map((item) => ({
-        id: item.id,
-        type: item.type,
-        amountMinor: item.amountMinor.toString(),
-        currency: item.currency,
-        status: item.status,
-        createdAt: item.createdAt.toISOString(),
-        description: item.reason,
-      })),
-    };
-  }
-
-  @Get('referrals')
-  async referrals(@Headers('x-acting-user') actingUser: string | undefined) {
-    const user = await this.user(actingUser);
-    const attributions = await this.infra.db.referralAttribution.findMany({
-      where: { referrerId: user.id },
-    });
-    const [rewards, botUsername] = await Promise.all([
-      this.infra.db.referralReward.aggregate({
-        where: { attributionId: { in: attributions.map((item) => item.id) } },
-        _sum: { amountMinor: true },
-      }),
-      this.settings.get('bot.username'),
-    ]);
-    const username = String(botUsername);
-    return {
-      code: user.referralCode,
-      link: `https://t.me/${username}?start=ref_${user.referralCode}`,
-      invited: attributions.length,
-      converted: attributions.filter((item) => item.status === 'converted').length,
-      earned: { amountMinor: (rewards._sum.amountMinor ?? 0n).toString(), currency: 'RUB' },
-    };
-  }
-
-  @Post('trial')
-  @HttpCode(200)
-  async trial(@Headers('x-acting-user') actingUser: string | undefined) {
-    const user = await this.user(actingUser);
-    return { subscription: await this.subscriptions.trial(user.id) };
-  }
-
-  @Post('subscription/revoke')
-  @HttpCode(200)
-  async revoke(@Headers('x-acting-user') actingUser: string | undefined) {
-    const user = await this.user(actingUser);
-    try {
-      return await this.remnawave.revokeSubscription(user.id);
-    } catch (error) {
-      if (error instanceof RevokeRateLimitError)
-        throw new HttpException({ code: 'REVOKE_RATE_LIMITED' }, HttpStatus.TOO_MANY_REQUESTS);
-      throw error;
-    }
-  }
-
-  @Get('payment-methods')
-  async paymentMethods() {
-    const providers = await this.infra.db.paymentProvider.findMany({
-      where: { enabled: true },
-      orderBy: { sortOrder: 'asc' },
-      select: { code: true, displayName: true },
-    });
-    return {
-      items: [
-        {
-          code: 'balance',
-          displayName: { ru: 'Баланс', en: 'Balance' },
-          kind: 'balance',
-          available: true,
-        },
-        ...providers.map((provider) => ({
-          code: provider.code,
-          displayName: provider.displayName,
-          kind: provider.code === 'stars' ? 'stars' : 'redirect',
-          available: true,
-        })),
-      ],
-    };
-  }
-
-  @Get('topup-config')
-  async topupConfig() {
-    return {
-      presetsMinor: (await this.settings.get('balance.topup_presets_minor')) as string[],
-      minMinor: String(await this.settings.get('balance.topup_min_minor')),
-      maxMinor: String(await this.settings.get('balance.topup_max_minor')),
-    };
-  }
-
-  @Post('promocodes/redeem')
-  @HttpCode(200)
-  async redeemPromo(
-    @Headers('x-acting-user') actingUser: string | undefined,
-    @Body() body: unknown,
-  ) {
-    const user = await this.user(actingUser);
-    if (
-      !isRecord(body) ||
-      typeof body.code !== 'string' ||
-      !/^[A-Za-z0-9_-]{3,64}$/u.test(body.code)
-    )
-      throw new BadRequestException('INVALID_BODY');
-    const promo = await this.infra.db.promocode.findFirst({
-      where: { code: { equals: body.code, mode: 'insensitive' }, isActive: true, deletedAt: null },
-      select: { id: true },
-    });
-    if (!promo) throw new BadRequestException('PROMO_NOT_FOUND');
-    await this.infra.db.user.update({
-      where: { id: user.id },
-      data: { pendingPromocodeId: promo.id },
-    });
-    return { reservedForNextPurchase: true };
-  }
-
+  /** Section 9.5 `POST /api/internal/v1/support/forward`. */
   @Post('support/forward')
   @HttpCode(204)
   async supportForward(
     @Headers('x-acting-user') actingUser: string | undefined,
     @Body() body: unknown,
   ) {
-    const user = await this.user(actingUser);
+    if (!actingUser || !/^\d+$/.test(actingUser)) throw new ForbiddenException('FORBIDDEN');
     if (
       !isRecord(body) ||
       typeof body.text !== 'string' ||
@@ -417,51 +187,10 @@ export class BotUserController {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
         signal: AbortSignal.timeout(10_000),
-        body: JSON.stringify({
-          chat_id: chatId,
-          text: `#support ${user.telegramId.toString()}\n${body.text}`,
-        }),
+        body: JSON.stringify({ chat_id: chatId, text: `#support ${actingUser}\n${body.text}` }),
       },
     );
     if (!response.ok) throw new BadRequestException('SUPPORT_UNAVAILABLE');
-  }
-
-  @Post('invoices')
-  @HttpCode(201)
-  async invoice(
-    @Headers('x-acting-user') actingUser: string | undefined,
-    @Headers('idempotency-key') idempotencyKey: string | undefined,
-    @Body() body: unknown,
-  ) {
-    const user = await this.user(actingUser);
-    if (!isRecord(body) || !isInvoiceKind(body.kind) || typeof body.provider !== 'string')
-      throw new BadRequestException('INVALID_BODY');
-    const result = await this.payments.createInvoice({
-      userId: user.id,
-      kind: body.kind,
-      provider: body.provider,
-      ...(typeof body.planId === 'string' ? { planId: body.planId } : {}),
-      ...(typeof body.amountMinor === 'string' ? { amountMinor: BigInt(body.amountMinor) } : {}),
-      idempotencyKey: idempotencyKey ?? '',
-    });
-    if (!result) throw new BadRequestException('INVOICE_NOT_FOUND');
-    return toInvoiceView(result);
-  }
-
-  @Post('invoices/:id/check')
-  @HttpCode(200)
-  async check(@Headers('x-acting-user') actingUser: string | undefined, @Param('id') id: string) {
-    const user = await this.user(actingUser);
-    const invoice = await this.infra.db.invoice.findUnique({ where: { id } });
-    if (!invoice || invoice.userId !== user.id) throw new BadRequestException('INVOICE_NOT_FOUND');
-    const result = await this.payments.recheck(id);
-    if (!result) throw new BadRequestException('INVOICE_NOT_FOUND');
-    return toInvoiceView(result);
-  }
-
-  private async user(actingUser: string | undefined) {
-    if (!actingUser || !/^\d+$/.test(actingUser)) throw new ForbiddenException('FORBIDDEN');
-    return this.infra.db.user.findUniqueOrThrow({ where: { telegramId: BigInt(actingUser) } });
   }
 }
 
@@ -596,57 +325,6 @@ export class BotAdminController {
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null;
-}
-
-function isInvoiceKind(value: unknown): value is 'purchase' | 'topup' | 'plan_change' {
-  return value === 'purchase' || value === 'topup' || value === 'plan_change';
-}
-
-function toSubscriptionView(subscription: {
-  id: string;
-  userId: string;
-  planId: string | null;
-  source: string;
-  status: string;
-  startsAt: Date;
-  expiresAt: Date;
-  trafficLimitBytes: bigint;
-  deviceLimit: number;
-}) {
-  return {
-    id: subscription.id,
-    userId: subscription.userId,
-    planId: subscription.planId,
-    source: subscription.source,
-    status: subscription.status,
-    startsAt: subscription.startsAt.toISOString(),
-    expiresAt: subscription.expiresAt.toISOString(),
-    trafficLimitBytes: subscription.trafficLimitBytes.toString(),
-    deviceLimit: subscription.deviceLimit,
-  };
-}
-
-function toInvoiceView(invoice: {
-  id: string;
-  kind: string;
-  status: string;
-  provider: string;
-  amountMinor: bigint;
-  currency: string;
-  paymentUrl: string | null;
-  expiresAt: Date;
-  createdAt: Date;
-}) {
-  return {
-    id: invoice.id,
-    kind: invoice.kind,
-    status: invoice.status,
-    provider: invoice.provider,
-    amount: { amountMinor: invoice.amountMinor.toString(), currency: invoice.currency },
-    ...(invoice.paymentUrl ? { paymentUrl: invoice.paymentUrl } : {}),
-    expiresAt: invoice.expiresAt.toISOString(),
-    createdAt: invoice.createdAt.toISOString(),
-  };
 }
 
 function startOfDay(): Date {

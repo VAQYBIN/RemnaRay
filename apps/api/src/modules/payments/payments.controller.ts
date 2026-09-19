@@ -1,9 +1,9 @@
-import { Body, Controller, Headers, Param, Post, Req, Res, UseGuards } from '@nestjs/common';
+import { Controller, Headers, Param, Post, Req, Res, UseGuards } from '@nestjs/common';
 import type { RawBodyRequest } from '@nestjs/common';
 import type { FastifyReply, FastifyRequest } from 'fastify';
 
 import { PaymentsService } from './payments.service';
-import { AuthGuard, InternalTokenGuard, type AuthenticatedRequest } from '../auth/auth.guards';
+import { InternalTokenGuard } from '../auth/auth.guards';
 
 @Controller('webhooks')
 export class PaymentsWebhookController {
@@ -29,36 +29,6 @@ export class PaymentsWebhookController {
         return response.status(400).send({ code: error.message });
       throw error;
     }
-  }
-}
-
-@Controller('api/v1/me/invoices')
-@UseGuards(AuthGuard)
-export class PaymentsUserController {
-  constructor(private readonly payments: PaymentsService) {}
-
-  @Post()
-  create(
-    @Body()
-    body: {
-      userId?: string;
-      kind: 'purchase' | 'topup' | 'plan_change';
-      planId?: string;
-      provider: string;
-    },
-    @Headers('idempotency-key') key: string | undefined,
-    @Req() request: AuthenticatedRequest,
-  ) {
-    return this.payments.createInvoice({
-      ...body,
-      userId: request.user?.id ?? body.userId ?? '',
-      idempotencyKey: key ?? '',
-    });
-  }
-
-  @Post(':id/check')
-  check(@Param('id') id: string) {
-    return this.payments.recheck(id);
   }
 }
 

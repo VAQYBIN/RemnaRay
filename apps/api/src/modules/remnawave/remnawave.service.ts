@@ -136,6 +136,50 @@ export class RemnawaveService {
     }
   }
 
+  /** HWID devices registered for the user's panel account (FR-026). */
+  async devices(userId: string): Promise<
+    {
+      hwid: string;
+      platform: string | null;
+      osVersion: string | null;
+      deviceModel: string | null;
+      createdAt: string | null;
+    }[]
+  > {
+    const row = await this.infra.db.panelUser.findUnique({ where: { userId } });
+    if (!row) return [];
+    const client = await this.client();
+    try {
+      const devices = await client.hwid.list(row.panelUuid);
+      return devices.flatMap((device) => {
+        const hwid = typeof device.hwid === 'string' ? device.hwid : null;
+        if (!hwid) return [];
+        return [
+          {
+            hwid,
+            platform: typeof device.platform === 'string' ? device.platform : null,
+            osVersion: typeof device.osVersion === 'string' ? device.osVersion : null,
+            deviceModel: typeof device.deviceModel === 'string' ? device.deviceModel : null,
+            createdAt: typeof device.createdAt === 'string' ? device.createdAt : null,
+          },
+        ];
+      });
+    } finally {
+      await client.close();
+    }
+  }
+
+  async removeDevice(userId: string, hwid: string): Promise<void> {
+    const row = await this.infra.db.panelUser.findUnique({ where: { userId } });
+    if (!row) throw new PanelUnavailableError();
+    const client = await this.client();
+    try {
+      await client.hwid.remove(row.panelUuid, hwid);
+    } finally {
+      await client.close();
+    }
+  }
+
   async revokeSubscription(userId: string): Promise<{ subscriptionUrl: string }> {
     const lockKey = `rr:revoke:${userId}`;
     const acquired = await this.infra.redis.set(lockKey, '1', 'EX', 86_400, 'NX');

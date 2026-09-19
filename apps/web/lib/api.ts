@@ -12,5 +12,8 @@ export function serverApi(cookie?: string): ApiClient {
 
 /** Client components go through the proxy on the same origin. */
 export function browserApi(): ApiClient {
-  return createApiClient({ baseUrl: '/', headers: { 'x-requested-with': 'RemnaRay' } });
+  return createApiClient({
+    baseUrl: typeof window === 'undefined' ? INTERNAL_API_URL : window.location.origin,
+    headers: { 'x-requested-with': 'RemnaRay' },
+  });
 }

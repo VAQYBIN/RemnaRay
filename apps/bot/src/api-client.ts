@@ -29,11 +29,21 @@ export type UpsertUserResult = {
   planSlug?: string;
 };
 
+/** `UserMe` from section 9.4. */
 export type HomeState = {
-  user: UserSummary & { email: string | null; marketingOptOut: boolean };
-  balance: { amountMinor: string; currency: string };
-  subscription: { status: string; expiresAt: string; planId: string | null } | null;
+  id: string;
+  telegramId: number;
+  username: string | null;
+  firstName: string | null;
+  language: Locale;
+  email: string | null;
+  balance: { amountMinor: number; currency: string };
+  referralCode: string;
+  referralLink: string;
+  botReferralLink: string;
+  marketingOptOut: boolean;
   trialAvailable: boolean;
+  createdAt: string;
 };
 
 export type PublicPlan = {
@@ -50,10 +60,16 @@ export type SubscriptionState = {
   subscription: {
     status: string;
     expiresAt: string;
-    trafficLimitBytes: string;
-    deviceLimit: number;
+    daysLeft: number;
+    canChangePlan: boolean;
+    canRevoke: boolean;
   } | null;
-  panel: { subscriptionUrl: string; usedTrafficBytes: string; trafficLimitBytes: string } | null;
+  panel: {
+    subscriptionUrl: string;
+    usedTrafficBytes: number;
+    trafficLimitBytes: number;
+  } | null;
+  clients: { id: string; name: string; platforms: string[]; deepLink: string | null }[];
 };
 
 export type InvoiceView = {
@@ -61,8 +77,9 @@ export type InvoiceView = {
   kind: string;
   status: string;
   provider: string;
-  amount: { amountMinor: string; currency: string };
+  amount: { amountMinor: number; currency: string };
   paymentUrl?: string;
+  starsInvoiceLink?: string;
   expiresAt: string;
   createdAt: string;
 };
@@ -72,7 +89,7 @@ export type ReferralState = {
   link: string;
   invited: number;
   converted: number;
-  earned: { amountMinor: string; currency: string };
+  earned: { amountMinor: number; currency: string };
 };
 
 export type ApiClientOptions = {
@@ -245,11 +262,11 @@ export class ApiClient {
   getTransactions(telegramId: number) {
     return this.request<{
       items: Array<{
-        amountMinor: string;
-        currency: string;
+        amount: { amountMinor: number; currency: string };
         description: string | null;
         createdAt: string;
       }>;
+      nextCursor: string | null;
     }>('/api/internal/v1/me/transactions', { userId: telegramId });
   }
 
@@ -283,7 +300,7 @@ export class ApiClient {
   }
 
   getTopupConfig() {
-    return this.request<{ presetsMinor: string[]; minMinor: string; maxMinor: string }>(
+    return this.request<{ presetsMinor: number[]; minMinor: number; maxMinor: number }>(
       '/api/internal/v1/me/topup-config',
     );
   }
@@ -294,7 +311,7 @@ export class ApiClient {
       kind: 'purchase' | 'topup' | 'plan_change';
       planId?: string;
       provider: string;
-      amountMinor?: string;
+      amountMinor?: number;
     },
     idempotencyKey: string,
   ) {

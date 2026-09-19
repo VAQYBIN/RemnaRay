@@ -45,7 +45,7 @@ export function installConversations(bot: Bot<RrContext>, redis: Redis, api: Api
         const config =
           id === 'topupCustom'
             ? await conversation.external(() => api.getTopupConfig())
-            : { minMinor: '0', maxMinor: '0', presetsMinor: [] };
+            : { minMinor: 0, maxMinor: 0, presetsMinor: [] };
         const started = await conversation.now();
         for (let attempt = 0; attempt < 3; attempt += 1) {
           const remaining = 600_000 - ((await conversation.now()) - started);
@@ -104,7 +104,11 @@ export function installConversations(bot: Bot<RrContext>, redis: Redis, api: Api
             }
             const key = await conversation.external(() => randomUUID());
             const invoice = await conversation.external(() =>
-              api.createInvoice(telegramId, { kind: 'topup', provider, amountMinor: amount }, key),
+              api.createInvoice(
+                telegramId,
+                { kind: 'topup', provider, amountMinor: Number(amount) },
+                key,
+              ),
             );
             await reply.reply(invoice.paymentUrl ?? t('bot.screen.pay.ok'));
           }

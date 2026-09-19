@@ -10,12 +10,7 @@ function context() {
 
 describe('bot home screen', () => {
   it('shows trial and buy for a user without a subscription', () => {
-    const keyboard = homeKeyboard(context(), {
-      user: {} as never,
-      balance: { amountMinor: '0', currency: 'RUB' },
-      subscription: null,
-      trialAvailable: true,
-    });
+    const keyboard = homeKeyboard(context(), { trialAvailable: true }, null);
     const callbacks = keyboard.inline_keyboard.flatMap((row) =>
       row.flatMap((item) => ('callback_data' in item ? [item.callback_data] : [])),
     );

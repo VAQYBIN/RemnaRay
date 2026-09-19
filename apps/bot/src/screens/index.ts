@@ -59,7 +59,7 @@ export function registerScreens(bot: Bot<RrContext>, api: ApiClient): void {
   bot.callbackQuery('balance', (ctx) => showBalance(ctx, api));
   bot.callbackQuery('topup:open', (ctx) => showTopup(ctx, api));
   bot.callbackQuery(/^topup:(\d+):([a-z-]+)$/u, (ctx) =>
-    createTopup(ctx, api, capture(ctx.match, 1), capture(ctx.match, 2)),
+    createTopup(ctx, api, Number(capture(ctx.match, 1)), capture(ctx.match, 2)),
   );
   bot.callbackQuery('ref', (ctx) => showReferrals(ctx, api));
   bot.callbackQuery('lang', (ctx) => showLanguage(ctx));
@@ -82,7 +82,7 @@ async function showBalance(ctx: RrContext, api: ApiClient): Promise<void> {
   const recent = transactions.items
     .map(
       (item) =>
-        `${formatMinor(item.amountMinor, item.currency)} · ${item.description ?? item.createdAt}`,
+        `${formatMinor(item.amount.amountMinor, item.amount.currency)} · ${item.description ?? item.createdAt}`,
     )
     .join('\n');
   const keyboard = new InlineKeyboard()
@@ -102,7 +102,7 @@ async function showTopup(ctx: RrContext, api: ApiClient): Promise<void> {
   const keyboard = new InlineKeyboard();
   for (const amount of config.presetsMinor) {
     keyboard
-      .text(formatMinor(amount), provider ? `topup:${amount}:${provider}` : 'topup:custom')
+      .text(formatMinor(amount), provider ? `topup:${String(amount)}:${provider}` : 'topup:custom')
       .row();
   }
   keyboard.text(ctx.t('bot.btn.back'), 'balance');
@@ -112,7 +112,7 @@ async function showTopup(ctx: RrContext, api: ApiClient): Promise<void> {
 async function createTopup(
   ctx: RrContext,
   api: ApiClient,
-  amountMinor: string,
+  amountMinor: number,
   provider: string,
 ): Promise<void> {
   if (!ctx.from) return;
@@ -162,7 +162,7 @@ async function showNotifications(ctx: RrContext, api: ApiClient): Promise<void> 
   await show(
     ctx,
     ctx.t(
-      state.user.marketingOptOut
+      state.marketingOptOut
         ? 'bot.screen.notifications.disabled'
         : 'bot.screen.notifications.enabled',
     ),
@@ -173,7 +173,7 @@ async function showNotifications(ctx: RrContext, api: ApiClient): Promise<void> 
 async function toggleNotifications(ctx: RrContext, api: ApiClient): Promise<void> {
   if (!ctx.from) return;
   const state = await api.getMe(ctx.from.id);
-  await api.patchMe(ctx.from.id, { marketingOptOut: !state.user.marketingOptOut });
+  await api.patchMe(ctx.from.id, { marketingOptOut: !state.marketingOptOut });
   await showNotifications(ctx, api);
 }
 

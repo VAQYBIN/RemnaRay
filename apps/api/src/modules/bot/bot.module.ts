@@ -10,7 +10,6 @@ import { PublicModule } from '../public/public.module';
 import {
   BotInternalController,
   BotAdminController,
-  BotUserController,
   TelegramWebhookController,
 } from './bot.controller';
 
@@ -23,12 +22,7 @@ import {
     RemnawaveModule,
     PublicModule,
   ],
-  controllers: [
-    TelegramWebhookController,
-    BotInternalController,
-    BotUserController,
-    BotAdminController,
-  ],
+  controllers: [TelegramWebhookController, BotInternalController, BotAdminController],
   providers: [InternalTokenGuard],
 })
 // eslint-disable-next-line @typescript-eslint/no-extraneous-class

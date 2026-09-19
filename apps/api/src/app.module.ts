@@ -14,6 +14,7 @@ import { PaymentsModule } from './modules/payments/payments.module';
 import { BotModule } from './modules/bot/bot.module';
 import { AdminModule } from './modules/admin/admin.module';
 import { PublicModule } from './modules/public/public.module';
+import { MeModule } from './modules/me/me.module';
 
 @Module({
   imports: [
@@ -29,6 +30,7 @@ import { PublicModule } from './modules/public/public.module';
     BotModule,
     AdminModule,
     PublicModule,
+    MeModule,
     LoggerModule.forRoot({
       pinoHttp: {
         level: process.env.RR_LOG_LEVEL ?? 'info',
