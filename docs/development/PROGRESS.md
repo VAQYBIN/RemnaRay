@@ -6,7 +6,7 @@ M0
 
 ## Current task
 
-TASK-M0-006 — configuration, logger, and money packages.
+TASK-M0-007 — Prisma schema and initial database migration.
 
 ## Completed tasks
 
@@ -25,6 +25,8 @@ TASK-M0-006 — configuration, logger, and money packages.
   v3 identifier mapping in `docs/adr/ADR-010.md`.
 - TASK-M0-005 — added the NestJS/Fastify API, grammY bot, BullMQ worker, and
   Next.js/Tailwind web shells with their required local health endpoints.
+- TASK-M0-006 — added Zod environment validation, section 19.6 Pino redaction,
+  and exact bigint minor-unit money helpers with package-level Vitest tests.
 
 ## Verification
 
@@ -72,6 +74,9 @@ blocker is resolved.
   worker are inert with external services unconfigured; the BullMQ worker is
   enabled only with `RR_WORKER_ENABLED=true`, while all health routes remain
   available for local smoke checks.
+- M0-006 keeps environment validation free of secret values in error messages,
+  masks email as `a***@domain`, redacts all section 19.6 secret categories,
+  and performs money operations with `bigint` only.
 
 ## Definition of Done review
 
@@ -91,6 +96,8 @@ blocker is resolved.
 - TASK-M0-005 acceptance checks passed: frozen install, eight tests, lint,
   typecheck, formatting, Turbo build, and local HTTP 200 smoke checks for
   API, bot, worker, and web health endpoints.
+- TASK-M0-006 acceptance checks passed: config/logger/money Vitest suites
+  (10 tests), root tests, lint, typecheck, and formatting.
 
 ## Known blockers
 

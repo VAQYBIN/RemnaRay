@@ -14,7 +14,7 @@
     "format:fix": "prettier --write .",
     "lint": "eslint .",
     "prepare": "husky",
-    "test": "node --test",
+    "test": "node --test test/tooling.test.mjs",
     "typecheck": "tsc --noEmit"
   },
   "devDependencies": {
