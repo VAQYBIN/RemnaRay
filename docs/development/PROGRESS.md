@@ -2,11 +2,11 @@
 
 ## Current milestone
 
-M2
+M3
 
 ## Current task
 
-M2 complete — TASK-M2-010 verified and committed; M3 not started.
+TASK-M3-002 is next; TASK-M3-001 is verified and committed.
 
 ## Completed tasks
 
@@ -179,6 +179,11 @@ blocker is resolved.
 - TASK-M2-010 — added `ReceiptData`, fiscal settings integration, and provider
   receipt serialization with fallback email support.
 
+- TASK-M3-001 — added the grammY middleware chain, Valkey sessions and rate
+  limiting, ICU catalog loading, internal `ApiClient`, Telegram Stream webhook
+  ingress with consumer groups and `XAUTOCLAIM`, polling with runner, live
+  transport reconfiguration, and localized command registration.
+
 ## Verification correction
 
 The M1-001..003 runtime correction added a CommonJS-compatible DB export,
@@ -221,12 +226,26 @@ Turbo build.
 
 ## Known blockers
 
-M2 implementation is complete. Hosted GitHub Actions execution, maintainer
+M3 implementation is in progress. Hosted GitHub Actions execution, maintainer
 review, provider credential healthchecks, and the later proxy-smoke/full e2e
 gates remain external gates. The specification lists M2-008 as depending on
-M3-001; the Stars provider boundary is complete while bot update wiring remains
-in the explicitly deferred M3 scope. No credentials were required for the
-deterministic contract tests.
+M2-008; the bot has no external credential dependency for its deterministic
+contract tests. No credentials were required for TASK-M3-001.
+
+## M3-001 verification
+
+- Context7 documentation was checked for grammY middleware/webhooks, runner,
+  Redis sessions, rate limiting, auto-retry, and ICU formatting. The installed
+  package API was then checked locally because ratelimiter 1.2.1 exposes the
+  older `limit`/`RedisStore` contract.
+- `@remnaray/i18n-core`: typecheck and 2 tests passed.
+- `@remnaray/bot`: typecheck and 3 tests passed, including internal headers,
+  structured API errors, and the 20 updates/10 seconds drop boundary.
+- `@remnaray/api`: typecheck and 30 tests passed, including Telegram Stream
+  insertion, secret validation, locale delivery, and bot config.
+- The API publishes `tg:updates`; the bot uses `XACK` after successful handling
+  and reclaims pending entries after 60 seconds. Settings changes for `bot.*`
+  and `domain.*` reload transport and commands without restart.
 
 ## M2 verification
 
@@ -246,4 +265,4 @@ deterministic contract tests.
 
 ## Next
 
-M3-001 is next. Do not start it in this session.
+M3-002 is next. Do not start M4.

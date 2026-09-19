@@ -12,6 +12,7 @@
   },
   "dependencies": {
     "@remnaray/db": "workspace:*",
+    "@remnaray/i18n-core": "workspace:*",
     "@remnaray/payments-mock": "workspace:*",
     "@remnaray/remnawave-sdk": "workspace:*",
     "@asteasolutions/zod-to-openapi": "~9.1.0",

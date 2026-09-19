@@ -11,6 +11,7 @@ import { SubscriptionsModule } from './modules/subscriptions/subscriptions.modul
 import { SettingsModule } from './modules/settings/settings.module';
 import { UsersModule } from './modules/users/users.module';
 import { PaymentsModule } from './modules/payments/payments.module';
+import { BotModule } from './modules/bot/bot.module';
 
 @Module({
   imports: [
@@ -23,6 +24,7 @@ import { PaymentsModule } from './modules/payments/payments.module';
     RemnawaveModule,
     SubscriptionsModule,
     PaymentsModule,
+    BotModule,
     LoggerModule.forRoot({
       pinoHttp: {
         level: process.env.RR_LOG_LEVEL ?? 'info',
