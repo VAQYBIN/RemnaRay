@@ -220,6 +220,26 @@ test('installing generates the Prisma client', async () => {
   assert.match(db.exports['./generated'].types, /src\/generated\/prisma/u);
 });
 
+// Section 24.4 and 24.6: what the tag publishes must be what `compose.yaml`
+// pulls, down to the last path segment.
+test('the release and rebuild workflows publish the images compose pulls', async () => {
+  const release = await readFile('.github/workflows/release.yml', 'utf8');
+  const rebuild = await readFile('.github/workflows/rebuild.yml', 'utf8');
+  const compose = await readFile('compose.yaml', 'utf8');
+
+  for (const workflow of [release, rebuild]) {
+    for (const image of ['app', 'web', 'nginx', 'caddy', 'backup']) {
+      assert.match(workflow, new RegExp(`^ {10}- image: ${image}$`, 'mu'));
+    }
+    // A `remnaray-` prefix, or any other segment, is a name nothing pulls.
+    assert.match(workflow, /\/\$\{\{ github\.repository_owner \}\}\/\$\{\{ matrix\.image \}\}/u);
+    assert.doesNotMatch(workflow, /repository_owner \}\}\/[a-z-]+\$\{\{ matrix\.image/u);
+  }
+  for (const image of ['app', 'web', 'nginx', 'caddy', 'backup']) {
+    assert.ok(compose.includes(`ghcr.io/remnaray/${image}:`), `compose.yaml never pulls ${image}`);
+  }
+});
+
 test('the CI workflow covers required quality and image gates', async () => {
   const workflow = await readFile('.github/workflows/ci.yml', 'utf8');
   assert.match(workflow, /pnpm install --frozen-lockfile/);

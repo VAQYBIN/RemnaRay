@@ -1,4 +1,4 @@
-# Section 24.4. A tag `vX.Y.Z` publishes the four images, an SBOM and a signed
+# Section 24.4. A tag `vX.Y.Z` publishes the five images, an SBOM and a signed
 # attestation, and opens a GitHub Release with the changelog. A pre-release
 # `vX.Y.Z-rc.N` publishes under `rc` and never moves the floating major tag,
 # so an owner following `RR_VERSION=1` is not upgraded onto a candidate.
@@ -33,6 +33,10 @@ jobs:
             file: deploy/proxy/nginx/Dockerfile
           - image: caddy
             file: deploy/proxy/caddy/Dockerfile
+          # `compose.yaml` pulls this one in every profile, so a release that
+          # leaves it behind is a release nobody can start.
+          - image: backup
+            file: deploy/backup/Dockerfile
     outputs:
       prerelease: ${{ steps.version.outputs.prerelease }}
     steps:
@@ -68,7 +72,7 @@ jobs:
         id: meta
         uses: docker/metadata-action@v5
         with:
-          images: ${{ env.REGISTRY }}/${{ github.repository_owner }}/remnaray-${{ matrix.image }}
+          images: ${{ env.REGISTRY }}/${{ github.repository_owner }}/${{ matrix.image }}
           flavor: latest=false
           tags: |
             type=semver,pattern={{version}}
@@ -96,7 +100,7 @@ jobs:
       - name: Attest the provenance
         uses: actions/attest-build-provenance@v2
         with:
-          subject-name: ${{ env.REGISTRY }}/${{ github.repository_owner }}/remnaray-${{ matrix.image }}
+          subject-name: ${{ env.REGISTRY }}/${{ github.repository_owner }}/${{ matrix.image }}
           subject-digest: ${{ steps.push.outputs.digest }}
           push-to-registry: true
 
