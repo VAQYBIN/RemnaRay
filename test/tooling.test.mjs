@@ -210,6 +210,16 @@ test('the local deployment boundary includes Docker, Compose, and safe init scri
   assert.match(mockServer, /request.url === '\/health'/);
 });
 
+// Type-aware linting resolves `@remnaray/db` through its generated client, and
+// a fresh checkout has none: without this every Prisma call lints as `any`.
+test('installing generates the Prisma client', async () => {
+  const db = JSON.parse(await readFile('packages/db/package.json', 'utf8'));
+
+  assert.equal(packageManifest.scripts.postinstall, 'pnpm --filter @remnaray/db db:generate');
+  assert.equal(db.scripts['db:generate'], 'prisma generate');
+  assert.match(db.exports['./generated'].types, /src\/generated\/prisma/u);
+});
+
 test('the CI workflow covers required quality and image gates', async () => {
   const workflow = await readFile('.github/workflows/ci.yml', 'utf8');
   assert.match(workflow, /pnpm install --frozen-lockfile/);
