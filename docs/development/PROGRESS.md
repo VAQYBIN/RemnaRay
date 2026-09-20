@@ -5,16 +5,58 @@
 M5 — in progress; the milestone is **NOT VERIFIED**.
 
 **DO NOT PROCEED TO M6.** M5-001, M5-002, M5-003, M5-005, M5-006, M5-007 and
-M5-008 pass their gates. M5-004 still requires the real-domain certificate
-checklist, which needs a public server and DNS. M5-009 remains unstarted, and
-the queue defect recorded under "M5-008 finding" has to be repaired before the
-milestone can be called verified.
+M5-008 pass their gates, and the queue defect found under M5-008 is repaired.
+M5-004 still requires the real-domain certificate checklist, which needs a
+public server and DNS. M5-009 remains unstarted.
 
 ## Current task
 
-Repair the queue job identifiers (see "M5-008 finding"), then TASK-M5-009 —
-`docs/*`, README ru/en, CONTRIBUTING, SECURITY, issue templates, `release.yml`
-and `rebuild.yml`.
+TASK-M5-009 — `docs/*`, README ru/en, CONTRIBUTING, SECURITY, issue templates,
+`release.yml` and `rebuild.yml`.
+
+## Queue delivery repair — 2026-09-20
+
+The defect recorded under "M5-008 finding" is fixed, and it turned out to be
+two, either of which alone stopped every queued job:
+
+1. **BullMQ refuses a custom job id containing a colon** — its own key
+   separator — and refuses one that is all digits. Every identifier the
+   application builds carried a colon: `evt:<id>`, `panel:<userId>`,
+   `alert:payment.late:<id>`, `notify:<dedupKey>`, `maintenance:tls-check:<s>`
+   and twenty more. `packages/queues` now exports `toJobId`, which translates
+   the separator at the boundary with BullMQ and prefixes an all-digit id. The
+   readable form stays in `outbox_jobs.job_id`, and the mapping is one-to-one,
+   so deduplication is unchanged.
+2. **The relay published under `rr:q` and the workers waited on `bull`.** They
+   shared a queue name and nothing else: jobs were enqueued, nothing consumed
+   them, and neither side reported anything. `QUEUE_PREFIX` is now one exported
+   value that both use.
+
+Verified on a stand and in the suite:
+
+- Before: `docker logs worker` carried "Custom Id cannot contain :" every two
+  seconds, `outbox_jobs` had five unpublished rows, and `rr:q:notify:wait`
+  held jobs nothing was reading.
+- After: zero such errors, all five outbox rows published, and the queues
+  report `notify` 2 completed, `maintenance` 2 completed, `payments` 1
+  completed. The `panel` failure that remains is `PANEL_UNAVAILABLE` against
+  the stand's `https://panel.invalid`, which is the correct answer there.
+- `test/m1.integration.test.mjs` now runs a real job through: the outbox writes
+  `notify:sub.activated:<uuid>`, the relay publishes it, and a BullMQ worker
+  on the shared prefix receives it as `notify-sub.activated-<uuid>`. Both
+  defects fail this test.
+- `pnpm test:m1` (1), `pnpm test:m2` (1), `pnpm test:m4` (4), `pnpm test:m5`
+  (3), `pnpm test:e2e` (26), `pnpm test` (21), `pnpm -r test`, `pnpm lint`,
+  `pnpm format`, `pnpm typecheck`, `pnpm -r typecheck` and `pnpm build`.
+
+### Open: an intermittent test failure
+
+`setup.service.test.ts > accepts the environment token once` failed twice
+across six full `pnpm -r test` sweeps and never in isolation, under
+`--no-isolate`, or on any re-run. The test performs an argon2 hash and an
+argon2 verify, which is the slowest thing in the suite, so contention is the
+obvious suspect — but that was not established, and nothing was changed on a
+guess. Recorded here for whoever picks it up.
 
 ## M5-008 verification — 2026-09-20
 
@@ -96,11 +138,9 @@ This is the next thing to repair, before TASK-M5-009.
 
 ### M5-008 observation
 
-One run of `pnpm -r test` failed
-`setup.service.test.ts > accepts the environment token once` while the machine
-was running the whole workspace in parallel. It did not reproduce in four
-subsequent runs, including two full `pnpm -r test` sweeps and the file in
-isolation. Recorded rather than dismissed; no change was made for it.
+`setup.service.test.ts > accepts the environment token once` failed once under
+a full parallel `pnpm -r test`. See "Open: an intermittent test failure" above,
+which records what is known after further attempts.
 
 ## M5-007 verification — 2026-09-20
 

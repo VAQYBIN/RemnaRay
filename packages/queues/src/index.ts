@@ -5,6 +5,13 @@ import { Redis as RedisClient } from 'ioredis';
 export const QUEUE_NAMES = ['panel', 'payments', 'notify', 'broadcast', 'maintenance'] as const;
 export type QueueName = (typeof QUEUE_NAMES)[number];
 
+/**
+ * The Valkey key prefix every queue uses. It is exported because a producer
+ * and a consumer that disagree about it share a queue name and nothing else:
+ * the relay publishes, the worker waits, and neither reports a problem.
+ */
+export const QUEUE_PREFIX = 'rr:q';
+
 export type OutboxMessage = {
   queue: QueueName;
   name: string;
@@ -27,6 +34,21 @@ export class OutboxWriter {
   }
 }
 
+/**
+ * BullMQ refuses a custom job id that contains a colon or that is all digits:
+ * the first is its own key separator and the second collides with the ids it
+ * generates. The application builds ids like `alert:payment.late:<uuid>`, so
+ * the separator is translated here, at the boundary with BullMQ, rather than
+ * left to twenty-odd call sites to remember.
+ *
+ * `outbox_jobs.job_id` keeps the readable form; only what BullMQ is told
+ * changes, and the mapping is one-to-one, so deduplication is unaffected.
+ */
+export function toJobId(value: string): string {
+  const safe = value.replaceAll(':', '-');
+  return /^\d+$/u.test(safe) ? `j-${safe}` : safe;
+}
+
 export type RelayResult = { published: number; remaining: number };
 
 export class OutboxRelay {
@@ -37,7 +59,10 @@ export class OutboxRelay {
     private readonly redis: RedisClient,
   ) {
     this.queues = new Map(
-      QUEUE_NAMES.map((name) => [name, new Queue(name, { connection: redis, prefix: 'rr:q' })]),
+      QUEUE_NAMES.map((name) => [
+        name,
+        new Queue(name, { connection: redis, prefix: QUEUE_PREFIX }),
+      ]),
     );
   }
 
@@ -62,7 +87,7 @@ export class OutboxRelay {
         const queue = this.queues.get(row.queue as QueueName);
         if (!queue) continue;
         await queue.add(row.name, row.payload, {
-          jobId: row.jobId ?? row.id,
+          jobId: toJobId(row.jobId ?? row.id),
           removeOnComplete: 1000,
           removeOnFail: 5000,
         });

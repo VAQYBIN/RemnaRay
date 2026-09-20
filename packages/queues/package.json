@@ -13,11 +13,15 @@
   "scripts": {
     "lint": "eslint .",
     "typecheck": "tsc --noEmit -p tsconfig.json",
-    "build": "tsc -p tsconfig.build.json"
+    "build": "tsc -p tsconfig.build.json",
+    "test": "vitest run"
   },
   "dependencies": {
     "@remnaray/db": "workspace:*",
     "bullmq": "~6.3.7",
     "ioredis": "~5.11.1"
+  },
+  "devDependencies": {
+    "vitest": "~5.0.1"
   }
 }

@@ -1,5 +1,6 @@
 import { Injectable, Logger, type OnModuleDestroy, type OnModuleInit } from '@nestjs/common';
 import { queueJobs, recordTlsExpiry } from '@remnaray/metrics';
+import { QUEUE_PREFIX, toJobId } from '@remnaray/queues';
 import { Queue, Worker, type Job } from 'bullmq';
 
 import { backupStatus } from './backup-check';
@@ -26,22 +27,22 @@ export class WorkerService implements OnModuleInit, OnModuleDestroy {
       port: Number(process.env.RR_VALKEY_PORT ?? 6379),
       maxRetriesPerRequest: null,
     };
+    // The prefix the outbox relay publishes under. Without it the workers wait
+    // on `bull:*` while every relayed job sits in `rr:q:*` for ever.
+    const options = { connection, prefix: QUEUE_PREFIX };
 
     this.workers.push(
       new Worker(
         'payments',
         async (job: Job<{ eventId?: string }>) => this.call(paymentCall(job)),
-        { connection },
+        options,
       ),
     );
     this.workers.push(
       new Worker(
         'notify',
         async (job: Job<Record<string, unknown>>) => this.call(notifyCall(job)),
-        {
-          connection,
-          concurrency: 1,
-        },
+        { ...options, concurrency: 1 },
       ),
     );
     this.workers.push(
@@ -49,13 +50,15 @@ export class WorkerService implements OnModuleInit, OnModuleDestroy {
         'broadcast',
         async (job: Job<Record<string, unknown>>) =>
           this.call({ path: '/api/internal/v1/broadcasts/chunk', body: job.data }),
-        { connection, concurrency: 1 },
+        { ...options, concurrency: 1 },
       ),
     );
     this.workers.push(
-      new Worker('panel', async (job: Job<Record<string, unknown>>) => this.call(panelCall(job)), {
-        connection,
-      }),
+      new Worker(
+        'panel',
+        async (job: Job<Record<string, unknown>>) => this.call(panelCall(job)),
+        options,
+      ),
     );
     this.workers.push(
       new Worker(
@@ -66,21 +69,21 @@ export class WorkerService implements OnModuleInit, OnModuleDestroy {
             : job.name === 'maintenance.backup-check'
               ? await this.backupCheck()
               : await this.call(maintenanceCall(job)),
-        { connection },
+        options,
       ),
     );
 
-    const payments = new Queue('payments', { connection });
-    const notify = new Queue('notify', { connection });
-    const maintenance = new Queue('maintenance', { connection });
+    const payments = new Queue('payments', options);
+    const notify = new Queue('notify', options);
+    const maintenance = new Queue('maintenance', options);
     // Counted, not consumed from here: section 9.9 wants every queue's depth,
     // and a queue the worker only reads counts is cheap to hold open.
     const counted = [
       payments,
       notify,
       maintenance,
-      new Queue('broadcast', { connection }),
-      new Queue('panel', { connection }),
+      new Queue('broadcast', options),
+      new Queue('panel', options),
     ];
     this.queues.push(...counted);
 
@@ -105,9 +108,13 @@ export class WorkerService implements OnModuleInit, OnModuleDestroy {
       setInterval(() => {
         tick += 1;
         const stamp = String(Date.now());
-        void payments.add('payments.poll-pending', {}, { jobId: `payments:poll-pending:${stamp}` });
+        void payments.add(
+          'payments.poll-pending',
+          {},
+          { jobId: toJobId(`payments:poll-pending:${stamp}`) },
+        );
         if (tick % 2 === 0)
-          void payments.add('payments.expire', {}, { jobId: `payments:expire:${stamp}` });
+          void payments.add('payments.expire', {}, { jobId: toJobId(`payments:expire:${stamp}`) });
       }, 30_000),
     );
     // Section 16.1: a ten-minute window is precise enough, and
@@ -115,11 +122,15 @@ export class WorkerService implements OnModuleInit, OnModuleDestroy {
     this.timers.push(
       setInterval(() => {
         const stamp = String(Date.now());
-        void notify.add('notify.scan-expiring', {}, { jobId: `notify:scan-expiring:${stamp}` });
+        void notify.add(
+          'notify.scan-expiring',
+          {},
+          { jobId: toJobId(`notify:scan-expiring:${stamp}`) },
+        );
         void maintenance.add(
           'maintenance.referral-release',
           {},
-          { jobId: `maintenance:referral-release:${stamp}` },
+          { jobId: toJobId(`maintenance:referral-release:${stamp}`) },
         );
       }, 10 * 60_000),
     );
@@ -130,12 +141,12 @@ export class WorkerService implements OnModuleInit, OnModuleDestroy {
       void maintenance.add(
         'maintenance.tls-check',
         {},
-        { jobId: `maintenance:tls-check:${stamp}` },
+        { jobId: toJobId(`maintenance:tls-check:${stamp}`) },
       );
       void maintenance.add(
         'maintenance.backup-check',
         {},
-        { jobId: `maintenance:backup-check:${stamp}` },
+        { jobId: toJobId(`maintenance:backup-check:${stamp}`) },
       );
     };
     queueDaily();
