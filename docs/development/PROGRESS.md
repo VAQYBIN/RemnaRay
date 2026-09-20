@@ -53,6 +53,33 @@ implementation task after the external TLS gate is TASK-M5-007.
   `844.50s`, generated all 38 static pages and exported the `80,296,758` byte
   image.
 
+### Final executable M5 verification — 2026-09-20
+
+- `pnpm test:m5` passed on retry: 3/3 tests, including nginx TLS modes and
+  reload in 939 ms, Caddy modes, and AC-202 backup/restore with 14 daily and 8
+  weekly retention files. The first run's Docker Hub authorization EOF was a
+  transient external registry failure and did not recur.
+- `LD_LIBRARY_PATH="$HOME/.local/share/remnaray-browser-libs/usr/lib/x86_64-linux-gnu" pnpm test:e2e`
+  passed 26/26 Playwright tests.
+- The same browser runtime with `pnpm lighthouse` passed: landing RU
+  performance 99, accessibility 96, SEO 100; landing EN 99/96/100; account
+  accessibility 96.
+- `pnpm test`, `pnpm lint`, `pnpm typecheck`, `pnpm -r typecheck`,
+  `pnpm typecheck:e2e`, `pnpm format`, `pnpm i18n-check`, both theme
+  validations, and all four Compose profile config checks passed.
+
+### Remaining M5 blockers
+
+- TASK-M5-004 remains an **external/manual validation requirement**. A user
+  must provide a public server and DNS-controlled real domain, then record the
+  checklist in `docs/tls.md`: nginx ACME issuance, certbot bootstrap and
+  renewal reload, Caddy ACME, Caddy/certbot rejection, and the `/admin/system`
+  TLS reading.
+- TASK-M5-007, TASK-M5-008 and TASK-M5-009 are **implementation defects in the
+  milestone state**: they remain unstarted. They were outside this blocker
+  closure scope and must be implemented in dependency order after the external
+  TLS gate is addressed.
+
 ## Reconciliation authority — 2026-09-20
 
 The repository is the source of truth. HEAD at entry was `d8610a8` and the
