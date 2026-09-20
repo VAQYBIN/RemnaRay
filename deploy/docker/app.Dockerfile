@@ -16,12 +16,9 @@ RUN pnpm turbo run build \
       --filter=@remnaray/api \
       --filter=@remnaray/bot \
       --filter=@remnaray/worker
-# Keep only production dependency closures for the runtime image. Copying the
-# root pnpm store made the image exceed NFR-011 by more than a gigabyte.
-RUN pnpm deploy --filter=@remnaray/api --prod /out/api \
-    && pnpm deploy --filter=@remnaray/bot --prod /out/bot \
-    && pnpm deploy --filter=@remnaray/worker --prod /out/worker \
-    && pnpm deploy --filter=@remnaray/db --prod /out/db
+# One production closure for the single app image required by section 26.1.
+# Separate deployments duplicate Prisma and Nest across API, worker and tools.
+RUN pnpm deploy --filter=@remnaray/runtime --prod /out/runtime
 
 FROM node:24-alpine
 
@@ -36,23 +33,16 @@ RUN apk add --no-cache "postgresql18-client=${POSTGRES_CLIENT_VERSION}" \
 ENV NODE_ENV=production
 WORKDIR /app
 
-COPY --from=build /out/api/dist ./dist/apps/api
-COPY --from=build /out/api/node_modules ./dist/apps/api/node_modules
-COPY --from=build /out/bot/dist ./dist/apps/bot
-COPY --from=build /out/bot/node_modules ./dist/apps/bot/node_modules
-COPY --from=build /out/worker/dist ./dist/apps/worker
-COPY --from=build /out/worker/node_modules ./dist/apps/worker/node_modules
-# `migrate` runs `prisma migrate deploy` from the db package, so it needs the
-# schema, the migrations and the Prisma CLI beside them.
-COPY --from=build /out/db/package.json ./dist/packages/db/package.json
-COPY --from=build /out/db/prisma ./dist/packages/db/prisma
-COPY --from=build /out/db/dist ./dist/packages/db/dist
-COPY --from=build /out/db/node_modules ./dist/packages/db/node_modules
+COPY --from=build /out/runtime/node_modules ./node_modules
 
-# Section 21.1 runs the deployment tools as `dist/tools/*.js`. They are built
-# with the API so they share its `node_modules`; Node resolves through the
-# symlink, so the modules are found next to the real files.
-RUN ln -s apps/api/tools dist/tools
+# Preserve the public entrypoints used by Compose. Node follows the symlinks
+# into the deployed packages, where pnpm's isolated dependency links resolve.
+RUN mkdir -p dist/apps dist/packages \
+    && ln -s ../../node_modules/@remnaray/api/dist dist/apps/api \
+    && ln -s ../../node_modules/@remnaray/bot/dist dist/apps/bot \
+    && ln -s ../../node_modules/@remnaray/worker/dist dist/apps/worker \
+    && ln -s ../../node_modules/@remnaray/db dist/packages/db \
+    && ln -s apps/api/tools dist/tools
 
 USER node
 

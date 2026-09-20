@@ -194,6 +194,9 @@ test('the local deployment boundary includes Docker, Compose, and safe init scri
 
   assert.match(appDockerfile, /FROM node:24-alpine AS build/);
   assert.match(appDockerfile, /pnpm install --frozen-lockfile/);
+  assert.match(appDockerfile, /pnpm deploy --filter=@remnaray\/runtime --prod \/out\/runtime/);
+  assert.match(appDockerfile, /node_modules\/@remnaray\/api\/dist/);
+  assert.match(appDockerfile, /node_modules\/@remnaray\/db/);
   assert.match(webDockerfile, /\.next\/standalone/);
   assert.match(compose, /172\.28\.0\.0\/16/);
   assert.match(compose, /read_only: true/);
