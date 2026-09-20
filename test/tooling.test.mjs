@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
-import { readFile } from 'node:fs/promises';
+import { glob, readFile } from 'node:fs/promises';
 import test from 'node:test';
 
 const packageManifest = JSON.parse(await readFile('package.json', 'utf8'));
@@ -231,6 +231,22 @@ test('a source checkout can build the images compose resolves to', async () => {
     assert.match(wrapper, new RegExp(`${image}\\) printf '%s' deploy/`, 'u'));
   }
   assert.match(install, /## Running from a source checkout/u);
+});
+
+// `tsc -p tsconfig.build.json` compiles whatever the config includes, and a
+// test file that ships in `dist` is both dead weight in the app image and a
+// build that fails on code no deployment runs.
+test('no package compiles its tests into dist', async () => {
+  const configs = await Array.fromAsync(glob('packages/*/tsconfig.build.json'));
+  assert.ok(configs.length > 10, 'found almost no build configs');
+
+  for (const path of configs) {
+    const config = JSON.parse(await readFile(path, 'utf8'));
+    assert.ok(
+      config.exclude?.some((pattern) => pattern.endsWith('*.test.ts')),
+      `${path} does not exclude its tests from the build`,
+    );
+  }
 });
 
 // A clone has to be able to run what the documentation tells it to run, and

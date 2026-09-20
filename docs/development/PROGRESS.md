@@ -43,6 +43,18 @@ Four defects, two of them one root cause.
   `app/globals.css` fixes all of it; measured before and after in
   `.next/static/chunks/*.css`.
 
+A fourth defect surfaced when the owner rebuilt the images with these fixes:
+`docker build` of the app failed with TS1484 on a type-only import in the new
+SDK test. Three packages — `db`, `remnawave-sdk` and `remnawave-mock` —
+compiled their tests into `dist` where the other ten excluded them, so test
+code shipped in the application image and the image build was the only gate
+that type-checked it. All three now exclude tests, and
+`test/tooling.test.mjs` holds every package build config to the rule. The
+applications still compile their own tests into `dist` — they build from
+`tsconfig.json` directly, so separating that needs a build config per app; it
+is recorded here with the M5-002 image-size item rather than changed in the
+same breath.
+
 **Still open, and now the largest item in the project.** ADR-010 recorded on
 2026-09-19 that the panel identifies users by a numeric `id` and carries no
 `uuid`, that `/api/users/by-telegram-id/{telegramId}` does not exist, and that
@@ -392,11 +404,15 @@ none of them could be seen without running the deployment end to end.
   `docker compose config` for the `nginx`, `caddy`, `external`, `certbot` and
   smoke-overlay profiles.
 
-### M5-007 finding, not repaired here
+### M5-007 image-size doubt — resolved on 2026-09-21
 
-`docker image inspect` reports `remnaray/app` at about 878 MB, not the
-187,223,208 bytes the M5-002 closure recorded. The M5-002 measurement should be
-repeated before the milestone is called verified.
+A reading of about 878 MB was recorded here against the M5-002 closure's
+187,223,208 bytes, and the measurement was asked to be repeated. It was: a
+clean `docker build -f deploy/docker/app.Dockerfile` gives
+`docker image inspect --format '{{.Size}}'` = **188,499,066 bytes**, which is
+the M5-002 figure plus everything added since. The 878 MB reading did not
+measure the released image and the doubt is withdrawn; the section 26.1 budget
+of 250 MB holds.
 
 ## Latest blocker closure audit — 2026-09-20
 

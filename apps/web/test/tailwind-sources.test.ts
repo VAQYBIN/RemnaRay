@@ -14,17 +14,17 @@ const css = readFileSync(cssPath, 'utf8');
  * and the toast viewport lost the `fixed`/`z-100` that put it on the screen.
  */
 describe('the stylesheet scans the UI kit', () => {
-  const sources = [...css.matchAll(/@source\s+'([^']+)'/gu)].map(([, value]) => value);
+  const sources = [...css.matchAll(/@source\s+'([^']+)'/gu)].map((match) => match[1] ?? '');
 
   it('registers a source that resolves to the kit', () => {
     const resolved = sources.map((source) => resolve(dirname(cssPath), source));
-    const kit = resolved.find((path) => path.endsWith('packages/ui/src'));
+    const [kit = ''] = resolved.filter((path) => path.endsWith('packages/ui/src'));
 
-    expect(kit, `globals.css registers no UI kit source (found ${sources.join(', ')})`).toBeTypeOf(
-      'string',
+    expect(kit, `globals.css registers no UI kit source (found ${sources.join(', ')})`).not.toBe(
+      '',
     );
-    expect(existsSync(kit as string)).toBe(true);
-    expect(readdirSync(kit as string)).toContain('button.tsx');
+    expect(existsSync(kit)).toBe(true);
+    expect(readdirSync(kit)).toContain('button.tsx');
   });
 
   it('registers it before anything that would use it', () => {
