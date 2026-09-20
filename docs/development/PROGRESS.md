@@ -15,6 +15,44 @@ M5 closure. The one remaining gate is TASK-M5-004, which needs a public server
 and a real domain: the checklist is in `docs/tls.md`. Nothing else in M5 is
 open. **Do not begin M6** until that checklist is run and recorded.
 
+## First-panel findings — 2026-09-20
+
+The owner reached step 3 of the setup wizard against a real Remnawave panel.
+Four defects, two of them one root cause.
+
+- **`squads.map is not a function`.** `GET /api/internal-squads` answers with a
+  page — `{response:{total,internalSquads:[…]}}` — and the client read what was
+  left after unwrapping the envelope as the list itself. `packages/remnawave-mock`
+  answered `{response:[…]}`, imitating the client rather than the panel, so
+  nothing could catch it. The same page shape applies to
+  `GET /api/hwid/devices/{id}`; `DELETE /api/users/{id}` answers 204 with no
+  body, which the client parsed unconditionally. All three are fixed, the mock
+  now answers what the panel answers, and a non-JSON error body — an HTML page
+  from a proxy in front of the panel — now reaches the caller as its message.
+  Re-verified against the official v3.4.4 document, which has not drifted: same
+  SHA-256, 162 paths. `docs/adr/ADR-010.md` carries the correction.
+- **Cramped buttons, invisible errors and a "Далее" that wanted two clicks.**
+  One cause: Tailwind's automatic source detection skips `node_modules`, and
+  that is the only path from `apps/web` to `@remnaray/ui`. The stylesheet
+  carried just the classes the application itself used — 16 KB where there
+  should be 27 KB. Every class the kit alone owned was absent: `px-4 py-2` from
+  every button, `disabled:opacity-50` (so a disabled button looked exactly like
+  an enabled one, which is the two-click impression), and `fixed`, `z-100`,
+  `max-w-sm` from the toast viewport, so errors were reported to a toast that
+  was never on the screen. `@source '../../../packages/ui/src'` in
+  `app/globals.css` fixes all of it; measured before and after in
+  `.next/static/chunks/*.css`.
+
+**Still open, and now the largest item in the project.** ADR-010 recorded on
+2026-09-19 that the panel identifies users by a numeric `id` and carries no
+`uuid`, that `/api/users/by-telegram-id/{telegramId}` does not exist, and that
+every action route and the HWID body take that numeric id. It asked TASK-M2-001
+to introduce the mapping. M2-001 was scoped to payments and did not. The
+section 10.1 client is UUID-based throughout, so every user operation beyond
+`users.create` and `users.getByUsername` will fail against a live v3.4.4 panel:
+a purchase cannot provision. This needs its own task — it changes the
+identifier the subscription rows persist, so it carries a migration.
+
 ## First-server findings — 2026-09-20
 
 The owner took the repository to a VPS to run the TASK-M5-004 checklist and

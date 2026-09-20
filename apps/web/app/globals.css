@@ -1,5 +1,14 @@
 @import 'tailwindcss';
 
+/*
+ * The UI kit of section 15.1 is a workspace package, and Tailwind reaches it
+ * through the `node_modules` symlink its automatic detection skips. Without
+ * this the stylesheet carries only the classes the application itself happens
+ * to use, and every component the kit owns ships half-styled — `px-4 py-2` on
+ * a button simply does not exist.
+ */
+@source '../../../packages/ui/src';
+
 @theme inline {
   --color-primary: var(--color-primary);
   --color-primary-foreground: var(--color-primary-foreground);
