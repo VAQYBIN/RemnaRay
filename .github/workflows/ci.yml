@@ -50,8 +50,11 @@ jobs:
       - name: Repository tests
         run: pnpm test
 
+      # Through turbo, not `pnpm -r`: the `test` task depends on `^build`, and
+      # a package whose tests import another workspace package cannot resolve
+      # it until that one is built.
       - name: Workspace tests
-        run: pnpm -r test
+        run: pnpm turbo run test
 
       - name: Locale and theme checks
         run: |

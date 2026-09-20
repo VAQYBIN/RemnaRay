@@ -82,6 +82,21 @@ and the generated Prisma client, installs, and runs lint, format, both
 typechecks, both test sets, the locale and theme checks and the build. It
 passes on this tree; `CONTRIBUTING.md` points at it.
 
+A seventh, and the same shape again: `@remnaray/queues` imports
+`@remnaray/db`, whose `exports` point at `dist`, and turbo's `test` task
+depended on `^test` — which builds nothing. CI ran `pnpm -r test` before the
+build step, so the suite could not resolve the import and failed to load. The
+task depends on `^build` now and the workspace tests run through turbo
+everywhere.
+
+`scripts/ci-local.sh` did reproduce this on its first run and it was reported
+as passing anyway. The script was not at fault: `set -eu` in a real script
+aborts correctly. The verification was a hand-written paraphrase of it typed
+into a shell, where `set -e` inside a `{ … }` group did nothing, and the log
+was then checked with a grep that did not match the failure. The script is the
+thing to run; a retyped copy of it is not. Run for real on this tree it exits
+0, with 263 workspace tests across 17 packages and 33 repository tests.
+
 **Still open, and now the largest item in the project.** ADR-010 recorded on
 2026-09-19 that the panel identifies users by a numeric `id` and carries no
 `uuid`, that `/api/users/by-telegram-id/{telegramId}` does not exist, and that

@@ -32,7 +32,7 @@ pnpm -r typecheck
 echo '==> repository tests'
 pnpm test
 echo '==> workspace tests'
-pnpm -r test
+pnpm turbo run test
 echo '==> locale and theme checks'
 pnpm i18n-check
 pnpm theme-validate themes/manta

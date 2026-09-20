@@ -27,7 +27,7 @@ installs the right pnpm for you.
 pnpm lint
 pnpm format
 pnpm typecheck && pnpm -r typecheck && pnpm typecheck:e2e
-pnpm test && pnpm -r test
+pnpm test && pnpm turbo run test
 pnpm build
 pnpm i18n-check
 ```

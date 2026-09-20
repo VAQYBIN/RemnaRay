@@ -330,6 +330,21 @@ test('the release and rebuild workflows publish the images compose pulls', async
   }
 });
 
+// A package's tests import its dependencies through their `exports`, which
+// point at `dist`. `pnpm -r test` builds nothing, so on a checkout that has
+// never been built `@remnaray/queues` could not resolve `@remnaray/db` — and
+// CI starts from exactly such a checkout.
+test('workspace tests build what they import', async () => {
+  const turbo = JSON.parse(await readFile('turbo.json', 'utf8'));
+  const workflow = await readFile('.github/workflows/ci.yml', 'utf8');
+  const contributing = await readFile('CONTRIBUTING.md', 'utf8');
+
+  assert.deepEqual(turbo.tasks.test.dependsOn, ['^build']);
+  assert.match(workflow, /run: pnpm turbo run test/u);
+  assert.doesNotMatch(workflow, /run: pnpm -r test/u);
+  assert.doesNotMatch(contributing, /pnpm -r test/u);
+});
+
 test('the CI workflow covers required quality and image gates', async () => {
   const workflow = await readFile('.github/workflows/ci.yml', 'utf8');
   assert.match(workflow, /pnpm install --frozen-lockfile/);
@@ -337,7 +352,7 @@ test('the CI workflow covers required quality and image gates', async () => {
   assert.match(workflow, /pnpm format/);
   assert.match(workflow, /pnpm typecheck/);
   assert.match(workflow, /pnpm -r typecheck/);
-  assert.match(workflow, /pnpm -r test/);
+  assert.match(workflow, /pnpm turbo run test/);
   assert.match(workflow, /pnpm i18n-check/);
   assert.match(workflow, /pnpm theme-validate themes\/manta/);
   assert.match(workflow, /pnpm build/);
