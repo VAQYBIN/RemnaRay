@@ -41,7 +41,9 @@ export class RemnawaveService {
     try {
       let panelUser = await this.infra.db.panelUser.findUnique({ where: { userId } });
       let current: PanelUser | null = panelUser
-        ? await client.users.getByUuid(panelUser.panelUuid)
+        ? panelUser.panelUserId === null
+          ? null
+          : await client.users.getById(panelUser.panelUserId)
         : null;
       if (!current) {
         if (panelUser) await this.infra.db.panelUser.delete({ where: { userId } });
@@ -56,10 +58,10 @@ export class RemnawaveService {
         panelUser = await this.saveSnapshot(userId, current, false);
       }
       if (subscription) {
-        const desired = desiredUpdate(subscription, user.telegramId, user.email, current.uuid);
+        const desired = desiredUpdate(subscription, user.telegramId, user.email, current.id);
         current = await client.users.update(desired);
         if (current.status === 'DISABLED' && subscription.status === 'active')
-          current = await client.users.enable(current.uuid);
+          current = await client.users.enable(current.id);
       }
       await this.saveSnapshot(userId, current, false);
       if (subscription?.status === 'provisioning')
@@ -90,7 +92,12 @@ export class RemnawaveService {
         orderBy: { updatedAt: 'asc' },
       });
       for (const row of rows) {
-        const current = await client.users.getByUuid(row.panelUuid);
+        if (row.panelUserId === null) {
+          await this.syncUser(row.userId, 'reconcile:legacy-panel-id');
+          drifted += 1;
+          continue;
+        }
+        const current = await client.users.getById(row.panelUserId);
         if (!current) {
           await this.syncUser(row.userId, 'reconcile:missing');
           drifted += 1;
@@ -150,7 +157,8 @@ export class RemnawaveService {
     if (!row) return [];
     const client = await this.client();
     try {
-      const devices = await client.hwid.list(row.panelUuid);
+      if (row.panelUserId === null) throw new PanelUnavailableError();
+      const devices = await client.hwid.list(row.panelUserId);
       return devices.flatMap((device) => {
         const hwid = typeof device.hwid === 'string' ? device.hwid : null;
         if (!hwid) return [];
@@ -174,7 +182,8 @@ export class RemnawaveService {
     if (!row) throw new PanelUnavailableError();
     const client = await this.client();
     try {
-      await client.hwid.remove(row.panelUuid, hwid);
+      if (row.panelUserId === null) throw new PanelUnavailableError();
+      await client.hwid.remove(row.panelUserId, hwid);
     } finally {
       await client.close();
     }
@@ -189,7 +198,8 @@ export class RemnawaveService {
       if (!row) throw new PanelUnavailableError();
       const client = await this.client();
       try {
-        const updated = await client.users.revokeSubscription(row.panelUuid);
+        if (row.panelUserId === null) throw new PanelUnavailableError();
+        const updated = await client.users.revokeSubscription(row.panelUserId);
         await this.saveSnapshot(userId, updated, false);
         return { subscriptionUrl: updated.subscriptionUrl };
       } finally {
@@ -220,17 +230,17 @@ export class RemnawaveService {
     if (typeof body !== 'object' || body === null || !('event' in body) || !('data' in body))
       return;
     const data = body.data as {
-      uuid?: string;
+      id?: number;
       telegramId?: number;
       status?: string;
       expireAt?: string;
     };
-    if (data.uuid && body.event === 'user.deleted') {
-      await this.infra.db.panelUser.deleteMany({ where: { panelUuid: data.uuid } });
+    if (typeof data.id === 'number' && body.event === 'user.deleted') {
+      await this.infra.db.panelUser.deleteMany({ where: { panelUserId: data.id } });
       return;
     }
-    if (!data.uuid) return;
-    const row = await this.infra.db.panelUser.findFirst({ where: { panelUuid: data.uuid } });
+    if (typeof data.id !== 'number') return;
+    const row = await this.infra.db.panelUser.findFirst({ where: { panelUserId: data.id } });
     if (!row) return;
     await this.infra.db.panelUser.update({
       where: { userId: row.userId },
@@ -299,8 +309,8 @@ function desiredCreate(
     trafficLimitBytes: Number(subscription.trafficLimitBytes),
     trafficLimitStrategy: subscription.trafficResetStrategy as PanelUser['trafficLimitStrategy'],
     hwidDeviceLimit: subscription.deviceLimit || null,
-    activeInternalSquads: subscription.squads.map((uuid) => ({ uuid, name: uuid })),
-    tag: 'trial',
+    activeInternalSquads: subscription.squads,
+    tag: 'TRIAL',
   };
 }
 function desiredUpdate(
@@ -313,29 +323,30 @@ function desiredUpdate(
   },
   telegramId: bigint,
   email: string | null,
-  uuid: string,
+  id: number,
 ) {
   return {
-    uuid,
+    id,
     telegramId: Number(telegramId),
     email,
     expireAt: subscription.expiresAt.toISOString(),
     trafficLimitBytes: Number(subscription.trafficLimitBytes),
     trafficLimitStrategy: subscription.trafficResetStrategy as PanelUser['trafficLimitStrategy'],
     hwidDeviceLimit: subscription.deviceLimit || null,
-    activeInternalSquads: subscription.squads.map((id) => ({ uuid: id, name: id })),
+    activeInternalSquads: subscription.squads,
   };
 }
 function snapshot(userId: string, current: PanelUser, conflict: boolean) {
   return {
     userId,
     panelId: 1,
-    panelUuid: current.uuid,
+    panelUserId: current.id,
+    panelUuid: current.vlessUuid,
     panelUsername: current.username,
     shortUuid: current.shortUuid,
     subscriptionUrl: current.subscriptionUrl,
     panelStatus: current.status,
-    usedTrafficBytes: BigInt(current.usedTrafficBytes),
+    usedTrafficBytes: BigInt(current.userTraffic.usedTrafficBytes),
     trafficLimitBytes: BigInt(current.trafficLimitBytes),
     expireAtPanel: new Date(current.expireAt),
     hwidDeviceLimit: current.hwidDeviceLimit,

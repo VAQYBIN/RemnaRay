@@ -3,7 +3,7 @@ import Fastify, { type FastifyInstance } from 'fastify';
 import type { CreateUserInput, PanelUser, UpdateUserInput } from '@remnaray/remnawave-sdk';
 
 export type RemnawaveMock = FastifyInstance & {
-  users: Map<string, PanelUser>;
+  users: Map<number, PanelUser>;
   mode: 'up' | 'down' | 'slow' | '401';
 };
 
@@ -39,12 +39,10 @@ export function createRemnawaveMock(): RemnawaveMock {
   app.post<{ Body: CreateUserInput }>('/api/users', (request, reply) => {
     const now = new Date().toISOString();
     const user: PanelUser = {
-      uuid: crypto.randomUUID(),
+      id: app.users.size + 1,
       shortUuid: crypto.randomUUID().slice(0, 8),
       username: request.body.username,
       status: 'ACTIVE',
-      usedTrafficBytes: 0,
-      lifetimeUsedTrafficBytes: 0,
       trafficLimitBytes: request.body.trafficLimitBytes ?? 0,
       trafficLimitStrategy: request.body.trafficLimitStrategy ?? 'NO_RESET',
       expireAt: request.body.expireAt,
@@ -53,33 +51,41 @@ export function createRemnawaveMock(): RemnawaveMock {
       description: request.body.description ?? null,
       tag: request.body.tag ?? null,
       hwidDeviceLimit: request.body.hwidDeviceLimit ?? null,
+      vlessUuid: crypto.randomUUID(),
       subscriptionUrl: `https://mock.test/sub/${crypto.randomUUID()}`,
-      activeInternalSquads: request.body.activeInternalSquads ?? [],
-      onlineAt: null,
-      firstConnectedAt: null,
+      activeInternalSquads: (request.body.activeInternalSquads ?? []).map((uuid) => ({
+        uuid,
+        name: uuid,
+      })),
+      userTraffic: {
+        usedTrafficBytes: 0,
+        lifetimeUsedTrafficBytes: 0,
+        onlineAt: null,
+        firstConnectedAt: null,
+        lastConnectedNodeUuid: null,
+      },
       createdAt: now,
       updatedAt: now,
     };
-    app.users.set(user.uuid, user);
+    app.users.set(user.id, user);
     return reply.code(201).send({ response: user });
   });
   app.patch<{ Body: UpdateUserInput }>('/api/users', (request, reply) =>
     updateUser(app, request.body, reply),
   );
-  app.get<{ Params: { uuid: string } }>('/api/users/:uuid', (request, reply) => {
-    const user = app.users.get(request.params.uuid);
+  app.get<{ Params: { id: string } }>('/api/users/:id', (request, reply) => {
+    const user = app.users.get(Number(request.params.id));
     return user
       ? reply.send({ response: user })
       : reply.code(404).send({ message: 'not found', errorCode: 'NOT_FOUND' });
   });
-  app.get<{ Params: { telegramId: string } }>(
-    '/api/users/by-telegram-id/:telegramId',
-    (request) => ({
-      response: [...app.users.values()].filter(
-        (user) => String(user.telegramId) === request.params.telegramId,
+  app.get<{ Querystring: { telegramId?: string } }>('/api/users/stream', (request) => ({
+    response: {
+      users: [...app.users.values()].filter(
+        (user) => String(user.telegramId) === String(request.query.telegramId),
       ),
-    }),
-  );
+    },
+  }));
   app.get<{ Params: { username: string } }>(
     '/api/users/by-username/:username',
     (request, reply) => {
@@ -107,7 +113,7 @@ export function createRemnawaveMock(): RemnawaveMock {
     [
       'reset-traffic',
       (user: PanelUser) => {
-        user.usedTrafficBytes = 0;
+        user.userTraffic.usedTrafficBytes = 0;
       },
     ],
     [
@@ -118,22 +124,19 @@ export function createRemnawaveMock(): RemnawaveMock {
       },
     ],
   ] as const) {
-    app.post<{ Params: { uuid: string } }>(
-      `/api/users/:uuid/actions/${action}`,
-      (request, reply) => {
-        const user = app.users.get(request.params.uuid);
-        if (!user) return reply.code(404).send({ message: 'not found', errorCode: 'NOT_FOUND' });
-        mutate(user);
-        user.updatedAt = new Date().toISOString();
-        return reply.send({ response: user });
-      },
-    );
+    app.post<{ Params: { id: string } }>(`/api/users/:id/actions/${action}`, (request, reply) => {
+      const user = app.users.get(Number(request.params.id));
+      if (!user) return reply.code(404).send({ message: 'not found', errorCode: 'NOT_FOUND' });
+      mutate(user);
+      user.updatedAt = new Date().toISOString();
+      return reply.send({ response: user });
+    });
   }
-  app.delete<{ Params: { uuid: string } }>('/api/users/:uuid', (request, reply) => {
-    app.users.delete(request.params.uuid);
+  app.delete<{ Params: { id: string } }>('/api/users/:id', (request, reply) => {
+    app.users.delete(Number(request.params.id));
     return reply.code(204).send();
   });
-  app.get('/api/hwid/devices/:userUuid', () => ({ response: { total: 0, devices: [] } }));
+  app.get('/api/hwid/devices/:userId', () => ({ response: { total: 0, devices: [] } }));
   app.post('/api/hwid/devices/delete', () => ({ response: { total: 0, devices: [] } }));
   return app;
 }
@@ -146,8 +149,17 @@ function updateUser(
     code: (status: number) => { send: (value: unknown) => unknown };
   },
 ) {
-  const user = app.users.get(input.uuid);
+  const user = app.users.get(input.id);
   if (!user) return reply.code(404).send({ message: 'not found', errorCode: 'NOT_FOUND' });
-  Object.assign(user, input, { updatedAt: new Date().toISOString() });
+  const { activeInternalSquads } = input;
+  const fields = Object.fromEntries(
+    Object.entries(input).filter(([key]) => key !== 'id' && key !== 'activeInternalSquads'),
+  );
+  Object.assign(user, fields, {
+    ...(activeInternalSquads
+      ? { activeInternalSquads: activeInternalSquads.map((uuid) => ({ uuid, name: uuid })) }
+      : {}),
+    updatedAt: new Date().toISOString(),
+  });
   return reply.send({ response: user });
 }

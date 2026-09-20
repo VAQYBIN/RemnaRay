@@ -12,30 +12,45 @@ export type PanelStats = Record<string, unknown>;
 export type InternalSquad = { uuid: string; name: string; info?: { membersCount?: number } };
 export type HwidDevice = Record<string, unknown>;
 export type PanelUser = {
-  uuid: string;
+  id: number;
   shortUuid: string;
   username: string;
   status: 'ACTIVE' | 'DISABLED' | 'LIMITED' | 'EXPIRED';
-  usedTrafficBytes: number;
-  lifetimeUsedTrafficBytes: number;
   trafficLimitBytes: number;
-  trafficLimitStrategy: 'NO_RESET' | 'DAY' | 'WEEK' | 'MONTH';
+  trafficLimitStrategy: 'NO_RESET' | 'DAY' | 'WEEK' | 'MONTH' | 'MONTH_ROLLING';
   expireAt: string;
   telegramId: number | null;
   email: string | null;
   description: string | null;
   tag: string | null;
   hwidDeviceLimit: number | null;
+  vlessUuid: string;
   subscriptionUrl: string;
   activeInternalSquads: Array<{ uuid: string; name: string }>;
-  onlineAt: string | null;
-  firstConnectedAt: string | null;
+  userTraffic: {
+    usedTrafficBytes: number;
+    lifetimeUsedTrafficBytes: number;
+    onlineAt: string | null;
+    firstConnectedAt: string | null;
+    lastConnectedNodeUuid: string | null;
+  };
   createdAt: string;
   updatedAt: string;
 };
 
-export type CreateUserInput = Partial<PanelUser> & { username: string; expireAt: string };
-export type UpdateUserInput = Partial<PanelUser> & { uuid: string };
+export type CreateUserInput = {
+  username: string;
+  expireAt: string;
+  telegramId?: number | null;
+  email?: string | null;
+  description?: string | null;
+  tag?: string | null;
+  trafficLimitBytes?: number;
+  trafficLimitStrategy?: PanelUser['trafficLimitStrategy'];
+  hwidDeviceLimit?: number | null;
+  activeInternalSquads?: string[];
+};
+export type UpdateUserInput = Omit<CreateUserInput, 'username' | 'expireAt'> & { id: number };
 
 export class PanelError extends Error {
   constructor(
@@ -53,19 +68,19 @@ export interface RemnawaveClient {
   users: {
     create(input: CreateUserInput): Promise<PanelUser>;
     update(input: UpdateUserInput): Promise<PanelUser>;
-    getByUuid(uuid: string): Promise<PanelUser | null>;
+    getById(id: number): Promise<PanelUser | null>;
     getByTelegramId(telegramId: number): Promise<PanelUser[]>;
     getByUsername(username: string): Promise<PanelUser | null>;
-    enable(uuid: string): Promise<PanelUser>;
-    disable(uuid: string): Promise<PanelUser>;
-    resetTraffic(uuid: string): Promise<PanelUser>;
-    revokeSubscription(uuid: string): Promise<PanelUser>;
-    delete(uuid: string): Promise<void>;
+    enable(id: number): Promise<PanelUser>;
+    disable(id: number): Promise<PanelUser>;
+    resetTraffic(id: number): Promise<PanelUser>;
+    revokeSubscription(id: number): Promise<PanelUser>;
+    delete(id: number): Promise<void>;
   };
   squads: { list(): Promise<InternalSquad[]> };
   hwid: {
-    list(userUuid: string): Promise<HwidDevice[]>;
-    remove(userUuid: string, hwid: string): Promise<void>;
+    list(userId: number): Promise<HwidDevice[]>;
+    remove(userId: number, hwid: string): Promise<void>;
   };
 }
 
@@ -82,45 +97,41 @@ export class RemnawaveClientImpl implements RemnawaveClient {
       this.call<PanelUser>('users.create', 'POST', '/api/users', input),
     update: (input: UpdateUserInput) =>
       this.call<PanelUser>('users.update', 'PATCH', '/api/users', input),
-    getByUuid: (uuid: string) =>
-      this.optional<PanelUser>('users.getByUuid', `/api/users/${encodeURIComponent(uuid)}`),
-    getByTelegramId: (telegramId: number) =>
-      this.call<PanelUser[]>(
+    getById: (id: number) => this.optional<PanelUser>('users.getById', `/api/users/${String(id)}`),
+    getByTelegramId: async (telegramId: number) =>
+      collection<PanelUser>(
         'users.getByTelegramId',
-        'GET',
-        `/api/users/by-telegram-id/${String(telegramId)}`,
+        'users',
+        await this.call(
+          'users.getByTelegramId',
+          'GET',
+          `/api/users/stream?size=1000&telegramId=${encodeURIComponent(String(telegramId))}`,
+        ),
       ),
     getByUsername: (username: string) =>
       this.optional<PanelUser>(
         'users.getByUsername',
         `/api/users/by-username/${encodeURIComponent(username)}`,
       ),
-    enable: (uuid: string) =>
-      this.call<PanelUser>(
-        'users.enable',
-        'POST',
-        `/api/users/${encodeURIComponent(uuid)}/actions/enable`,
-      ),
-    disable: (uuid: string) =>
-      this.call<PanelUser>(
-        'users.disable',
-        'POST',
-        `/api/users/${encodeURIComponent(uuid)}/actions/disable`,
-      ),
-    resetTraffic: (uuid: string) =>
+    enable: (id: number) =>
+      this.call<PanelUser>('users.enable', 'POST', `/api/users/${String(id)}/actions/enable`),
+    disable: (id: number) =>
+      this.call<PanelUser>('users.disable', 'POST', `/api/users/${String(id)}/actions/disable`),
+    resetTraffic: (id: number) =>
       this.call<PanelUser>(
         'users.resetTraffic',
         'POST',
-        `/api/users/${encodeURIComponent(uuid)}/actions/reset-traffic`,
+        `/api/users/${String(id)}/actions/reset-traffic`,
       ),
-    revokeSubscription: (uuid: string) =>
+    revokeSubscription: (id: number) =>
       this.call<PanelUser>(
         'users.revokeSubscription',
         'POST',
-        `/api/users/${encodeURIComponent(uuid)}/actions/revoke`,
+        `/api/users/${String(id)}/actions/revoke`,
+        { revokeOnlyPasswords: false },
       ),
-    delete: async (uuid: string) => {
-      await this.call<unknown>('users.delete', 'DELETE', `/api/users/${encodeURIComponent(uuid)}`);
+    delete: async (id: number) => {
+      await this.call<unknown>('users.delete', 'DELETE', `/api/users/${String(id)}`);
     },
   };
   readonly squads = {
@@ -134,14 +145,14 @@ export class RemnawaveClientImpl implements RemnawaveClient {
       ),
   };
   readonly hwid = {
-    list: async (userUuid: string) =>
+    list: async (userId: number) =>
       collection<HwidDevice>(
         'hwid.list',
         'devices',
-        await this.call('hwid.list', 'GET', `/api/hwid/devices/${encodeURIComponent(userUuid)}`),
+        await this.call('hwid.list', 'GET', `/api/hwid/devices/${String(userId)}`),
       ),
-    remove: async (userUuid: string, hwid: string) => {
-      await this.call('hwid.remove', 'POST', '/api/hwid/devices/delete', { userUuid, hwid });
+    remove: async (userId: number, hwid: string) => {
+      await this.call('hwid.remove', 'POST', '/api/hwid/devices/delete', { userId, hwid });
     },
   };
 

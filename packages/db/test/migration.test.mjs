@@ -3,6 +3,10 @@ import { readFile } from 'node:fs/promises';
 import test from 'node:test';
 
 const migration = await readFile('prisma/migrations/0001_init/migration.sql', 'utf8');
+const panelUserIdMigration = await readFile(
+  'prisma/migrations/0005_panel_user_id/migration.sql',
+  'utf8',
+);
 const schema = await readFile('prisma/schema.prisma', 'utf8');
 
 test('initial migration includes the required tables and immutable triggers', () => {
@@ -37,4 +41,10 @@ test('Prisma uses the Prisma 7 client generator and explicit output', () => {
   assert.match(schema, /provider = "prisma-client"/);
   assert.match(schema, /output\s+=\s+"\.\.\/src\/generated\/prisma"/);
   assert.match(schema, /uuidv7\(\)/);
+});
+
+test('the Remnawave v3.4.4 numeric user mapping is migrated and unique', () => {
+  assert.match(panelUserIdMigration, /ADD COLUMN panel_user_id integer/);
+  assert.match(panelUserIdMigration, /CREATE UNIQUE INDEX ux_panel_users_panel_user_id/);
+  assert.match(schema, /panelUserId Int\? @map\("panel_user_id"\)/);
 });

@@ -1,19 +1,91 @@
 # RemnaRay Development Progress
 
-## Current milestone
+## Reconciliation — 2026-09-21
 
-M5 — in progress; the milestone is **NOT VERIFIED**.
+This is the current handoff state. Older entries below preserve the evidence
+and decisions made during the previous agent's work; this section supersedes
+their earlier "next task" and release statements.
 
-**DO NOT PROCEED TO M6.** Every M5 task except TASK-M5-004 passes its gate,
-and the queue defect found under M5-008 is repaired. M5-004 requires the
-real-domain certificate checklist, which needs a public server and public DNS
-this environment cannot supply; `docs/tls.md` holds the checklist to run.
+### Current milestone and task
 
-## Current task
+M5 — in progress; the milestone is **NOT VERIFIED**. Do not proceed to M6.
+The immediate task is release and acceptance closure after repairing the
+Remnawave v3.4.4 compatibility boundary.
 
-M5 closure. The one remaining gate is TASK-M5-004, which needs a public server
-and a real domain: the checklist is in `docs/tls.md`. Nothing else in M5 is
-open. **Do not begin M6** until that checklist is run and recorded.
+### Verified state
+
+- TASK-M5-003, TASK-M5-006, TASK-M5-007, TASK-M5-008 and TASK-M5-009 are
+  verified by the evidence recorded below. TASK-M5-002 is locally verified,
+  including the measured image-size gate in its later reconciliation entry.
+- TASK-M5-004 is locally verified only. Its required real-domain ACME and
+  Certbot checklist remains open; the checklist is in `docs/tls.md`.
+- TASK-M5-001 and TASK-M5-005 have implementation and unit coverage. Fresh
+  Playwright verification depends on the host Chromium library and is not
+  claimed here as a current result.
+- The panel contract repair is implemented in this handoff but is not yet
+  accepted against the VPS. The SDK now uses numeric Remnawave `id`, the
+  documented Telegram stream endpoint, numeric action/HWID routes, and the
+  required revoke body, nested `userTraffic`, and UUID-string squad payloads.
+  Migration `0005_panel_user_id` stores the mapping; `vlessUuid` remains the
+  subscription snapshot. The live panel is v3.4.4.
+
+### CI, images and release
+
+- `pnpm install --frozen-lockfile` passed in this checkout.
+- GitHub run `35535283089` for commit `c28ec08` passed quality, E2E,
+  Lighthouse, proxy, all five Docker matrix builds and both proxy-smoke jobs.
+  The default `main` branch also has a successful CI run.
+- `.github/workflows/images.yml` is manual (`workflow_dispatch`) and has zero
+  runs. `.github/workflows/ci.yml` builds with `push: false`; it never publishes
+  images. No release tag exists and there are no published image runs to
+  inspect. This is an operational/manual release blocker, not evidence of a
+  failed Docker build. The workflow's triggers, permissions, GHCR login,
+  Buildx, matrix, tags and cache are present and actionlint was previously
+  reported clean. Do not claim GHCR publication until an authorized workflow
+  run or release tag proves it.
+- Local app-image reproduction on this host terminated inside Docker with
+  `fatal error: unexpected signal during runtime execution` / `Bus error`
+  while installing the 970-package workspace. CI successfully built the same
+  preceding app and web image revisions; the host failure is an environment
+  blocker. After the crash, even `docker compose version` returned `Bus error`;
+  proxy and backup images still require a fresh local build after Docker
+  Desktop is repaired, and the repaired app image still needs a CI run.
+
+### Current verification run
+
+`pnpm install --frozen-lockfile`, `pnpm typecheck`, `pnpm -r typecheck`,
+`pnpm lint`, `pnpm format`, `pnpm test` (34), `pnpm --filter
+@remnaray/api test` (155), `pnpm --filter @remnaray/db test` (3),
+`pnpm turbo run test --force` (30 tasks), `pnpm build`,
+`pnpm typecheck:e2e`, `pnpm i18n-check`, both theme checks, Prisma validation,
+the SDK/mock tests, and `git diff --check` passed after the repair. The Docker
+Compose validation command was attempted but could not run because Docker
+Desktop itself returned the bus error above.
+
+### Manual acceptance
+
+- The previous VPS run reached setup step 3 and verified the squad page shape,
+  Tailwind source coverage, queue delivery, proxy profiles, monitoring and
+  backup behavior as recorded below.
+- The previous VPS could not complete a purchase against the panel because the
+  SDK sent UUIDs to a v3.4.4 panel that requires numeric IDs. The repair is now
+  ready for VPS acceptance, but the purchase, HWID, revoke and webhook paths
+  still need to be exercised against that panel.
+- Remaining blockers are classified as: **implementation** — run live panel
+  compatibility acceptance; **release** — run and inspect the manual images
+  workflow or a tagged release; **environment/VPS** — public-domain TLS
+  checklist and this host's Docker bus error; **manual validation** — M6
+  acceptance and provider checks remain out of scope for this handoff.
+
+### Exact next action
+
+Run the narrow SDK/API checks, regenerate and apply migration `0005_panel_user_id`
+on the VPS, then exercise one purchase and the panel user actions against
+v3.4.4. Separately run the `images` workflow with a chosen tag and verify all
+five GHCR manifests before setting `RR_REGISTRY`/`RR_VERSION` on the VPS. Then
+run the real-domain checklist in `docs/tls.md` and record its output.
+
+## Historical progress
 
 ## First-panel findings — 2026-09-20
 

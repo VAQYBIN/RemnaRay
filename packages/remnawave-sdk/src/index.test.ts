@@ -8,10 +8,12 @@ import { createRemnawaveClient, PanelError } from './index.js';
 type Answer = { status: number; body?: string };
 
 let server: Server | undefined;
+let lastPath: string | undefined;
 
 /** A panel that answers every request the same way, on a free port. */
 async function panel(answer: Answer): Promise<string> {
-  server = createServer((_request, response) => {
+  server = createServer((request, response) => {
+    lastPath = request.url;
     response.writeHead(answer.status, { 'content-type': 'application/json' });
     response.end(answer.body ?? '');
   });
@@ -30,6 +32,7 @@ afterEach(async () => {
     });
   });
   server = undefined;
+  lastPath = undefined;
 });
 
 describe('RemnawaveClient', () => {
@@ -41,6 +44,17 @@ describe('RemnawaveClient', () => {
     });
     await expect(client.system.stats()).rejects.toThrow();
     expect(new PanelError('BAD', 400, 'bad').code).toBe('BAD');
+    await client.close();
+  });
+
+  it('uses the numeric user id and documented Telegram stream filter', async () => {
+    const baseUrl = await panel({ status: 200, body: JSON.stringify({ response: { users: [] } }) });
+    const client = createRemnawaveClient({ baseUrl, apiToken: 'token' });
+
+    await client.users.getById(42);
+    expect(lastPath).toBe('/api/users/42');
+    await expect(client.users.getByTelegramId(123)).resolves.toEqual([]);
+    expect(lastPath).toBe('/api/users/stream?size=1000&telegramId=123');
     await client.close();
   });
 
@@ -67,7 +81,7 @@ describe('RemnawaveClient', () => {
     });
     const client = createRemnawaveClient({ baseUrl, apiToken: 'token' });
 
-    await expect(client.hwid.list('u-1')).resolves.toEqual([{ hwid: 'h-1' }]);
+    await expect(client.hwid.list(1)).resolves.toEqual([{ hwid: 'h-1' }]);
     await client.close();
   });
 
@@ -86,7 +100,7 @@ describe('RemnawaveClient', () => {
     const baseUrl = await panel({ status: 204 });
     const client = createRemnawaveClient({ baseUrl, apiToken: 'token' });
 
-    await expect(client.users.delete('u-1')).resolves.toBeUndefined();
+    await expect(client.users.delete(1)).resolves.toBeUndefined();
     await client.close();
   });
 

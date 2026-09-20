@@ -17,7 +17,7 @@ describe('remnawave mock', () => {
     const updated = await app.inject({
       method: 'PATCH',
       url: '/api/users',
-      payload: { uuid: user.uuid, status: 'DISABLED' },
+      payload: { id: user.id, status: 'DISABLED' },
     });
     expect(responseOf(updated.body).response.status).toBe('DISABLED');
     await app.close();
