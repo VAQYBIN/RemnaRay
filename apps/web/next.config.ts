@@ -3,6 +3,12 @@ import createNextIntlPlugin from 'next-intl/plugin';
 
 const nextConfig: NextConfig = {
   output: 'standalone',
+  // The production image is built in constrained Docker environments. A
+  // single static-generation worker avoids concurrent page renders exhausting
+  // the builder while preserving the generated routes and runtime behavior.
+  experimental: {
+    staticGenerationMaxConcurrency: 1,
+  },
   images: {
     localPatterns: [
       // Section 18.2 serves theme assets as `/themes/<slug>/<asset>?v=<version>`;

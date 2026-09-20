@@ -2,18 +2,56 @@
 
 ## Current milestone
 
-M5 — reconciliation complete; the milestone is **NOT VERIFIED**.
+M5 — blocker closure audit in progress; the milestone is **NOT VERIFIED**.
 
-**DO NOT PROCEED TO M6.** M5-003 and M5-006 passed their task-specific
-acceptance checks. M5-001 and M5-005 still need the browser gate, M5-002 still
-fails the app image size requirement, and M5-004 still needs the real-domain
-TLS acceptance run.
+**DO NOT PROCEED TO M6.** Local implementation and automated gates are now
+passing for M5-001, M5-002, M5-003, M5-005 and M5-006. M5-004 still requires
+the real-domain certificate checklist. M5-007, M5-008 and M5-009 remain
+unstarted implementation tasks.
 
 ## Current task
 
-Verification closure for TASK-M5-001, TASK-M5-002, TASK-M5-004 and TASK-M5-005.
-TASK-M5-007 is the exact next implementation task after those blockers are
-closed; it was not started during this reconciliation.
+Verification closure for TASK-M5-004. Do not begin M6. The exact next
+implementation task after the external TLS gate is TASK-M5-007.
+
+## Latest blocker closure audit — 2026-09-20
+
+| Task        | Status                            | Evidence                                                                                                                                                                                                                                        |
+| ----------- | --------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| TASK-M5-001 | **VERIFIED locally**              | `LD_LIBRARY_PATH=... pnpm test:e2e`: 26/26 Playwright tests passed, including AC-171 setup steps and the post-completion `/setup` 404.                                                                                                          |
+| TASK-M5-002 | **VERIFIED locally**              | `pnpm test:m5` passed nginx, Caddy and AC-202 checks. App image `remnaray/app:m5-verify` measured `187,223,208` bytes and web image `remnaray/web:m5-verify` `80,296,758` bytes (`docker image inspect`), under 250 MB and 300 MB respectively. |
+| TASK-M5-003 | **VERIFIED**                      | `pnpm test:m5`: Caddy validation passed for supported modes.                                                                                                                                                                                    |
+| TASK-M5-004 | **LOCAL VERIFIED; EXTERNAL OPEN** | Local TLS mode rendering, certificate-backed nginx validation, Compose profiles and config validation passed. The required real-domain ACME and certbot issuance/renewal checklist has no public DNS/server in this environment.                |
+| TASK-M5-005 | **VERIFIED locally**              | API trusted-proxy suite passed (142 tests); the 26-test browser gate also passed.                                                                                                                                                               |
+| TASK-M5-006 | **VERIFIED**                      | `pnpm test:m5`: real PostgreSQL 18 AC-202 dump, restore and 14/8 retention passed.                                                                                                                                                              |
+| TASK-M5-007 | **NOT STARTED**                   | No implementation or verification was started, per scope.                                                                                                                                                                                       |
+| TASK-M5-008 | **NOT STARTED**                   | No implementation or verification was started, per scope.                                                                                                                                                                                       |
+| TASK-M5-009 | **NOT STARTED**                   | No implementation or verification was started, per scope.                                                                                                                                                                                       |
+
+### Closure repairs and environment evidence
+
+- `deploy/docker/app.Dockerfile` now deploys one shared production dependency
+  closure through `packages/runtime`, avoiding duplicate Prisma/Nest trees.
+  The image dropped from `396,071,825` bytes to `187,223,208` bytes. Runtime
+  smoke checks found API, tools and Prisma configuration entrypoints.
+- Next static generation uses
+  `experimental.staticGenerationMaxConcurrency: 1`, documented by current
+  Next.js configuration guidance, to keep the web Docker build within the
+  available 7.7 GiB Docker memory while preserving all generated routes.
+- Playwright system packages could not be installed system-wide because this
+  WSL user has no passwordless sudo. The supported Playwright command was
+  attempted: `pnpm exec playwright install --with-deps chromium`. The needed
+  Ubuntu packages were downloaded with `apt-get download` and extracted to
+  `$HOME/.local/share/remnaray-browser-libs`; Chromium then launched and all
+  E2E and Lighthouse checks passed with that `LD_LIBRARY_PATH`.
+- `pnpm lighthouse` passed: landing RU `100/96/100`, landing EN `100/96/100`,
+  account accessibility `96`.
+- The first web Docker build ran for `271.36s` and failed during static
+  generation after repeated 60-second page retries. This was a constrained
+  Docker resource failure, not a repository input failure: the same host build
+  passed in `44.95s`. With the concurrency cap, the Docker build completed in
+  `844.50s`, generated all 38 static pages and exported the `80,296,758` byte
+  image.
 
 ## Reconciliation authority — 2026-09-20
 
