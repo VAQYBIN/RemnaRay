@@ -44,10 +44,29 @@ deployment; none of them is in M5's artifact lists, and all three are fixed.
   nothing afterwards. `docs/install.md` gained "Running from a source
   checkout" and `docs/troubleshooting.md` the symptom.
 
-`test/tooling.test.mjs` covers all three: the wrapper's tags are compared
+- **A clone cannot run the documented commands.** This repository carries
+  `core.fileMode=false`, so the executable bit of every shipped script stayed
+  out of the index: `./scripts/rr up` answers `Permission denied` on a fresh
+  clone, CI's `proxy-smoke` step could not have launched its own script, and
+  the crontab the `backup` image installs executes
+  `/scripts/backup-entrypoint.sh` by path from a read-only mount that would
+  have been mode 644. Six scripts are now `100755` in the index.
+- **Neither backup wrapper ran.** `./scripts/rr backup` passed
+  `/scripts/backup-entrypoint.sh once` to an image whose entrypoint is that
+  script, so it arrived as the subcommand and the script printed its usage and
+  exited 1 — confirmed against the built image. `./scripts/rr restore` ran
+  `restore.sh` inside the `backup` container, and that script drives
+  `docker compose` (it stops the stack, brings PostgreSQL up alone, restores,
+  starts everything) so it has to run on the host. `backup` now passes `once`;
+  `restore` calls the host script with `COMPOSE_FILE` and `RR_PROXY_PROFILE`.
+  The section 26.4 item R drill was never runnable through the wrapper.
+
+`test/tooling.test.mjs` covers all of it: the wrapper's tags are compared
 against `compose.yaml` image by image, the workflows' names against the same,
-and the `postinstall` against `@remnaray/db`'s generated export. The naming
-test was confirmed to fail against the old workflows.
+and the `postinstall` against `@remnaray/db`'s generated export; the six
+script modes are read out of the git index, because the working tree hides the
+problem on this machine. The naming test and the mode test were each confirmed
+to fail against the state they fix.
 
 Note for whoever runs the M5-004 checklist: the branch under test is `dev`.
 `main` is still at M0, where `compose.yaml` pins `:local` tags that exist

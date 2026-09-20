@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { execFileSync } from 'node:child_process';
 import { readFile } from 'node:fs/promises';
 import test from 'node:test';
 
@@ -230,6 +231,46 @@ test('a source checkout can build the images compose resolves to', async () => {
     assert.match(wrapper, new RegExp(`${image}\\) printf '%s' deploy/`, 'u'));
   }
   assert.match(install, /## Running from a source checkout/u);
+});
+
+// A clone has to be able to run what the documentation tells it to run, and
+// the `backup` image's crontab executes its entrypoint by path.
+test('the scripts the documentation invokes are executable', () => {
+  const scripts = [
+    'scripts/rr',
+    'scripts/init-env.sh',
+    'deploy/ci/proxy-smoke.sh',
+    'deploy/ci/gen-selfsigned.sh',
+    'deploy/backup/backup-entrypoint.sh',
+    'deploy/backup/restore.sh',
+  ];
+  // The index, not the working tree: `core.fileMode=false` — which every
+  // checkout on a Windows filesystem sets — hides a missing bit locally and
+  // hands the clone a file it cannot run.
+  const listing = execFileSync('git', ['ls-files', '-s', '--', ...scripts], {
+    encoding: 'utf8',
+  });
+
+  for (const script of scripts) {
+    assert.match(listing, new RegExp(`^100755 [0-9a-f]+ 0\\t${script}$`, 'mu'));
+  }
+});
+
+// The image's entrypoint is the backup script, and the restore drives compose
+// from the host: both wrappers used to name a script the callee then read as
+// its subcommand, and neither ran.
+test('the backup wrappers call what they mean to call', async () => {
+  const wrapper = await readFile('scripts/rr', 'utf8');
+  const entrypoint = await readFile('deploy/backup/Dockerfile', 'utf8');
+  const restore = await readFile('deploy/backup/restore.sh', 'utf8');
+
+  assert.match(entrypoint, /ENTRYPOINT \["\/bin\/sh", "\/scripts\/backup-entrypoint\.sh"\]/u);
+  assert.match(wrapper, /run --rm backup once$/mu);
+  assert.doesNotMatch(wrapper, /run --rm backup \/scripts\//u);
+  // The restore stops the stack and starts it again, which nothing inside the
+  // stack can do.
+  assert.match(restore, /docker compose .* down/u);
+  assert.match(wrapper, /deploy\/backup\/restore\.sh "\$1"/u);
 });
 
 // Type-aware linting resolves `@remnaray/db` through its generated client, and

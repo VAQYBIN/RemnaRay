@@ -131,8 +131,10 @@ case "$command" in
       valkey-cli publish rr:proxy.reload '{"reason":"manual"}'
     ;;
   backup)
-    # Section 20.5: the same script the schedule runs, on demand.
-    docker compose -f "$compose_file" run --rm backup /scripts/backup-entrypoint.sh once
+    # Section 20.5: the same step the schedule runs, on demand. The image's
+    # entrypoint is the script itself, so the subcommand is the whole argument
+    # — naming the script again makes it the subcommand, and it refuses.
+    docker compose -f "$compose_file" run --rm backup once
     ;;
   restore)
     shift
@@ -140,9 +142,12 @@ case "$command" in
       echo "Usage: ./scripts/rr restore backups/<file>.dump" >&2
       exit 2
     fi
-    # The dump is named as the host sees it; the container mounts `./backups`.
-    docker compose -f "$compose_file" run --rm backup \
-      /scripts/restore.sh "/backups/$(basename "$1")"
+    # The restore of section 20.5 drives compose itself — it stops the stack,
+    # brings PostgreSQL up alone, restores and starts everything again — so it
+    # runs on the host. Inside the `backup` container there is no compose and
+    # no socket to reach it with.
+    COMPOSE_FILE="$compose_file" RR_PROXY_PROFILE="$profile" \
+      deploy/backup/restore.sh "$1"
     ;;
   theme:validate)
     shift
