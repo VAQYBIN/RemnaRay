@@ -19,6 +19,17 @@ if [ "$tls_mode" = "certbot" ]; then
   profiles="$profiles --profile certbot"
 fi
 
+usage() {
+  cat <<USAGE
+Usage: ./scripts/rr {up|down|logs|ps|config|proxy:render|proxy:reload|tls:issue|backup|restore|theme:validate}
+
+The proxy profile comes from RR_PROXY_PROFILE in .env (default: nginx), and
+RR_TLS_MODE=certbot adds the certbot profile.
+
+Set COMPOSE_FILE=compose.dev.yaml for the local PostgreSQL/Valkey dependencies.
+USAGE
+}
+
 case "$command" in
   up)
     # shellcheck disable=SC2086
@@ -65,15 +76,29 @@ case "$command" in
     docker compose -f "$compose_file" exec -T valkey \
       valkey-cli publish rr:proxy.reload '{"reason":"manual"}'
     ;;
+  backup)
+    # Section 20.5: the same script the schedule runs, on demand.
+    docker compose -f "$compose_file" run --rm backup /scripts/backup-entrypoint.sh once
+    ;;
+  restore)
+    shift
+    if [ $# -lt 1 ]; then
+      echo "Usage: ./scripts/rr restore backups/<file>.dump" >&2
+      exit 2
+    fi
+    # The dump is named as the host sees it; the container mounts `./backups`.
+    docker compose -f "$compose_file" run --rm backup \
+      /scripts/restore.sh "/backups/$(basename "$1")"
+    ;;
+  theme:validate)
+    shift
+    pnpm theme-validate "${1:-themes/manta}"
+    ;;
+  help | --help | -h)
+    usage
+    ;;
   *)
-    cat <<USAGE
-Usage: ./scripts/rr {up|down|logs|ps|config|proxy:render|proxy:reload|tls:issue}
-
-The proxy profile comes from RR_PROXY_PROFILE in .env (default: nginx), and
-RR_TLS_MODE=certbot adds the certbot profile.
-
-Set COMPOSE_FILE=compose.dev.yaml for the local PostgreSQL/Valkey dependencies.
-USAGE
+    usage >&2
     exit 1
     ;;
 esac

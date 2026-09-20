@@ -4,15 +4,81 @@
 
 M5 — in progress; the milestone is **NOT VERIFIED**.
 
-**DO NOT PROCEED TO M6.** M5-001, M5-002, M5-003, M5-005, M5-006, M5-007 and
-M5-008 pass their gates, and the queue defect found under M5-008 is repaired.
-M5-004 still requires the real-domain certificate checklist, which needs a
-public server and DNS. M5-009 remains unstarted.
+**DO NOT PROCEED TO M6.** Every M5 task except TASK-M5-004 passes its gate,
+and the queue defect found under M5-008 is repaired. M5-004 requires the
+real-domain certificate checklist, which needs a public server and public DNS
+this environment cannot supply; `docs/tls.md` holds the checklist to run.
 
 ## Current task
 
-TASK-M5-009 — `docs/*`, README ru/en, CONTRIBUTING, SECURITY, issue templates,
-`release.yml` and `rebuild.yml`.
+M5 closure. The one remaining gate is TASK-M5-004, which needs a public server
+and a real domain: the checklist is in `docs/tls.md`. Nothing else in M5 is
+open. **Do not begin M6** until that checklist is run and recorded.
+
+## M5-009 verification — 2026-09-20
+
+Verified on 2026-09-20. The acceptance is that the links in the README resolve
+and that `release.yml` publishes images for a tag like `v0.9.0-rc.1`.
+
+- `README.md` (English) and `README.ru.md` (Russian) carry the section 24.1
+  sections — badges, what it is, quick start, requirements, the proxy profile
+  table, the payment provider table, customisation without a fork, upgrading,
+  the comparison with `remnawave-tg-shop`, the section 7.1 architecture
+  diagram, contributing and the licence — and link to each other.
+- `LICENSE` (MIT), `CONTRIBUTING.md`, `CODE_OF_CONDUCT.md` (Contributor
+  Covenant 2.1), `SECURITY.md`, `CHANGELOG.md`, `Makefile`, the three issue
+  templates, `PULL_REQUEST_TEMPLATE.md` and `CODEOWNERS`.
+- New pages: `docs/install.md`, `docs/upgrade.md`, `docs/api.md`,
+  `docs/troubleshooting.md` (by symptom, as section 24.3 asks) and
+  `docs/faq.md`.
+- `.github/workflows/release.yml`, `rebuild.yml` and `nightly.yml`.
+
+### M5-009 verification evidence
+
+- `test/docs.test.mjs` walks every Markdown file the delivery ships and
+  resolves every relative link: **0 broken**. It also asserts the section 24.2
+  file set, a page per section 24.3 topic, the section 24.1 README sections and
+  badges in both languages, and the release workflow's own shape.
+- `actionlint` on all four workflows: clean.
+- The tag behaviour is asserted statically, because a tag may not be pushed
+  from here: `release.yml` triggers on `v*`, builds `app`, `web`, `nginx` and
+  `caddy` for `linux/amd64` and `linux/arm64`, pushes with an SBOM and a
+  provenance attestation, and tags `X.Y.Z` always while `X.Y` and `X` are
+  enabled only when the version carries no pre-release suffix. `v0.9.0-rc.1`
+  therefore publishes `0.9.0-rc.1` and `rc`, and does not move the tag an owner
+  on `RR_VERSION=1` follows.
+- `pnpm test` (27), `pnpm -r test` (api 155 and the rest), `pnpm lint`,
+  `pnpm format`, `pnpm typecheck`, `pnpm -r typecheck`, full `pnpm build`, the
+  `nginx`, `caddy` and `monitoring` compose profiles, and
+  `deploy/ci/proxy-smoke.sh nginx` end to end.
+
+### M5-009 decisions
+
+- `compose.yaml` now resolves its images through `${RR_VERSION:-1}`, which
+  section 24.4 requires and the delivery did not do: an owner who runs
+  `docker compose pull` follows the major line instead of a `:local` tag that
+  no registry serves. `RR_APP_IMAGE` and its siblings still override, which is
+  what the smoke stand uses.
+- `./scripts/rr` gained `backup`, `restore` and `theme:validate`, which section
+  23.1 lists and section 26.4 R1–R3 uses, and a `help` that exits zero so the
+  `Makefile` can alias it.
+- The `rebuild.yml` of section 24.6 publishes the dated tag and moves `X.Y` and
+  `X` only after trivy passes on the rebuilt image. A rebuild that made things
+  worse must not become what `RR_VERSION=1` resolves to.
+- `nightly.yml` runs `zap-baseline` against the section 22.7 smoke stand rather
+  than a stack of its own: the stand is already a real deployment behind a real
+  proxy, which is what a baseline scan should see.
+
+### M5-009 gaps, recorded not closed
+
+- **No screenshots.** Section 24.1 asks for the landing, the bot and the
+  console. There are no image files in the repository and a README that linked
+  to missing ones would fail its own acceptance, so the section is absent
+  rather than broken. It needs a running deployment to produce.
+- **Module READMEs**: section 23.3 wants one per `apps/api` module; 7 of 18
+  have one. Not in this task's artifact list, so not written here.
+- **ADRs**: `docs/adr/` holds ADR-010 alone, though the specification cites
+  ADR-005, ADR-006 and ADR-014 among others. Also outside this task's list.
 
 ## Queue delivery repair — 2026-09-20
 
@@ -249,7 +315,7 @@ repeated before the milestone is called verified.
 | TASK-M5-006 | **VERIFIED**                      | `pnpm test:m5`: real PostgreSQL 18 AC-202 dump, restore and 14/8 retention passed.                                                                                                                                                              |
 | TASK-M5-007 | **VERIFIED** (2026-09-20)         | `deploy/ci/proxy-smoke.sh` green on both profiles; see "M5-007 verification".                                                                                                                                                                   |
 | TASK-M5-008 | **VERIFIED** (2026-09-20)         | All twelve section 9.9 metrics present in `/metrics` on a running stand; see "M5-008 verification".                                                                                                                                             |
-| TASK-M5-009 | **NOT STARTED**                   | No implementation or verification was started, per scope.                                                                                                                                                                                       |
+| TASK-M5-009 | **VERIFIED** (2026-09-20)         | Every relative documentation link resolves; see "M5-009 verification".                                                                                                                                                                          |
 
 ### Closure repairs and environment evidence
 

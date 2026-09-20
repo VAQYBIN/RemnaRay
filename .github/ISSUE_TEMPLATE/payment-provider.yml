@@ -1,0 +1,75 @@
+name: Payment provider request
+description: Ask for a payment provider RemnaRay does not support yet.
+labels: [enhancement, payments]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        A provider is one class implementing `PaymentProvider`; the checklist
+        for writing it is in
+        [CONTRIBUTING.md](../../blob/main/CONTRIBUTING.md#adding-a-payment-provider).
+        These questions are what decides whether it can be written at all.
+
+  - type: input
+    id: name
+    attributes:
+      label: Provider
+      placeholder: 'Name, and the country or market it serves'
+    validations: { required: true }
+
+  - type: input
+    id: docs
+    attributes:
+      label: API documentation
+      description: A link. Without public documentation the provider cannot be added.
+    validations: { required: true }
+
+  - type: dropdown
+    id: webhooks
+    attributes:
+      label: Does it send webhooks?
+      options:
+        - 'Yes, signed'
+        - 'Yes, unsigned — verified by an IP allowlist'
+        - 'Yes, unsigned and with no allowlist'
+        - 'No — status has to be polled'
+        - 'Not sure'
+    validations: { required: true }
+
+  - type: input
+    id: signature
+    attributes:
+      label: How is a webhook authenticated?
+      placeholder: 'HMAC-SHA256 of the raw body in X-Signature, and so on'
+
+  - type: dropdown
+    id: receipts
+    attributes:
+      label: Does it issue fiscal receipts?
+      description: Section 11 offers a provider to an owner who needs receipts only if it can issue them.
+      options: ['Yes', 'No', 'Not sure']
+    validations: { required: true }
+
+  - type: input
+    id: currencies
+    attributes:
+      label: Currencies
+      placeholder: 'RUB, USDT, …'
+
+  - type: dropdown
+    id: onboarding
+    attributes:
+      label: Who can sign up for it?
+      options:
+        - 'An individual'
+        - 'A self-employed person'
+        - 'A sole trader'
+        - 'A registered company only'
+        - 'Not sure'
+    validations: { required: true }
+
+  - type: input
+    id: sandbox
+    attributes:
+      label: Test mode
+      description: How a contributor can test without moving real money.

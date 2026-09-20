@@ -1,0 +1,131 @@
+# Section 24.4. A tag `vX.Y.Z` publishes the four images, an SBOM and a signed
+# attestation, and opens a GitHub Release with the changelog. A pre-release
+# `vX.Y.Z-rc.N` publishes under `rc` and never moves the floating major tag,
+# so an owner following `RR_VERSION=1` is not upgraded onto a candidate.
+name: release
+
+on:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: write
+  packages: write
+  id-token: write
+  attestations: write
+
+env:
+  REGISTRY: ghcr.io
+
+jobs:
+  images:
+    name: ${{ matrix.image }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - image: app
+            file: deploy/docker/app.Dockerfile
+          - image: web
+            file: deploy/docker/web.Dockerfile
+          - image: nginx
+            file: deploy/proxy/nginx/Dockerfile
+          - image: caddy
+            file: deploy/proxy/caddy/Dockerfile
+    outputs:
+      prerelease: ${{ steps.version.outputs.prerelease }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Read the tag
+        id: version
+        run: |
+          version="${GITHUB_REF_NAME#v}"
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          case "$version" in
+            *-*) echo 'prerelease=true' >> "$GITHUB_OUTPUT" ;;
+            *) echo 'prerelease=false' >> "$GITHUB_OUTPUT" ;;
+          esac
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+
+      - name: Set up Buildx
+        uses: docker/setup-buildx-action@v4
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      # `X.Y.Z` always; `X.Y` and `X` only for a final release, so a candidate
+      # never becomes what `RR_VERSION=1` resolves to.
+      - name: Work out the tags
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.REGISTRY }}/${{ github.repository_owner }}/remnaray-${{ matrix.image }}
+          flavor: latest=false
+          tags: |
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}},enable=${{ steps.version.outputs.prerelease == 'false' }}
+            type=semver,pattern={{major}},enable=${{ steps.version.outputs.prerelease == 'false' }}
+            type=raw,value=rc,enable=${{ steps.version.outputs.prerelease == 'true' }}
+
+      - name: Build and push
+        id: push
+        uses: docker/build-push-action@v7
+        with:
+          context: .
+          file: ${{ matrix.file }}
+          platforms: linux/amd64,linux/arm64
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          sbom: true
+          provenance: mode=max
+          cache-from: type=gha,scope=release-${{ matrix.image }}
+          cache-to: type=gha,mode=max,scope=release-${{ matrix.image }}
+
+      # Signs the image with the workflow's own identity; `cosign verify`
+      # checks it against this repository and this workflow file.
+      - name: Attest the provenance
+        uses: actions/attest-build-provenance@v2
+        with:
+          subject-name: ${{ env.REGISTRY }}/${{ github.repository_owner }}/remnaray-${{ matrix.image }}
+          subject-digest: ${{ steps.push.outputs.digest }}
+          push-to-registry: true
+
+  release:
+    name: github release
+    runs-on: ubuntu-latest
+    needs: images
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+        with: { fetch-depth: 0 }
+
+      - name: Take this version's section out of the changelog
+        id: notes
+        run: |
+          version="${GITHUB_REF_NAME#v}"
+          # Everything between this version's heading and the next one.
+          awk -v v="$version" '
+            $0 ~ "^## +\\[?" v "\\]?" { printing = 1; next }
+            printing && /^## / { exit }
+            printing { print }
+          ' CHANGELOG.md > notes.md
+          if [ ! -s notes.md ]; then
+            printf 'No changelog section for %s.\n' "$version" > notes.md
+          fi
+
+      - name: Publish the release
+        uses: softprops/action-gh-release@v2
+        with:
+          body_path: notes.md
+          prerelease: ${{ needs.images.outputs.prerelease == 'true' }}
+          generate_release_notes: true
