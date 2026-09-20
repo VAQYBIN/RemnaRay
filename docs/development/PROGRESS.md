@@ -6,10 +6,9 @@ M5. M4 acceptance is closed; see "M4-003 Lighthouse verification".
 
 ## Current task
 
-TASK-M5-006 (the `backup` service, the restore script, the pre-migrate dump and
-S3). TASK-M5-001 … TASK-M5-005 are complete and committed; see their
-verification sections. TASK-M5-004 carries one external acceptance gate,
-recorded below.
+TASK-M5-007 (`proxy-smoke.sh`, the CI matrix and `expected-status.tsv`).
+TASK-M5-001 … TASK-M5-006 are complete and committed; see their verification
+sections. TASK-M5-004 carries one external acceptance gate, recorded below.
 
 ## M5 entry audit — 2026-09-20
 
@@ -384,7 +383,7 @@ image on a runner with room. See "Defects found while verifying M5-002".
 
 ## Next
 
-TASK-M5-006, then section 25.6 dependency order through TASK-M5-009.
+TASK-M5-007, then section 25.6 dependency order through TASK-M5-009.
 Do not begin M6.
 
 ## M3 acceptance reconciliation
@@ -1225,3 +1224,54 @@ Verified on 2026-09-20.
 - With `RR_TRUSTED_PROXIES` unset the API trusts nobody rather than falling
   back to the compose network. A deployment that has not said what sits in
   front of it should not believe a header anyone can send.
+
+## M5-006 verification
+
+Verified on 2026-09-20.
+
+- AC-202, both halves, in `test/m5.backup.integration.test.mjs` against a real
+  PostgreSQL 18: `backup-entrypoint.sh once` writes a `pg_dump -Fc -Z 6` and a
+  `.last-status` line carrying the state, the file and its size; the dump is
+  then read back with `pg_restore --clean --if-exists` and the schema is whole
+  again. Rotation is given 30 daily, 30 archive and 12 weekly files and keeps
+  exactly **14 daily, 14 archives and 8 weekly**, the newest of each.
+- The weekly copy is a hard link made on Sundays, so a Sunday costs no extra
+  space and the two retentions cannot argue over one file: each prunes its own
+  name and the bytes go with the last one.
+- `deploy/backup/Dockerfile` is `postgres:18-alpine` plus a pinned
+  `minio-client`, so the S3 copy has a client and a missing package fails the
+  image build rather than a backup at three in the morning. Alpine's package
+  is `minio-client` and its binary is `mcli`, which the script calls.
+- `.env` is never copied into a backup. It holds `RR_APP_KEY`, and an archive
+  carrying both the ciphertext and its key protects nothing.
+- `deploy/backup/restore.sh` performs the section 20.5 sequence and asks for
+  confirmation, because `--clean` drops what is there; `RR_RESTORE_ASSUME_YES`
+  skips the prompt for a script.
+- The `migrate` one-shot service of section 21.1 was missing from compose
+  entirely. It now applies the migrations before `api`, `bot` and `worker`
+  start, and takes `backups/pre-migrate-<version>.dump` first when a pending
+  migration is marked `-- reversible: no` — never on a fresh database, where
+  there is nothing to dump. Its header parsing, the pending comparison and the
+  dump decision are unit tested.
+- `maintenance.backup-check` reads `.last-status` in the worker and reports to
+  `POST /api/internal/v1/system/backup-result`, which raises `backup.failed`
+  when the newest backup failed or is older than 26 hours and feeds
+  `GET /api/admin/v1/system`, replacing another environment reading nothing
+  ever wrote.
+- Checks: the AC-202 integration test, `pnpm lint`, `pnpm typecheck`,
+  `pnpm -r typecheck`, `pnpm test` (11), `pnpm -r test` (api 141, worker 4,
+  web 22, bot 12 and the rest), `pnpm format`, full `pnpm build`,
+  `pnpm i18n-check`, and `docker compose config` for the `nginx` and
+  `external` profiles.
+
+### M5-006 decisions
+
+- The app image gained a pinned `postgresql18-client`, because section 20.4
+  makes `migrate` take a dump and the runtime image had no `pg_dump`. It also
+  carries the db package's schema, migrations and Prisma CLI, which
+  `prisma migrate deploy` needs beside them.
+- The entrypoint takes `once` and `rotate` subcommands rather than only the
+  scheduled loop. An operator can take a backup or apply the retention on
+  demand, and the acceptance test drives the same code the schedule does.
+- Rotation sorts by file name, which is chronological by construction, instead
+  of parsing dates out of names in shell.

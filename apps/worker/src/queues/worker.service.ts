@@ -1,6 +1,7 @@
 import { Injectable, Logger, type OnModuleDestroy, type OnModuleInit } from '@nestjs/common';
 import { Queue, Worker, type Job } from 'bullmq';
 
+import { backupStatus } from './backup-check';
 import { certificateStatus } from './tls-check';
 
 type InternalCall = { path: string; body?: unknown };
@@ -61,7 +62,9 @@ export class WorkerService implements OnModuleInit, OnModuleDestroy {
         async (job: Job<Record<string, unknown>>) =>
           job.name === 'maintenance.tls-check'
             ? await this.tlsCheck()
-            : await this.call(maintenanceCall(job)),
+            : job.name === 'maintenance.backup-check'
+              ? await this.backupCheck()
+              : await this.call(maintenanceCall(job)),
         { connection },
       ),
     );
@@ -95,15 +98,22 @@ export class WorkerService implements OnModuleInit, OnModuleDestroy {
       }, 10 * 60_000),
     );
     // Section 19.2: the certificate is checked at start and once a day.
-    const queueTlsCheck = () => {
+    // Section 20.3: the same daily cadence for the backup status.
+    const queueDaily = () => {
+      const stamp = String(Date.now());
       void maintenance.add(
         'maintenance.tls-check',
         {},
-        { jobId: `maintenance:tls-check:${String(Date.now())}` },
+        { jobId: `maintenance:tls-check:${stamp}` },
+      );
+      void maintenance.add(
+        'maintenance.backup-check',
+        {},
+        { jobId: `maintenance:backup-check:${stamp}` },
       );
     };
-    queueTlsCheck();
-    this.timers.push(setInterval(queueTlsCheck, 24 * 60 * 60_000));
+    queueDaily();
+    this.timers.push(setInterval(queueDaily, 24 * 60 * 60_000));
   }
 
   /**
@@ -117,6 +127,14 @@ export class WorkerService implements OnModuleInit, OnModuleDestroy {
     const [host, port] = domain.split(':');
     const status = await certificateStatus(host ?? domain, port ? Number(port) : 443);
     return this.call({ path: '/api/internal/v1/system/tls-result', body: status });
+  }
+
+  /** Section 20.3: `.last-status` is written by the `backup` container. */
+  private async backupCheck(): Promise<unknown> {
+    return this.call({
+      path: '/api/internal/v1/system/backup-result',
+      body: backupStatus(process.env.RR_BACKUP_DIR ?? '/backups'),
+    });
   }
 
   async onModuleDestroy() {

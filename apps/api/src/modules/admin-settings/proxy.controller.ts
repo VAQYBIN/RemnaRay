@@ -19,8 +19,19 @@ const tlsResultSchema = z.object({
   error: z.string().max(200).optional(),
 });
 
+/** Section 20.3: what `maintenance.backup-check` saw in `.last-status`. */
+const backupResultSchema = z.object({
+  ok: z.boolean(),
+  state: z.string().min(1).max(40),
+  at: z.iso.datetime().nullable(),
+  file: z.string().max(200).nullable(),
+  sizeBytes: z.number().int().min(0),
+  ageHours: z.number().nullable(),
+});
+
 export const TLS_ALERT_DAYS = 14;
 export const TLS_STATUS_KEY = 'rr:tls:status';
+export const BACKUP_STATUS_KEY = 'rr:backup:status';
 
 /**
  * Section 21.6: `proxy-reloader` reports every apply here, so the outcome is
@@ -73,5 +84,24 @@ export class InternalProxyController {
           : `${input.host}: ${input.error ?? 'unreachable'}`,
       });
     return { recorded: true, alerted: expiring || !input.reachable };
+  }
+
+  @Post('backup-result')
+  @HttpCode(200)
+  async backupResult(@Body() body: unknown) {
+    const input = backupResultSchema.parse(body);
+    await this.infra.redis
+      .set(BACKUP_STATUS_KEY, JSON.stringify({ ...input, checkedAt: new Date().toISOString() }))
+      .catch(() => null);
+
+    if (!input.ok)
+      await this.notify.alert({
+        type: 'backup.failed',
+        details:
+          input.ageHours === null
+            ? input.state
+            : `${input.state}, ${input.ageHours.toFixed(1)} h old`,
+      });
+    return { recorded: true, alerted: !input.ok };
   }
 }

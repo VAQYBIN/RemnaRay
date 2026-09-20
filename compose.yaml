@@ -15,6 +15,7 @@ x-app-common: &app-common
   volumes:
     - ./themes:/themes:ro
     - ./locales:/locales:ro
+    - uploads:/uploads
   read_only: true
   tmpfs: [/tmp]
   security_opt: [no-new-privileges:true]
@@ -58,11 +59,27 @@ services:
       timeout: 3s
       retries: 20
 
+  # Section 21.1: applies the migrations before anything else starts, and
+  # section 20.4 makes it dump first when a pending migration cannot be undone.
+  migrate:
+    <<: *app-common
+    working_dir: /app/dist/packages/db
+    command: [node, /app/dist/tools/migrate.js]
+    restart: 'no'
+    read_only: false
+    volumes:
+      - ./themes:/themes:ro
+      - ./locales:/locales:ro
+      - ./backups:/backups
+    depends_on:
+      postgres: { condition: service_healthy }
+
   api:
     <<: *app-common
     command: [node, dist/apps/api/main.js]
     expose: ['3000']
     depends_on:
+      migrate: { condition: service_completed_successfully }
       postgres: { condition: service_healthy }
       valkey: { condition: service_healthy }
     healthcheck:
@@ -243,6 +260,26 @@ services:
       valkey: { condition: service_healthy }
     profiles: [nginx, caddy]
 
+  # Section 20.5: the daily dump, its retention and the optional S3 copy.
+  backup:
+    image: ${RR_BACKUP_IMAGE:-ghcr.io/remnaray/backup:local}
+    env_file: .env
+    environment:
+      TZ: UTC
+      POSTGRES_HOST: postgres
+    volumes:
+      - ./backups:/backups
+      - ./deploy/backup:/scripts:ro
+      - ./themes:/src/themes:ro
+      - uploads:/src/uploads:ro
+    networks: [rr_net]
+    depends_on:
+      postgres: { condition: service_healthy }
+    restart: unless-stopped
+    security_opt: [no-new-privileges:true]
+    logging: { driver: json-file, options: { max-size: '50m', max-file: '5' } }
+    profiles: [nginx, caddy, external]
+
 networks:
   rr_net:
     ipam: { config: [{ subnet: 172.28.0.0/16 }] }
@@ -250,6 +287,7 @@ networks:
 volumes:
   pgdata: {}
   valkeydata: {}
+  uploads: {}
   proxy-conf: {}
   proxy-acme: {}
   proxy-cache: {}

@@ -21,7 +21,7 @@
     "test:m1": "pnpm build && node --test test/m1.integration.test.mjs",
     "test:m2": "pnpm build && node --test test/m2.payment.integration.test.mjs",
     "test:m4": "pnpm build && node --test test/m4.admin.integration.test.mjs test/m4.rewards.integration.test.mjs test/m4.notify.integration.test.mjs test/m4.broadcast.integration.test.mjs",
-    "test:m5": "pnpm build && node --test test/m5.proxy.integration.test.mjs",
+    "test:m5": "pnpm build && node --test test/m5.proxy.integration.test.mjs test/m5.backup.integration.test.mjs",
     "theme-validate": "tsx tools/theme-validate.ts",
     "typecheck": "tsc --noEmit",
     "typecheck:e2e": "tsc --noEmit -p e2e/tsconfig.json"

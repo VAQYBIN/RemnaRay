@@ -12,7 +12,7 @@ import { RemnawaveService } from '../remnawave/remnawave.service';
 import { SettingsService } from '../settings/settings.service';
 import { caddyHasRateLimit } from '../../tools/proxy-render';
 import { ForwardedObserver } from './forwarded.interceptor';
-import { TLS_STATUS_KEY } from './proxy.controller';
+import { BACKUP_STATUS_KEY, TLS_STATUS_KEY } from './proxy.controller';
 
 function appVersion(): string {
   if (process.env.RR_APP_VERSION) return process.env.RR_APP_VERSION;
@@ -49,6 +49,20 @@ export class SystemService {
       expiresAt: typeof parsed['expiresAt'] === 'string' ? parsed['expiresAt'] : null,
       daysLeft: typeof parsed['daysLeft'] === 'number' ? parsed['daysLeft'] : null,
       checkedAt: typeof parsed['checkedAt'] === 'string' ? parsed['checkedAt'] : null,
+    };
+  }
+
+  /** The last `maintenance.backup-check` reading (section 20.3). */
+  private async backupStatus(): Promise<Record<string, unknown>> {
+    const raw = await this.infra.redis.get(BACKUP_STATUS_KEY).catch(() => null);
+    if (!raw) return { ok: false, state: 'unknown', lastRunAt: null, file: null, sizeBytes: 0 };
+    const parsed = JSON.parse(raw) as Record<string, unknown>;
+    return {
+      ok: parsed['ok'] === true,
+      state: typeof parsed['state'] === 'string' ? parsed['state'] : 'unknown',
+      lastRunAt: typeof parsed['at'] === 'string' ? parsed['at'] : null,
+      file: typeof parsed['file'] === 'string' ? parsed['file'] : null,
+      sizeBytes: typeof parsed['sizeBytes'] === 'number' ? parsed['sizeBytes'] : 0,
     };
   }
 
@@ -96,7 +110,7 @@ export class SystemService {
           (process.env.RR_PROXY_PROFILE ?? 'nginx') !== 'caddy' ||
           caddyHasRateLimit(process.env.RR_CADDY_IMAGE),
       },
-      backups: { lastRunAt: process.env.RR_LAST_BACKUP_AT ?? null },
+      backups: await this.backupStatus(),
       healthUrl: '/api/v1/health',
     };
   }

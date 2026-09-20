@@ -1,0 +1,67 @@
+# Backups and restore
+
+Section 20.5. The `backup` service runs in every profile and takes one dump a
+day; `NFR-014` sets the targets it is built for: **RPO 24 hours, RTO 30
+minutes**.
+
+## What is kept
+
+| File                            | What                                            |
+| ------------------------------- | ----------------------------------------------- |
+| `remnaray-<yyyymmdd-HHMM>.dump` | `pg_dump -Fc -Z 6` of the whole database        |
+| `remnaray-weekly-<stamp>.dump`  | a hard link made on Sundays, for the 8 weeklies |
+| `files-<stamp>.tar.gz`          | `themes/` and `uploads/`                        |
+| `.last-status`                  | one line: state, time, file, size               |
+| `pre-migrate-<version>.dump`    | written by `migrate`; see below                 |
+
+`.env` is never copied. It holds `RR_APP_KEY`, and a backup that carries both
+the ciphertext and the key protects nothing — the README asks you to keep it
+somewhere else.
+
+Valkey is not backed up either: sessions and queues rebuild themselves. People
+sign in again, the cron regenerates the scans, and unfinished `outbox_jobs`
+live in PostgreSQL.
+
+## Retention
+
+Fourteen daily dumps and eight weekly ones. The weekly copy is a hard link, so
+a Sunday costs no extra space and the two retentions never argue over the same
+file: the daily rule prunes `remnaray-<stamp>.dump`, the weekly rule prunes
+`remnaray-weekly-<stamp>.dump`, and the bytes go only when the last name does.
+
+`docker compose exec backup /scripts/backup-entrypoint.sh once` takes one now,
+and `… rotate` applies the retention without taking one.
+
+## S3
+
+Set `RR_BACKUP_S3_ENDPOINT` and `RR_BACKUP_S3_BUCKET` — and the keys, and
+optionally `RR_BACKUP_S3_PREFIX` — and each dump is copied with the MinIO
+client after it is written. With the variables unset the step is skipped
+silently; the local copy is the same either way. A failed upload does not fail
+the backup, because a dump on disk is better than no dump at all, and it is
+logged.
+
+## Restore
+
+```sh
+./deploy/backup/restore.sh backups/remnaray-20260920-0300.dump
+```
+
+It performs the section 20.5 sequence — stop the stack, start PostgreSQL
+alone, `pg_restore --clean --if-exists`, start the stack — and asks for
+confirmation first, because `--clean` drops what is there now. Set
+`RR_RESTORE_ASSUME_YES=true` to skip the prompt in a script.
+
+## The pre-migrate dump
+
+Section 20.4: the `migrate` service applies migrations before `api`, `bot` and
+`worker` start. When a pending migration is marked `-- reversible: no` in its
+header, it takes `backups/pre-migrate-<RR_VERSION>.dump` first, so a rollback
+has something to go back to. `RR_AUTO_PREMIGRATE_BACKUP=false` turns that off.
+
+A fresh database is not dumped: there is nothing in it yet.
+
+## Checking it
+
+`maintenance.backup-check` reads `.last-status` and raises the `backup.failed`
+alert when the newest backup is older than 26 hours or the last run failed.
