@@ -1,6 +1,8 @@
 import { Injectable, Logger, type OnModuleDestroy, type OnModuleInit } from '@nestjs/common';
 import { Queue, Worker, type Job } from 'bullmq';
 
+import { certificateStatus } from './tls-check';
+
 type InternalCall = { path: string; body?: unknown };
 
 /**
@@ -56,7 +58,10 @@ export class WorkerService implements OnModuleInit, OnModuleDestroy {
     this.workers.push(
       new Worker(
         'maintenance',
-        async (job: Job<Record<string, unknown>>) => this.call(maintenanceCall(job)),
+        async (job: Job<Record<string, unknown>>) =>
+          job.name === 'maintenance.tls-check'
+            ? await this.tlsCheck()
+            : await this.call(maintenanceCall(job)),
         { connection },
       ),
     );
@@ -89,6 +94,29 @@ export class WorkerService implements OnModuleInit, OnModuleDestroy {
         );
       }, 10 * 60_000),
     );
+    // Section 19.2: the certificate is checked at start and once a day.
+    const queueTlsCheck = () => {
+      void maintenance.add(
+        'maintenance.tls-check',
+        {},
+        { jobId: `maintenance:tls-check:${String(Date.now())}` },
+      );
+    };
+    queueTlsCheck();
+    this.timers.push(setInterval(queueTlsCheck, 24 * 60 * 60_000));
+  }
+
+  /**
+   * The only maintenance job the worker performs itself: section 19.2 wants the
+   * TLS handshake made from outside the API, and the result is reported back so
+   * the alert and the `/admin/system` reading stay in one place.
+   */
+  private async tlsCheck(): Promise<unknown> {
+    const domain = process.env.RR_DOMAIN ?? '';
+    if (!domain) return { skipped: 'RR_DOMAIN is not set' };
+    const [host, port] = domain.split(':');
+    const status = await certificateStatus(host ?? domain, port ? Number(port) : 443);
+    return this.call({ path: '/api/internal/v1/system/tls-result', body: status });
   }
 
   async onModuleDestroy() {

@@ -6,10 +6,11 @@ M5. M4 acceptance is closed; see "M4-003 Lighthouse verification".
 
 ## Current task
 
-TASK-M5-004 (the TLS modes end to end: `acme`, the `certbot` container with its
-bootstrap configuration and flag reload, `custom`, and `tls-check`).
-TASK-M5-001 … TASK-M5-003 are complete and committed; see their verification
-sections.
+TASK-M5-005 (the `external` profile with the `edge` container,
+`RR_TRUSTED_PROXIES`, the `/admin/system` indicator and
+`docs/external-proxy.md`). TASK-M5-001 … TASK-M5-004 are complete and
+committed; see their verification sections. TASK-M5-004 carries one external
+acceptance gate, recorded below.
 
 ## M5 entry audit — 2026-09-20
 
@@ -384,7 +385,7 @@ image on a runner with room. See "Defects found while verifying M5-002".
 
 ## Next
 
-TASK-M5-004, then section 25.6 dependency order through TASK-M5-009.
+TASK-M5-005, then section 25.6 dependency order through TASK-M5-009.
 Do not begin M6.
 
 ## M3 acceptance reconciliation
@@ -1129,3 +1130,54 @@ Verified on 2026-09-20.
 - `custom.d/*.caddy` mirrors the nginx profile's `custom.d/*.conf`; the
   renderer picks the suffix from the profile so neither can pull the other's
   files in.
+
+## M5-004 verification
+
+Verified on 2026-09-20, except the acceptance gate the specification makes
+manual; see below.
+
+- `acme` was already complete with TASK-M5-002: the module renders only in that
+  mode, keeps its state in `proxy-acme` and renews without a reload because the
+  configuration names the certificate through `$acme_certificate`.
+- `certbot` is now whole. The `certbot` service renews every twelve hours and
+  its `--deploy-hook` touches `/etc/letsencrypt/.renewed`, which
+  `proxy-reloader` already watches; `./rr tls:issue` performs the first issue
+  against the HTTP-only bootstrap configuration the renderer chooses while no
+  certificate exists, then restarts `proxy-config` so the full configuration
+  renders. `./rr up` adds the `certbot` profile on its own.
+- `custom` needs no runtime service; both profiles name the owner's files, at
+  `/etc/nginx/certs` and `/certs`.
+- `maintenance.tls-check` is the one maintenance job the worker performs itself,
+  because section 19.2 wants the handshake made from outside the API. It runs at
+  start and daily, and posts to the new
+  `POST /api/internal/v1/system/tls-result`, which keeps the reading in Valkey,
+  raises `tls.expiring` below fourteen days or when the host does not answer,
+  and feeds `tls.expiresAt`, `tls.daysLeft` and `tls.checkedAt` on
+  `GET /api/admin/v1/system`. Verification is deliberately not enforced by the
+  check: an expired certificate still has to be readable.
+- `packages/config` now refuses every combination that cannot work — `none`
+  outside the `external` profile, and `certbot` with Caddy — so the process
+  fails at startup with the variable named instead of running a proxy that
+  never gets a certificate.
+- Checks: `pnpm lint`, `pnpm typecheck`, `pnpm -r typecheck`, `pnpm test` (11),
+  `pnpm -r test` (api 136, web 22, bot 12, worker 2, config 5 and the remaining
+  packages), `pnpm format`, full `pnpm build`, and
+  `docker compose --profile nginx --profile certbot config`.
+
+### M5-004 external gate
+
+Section 25.6 accepts this task "на стенде с реальным доменом… (ручная
+проверка, чеклист в PR)" — both issue paths exercised by hand against a real
+domain. That needs a public server and DNS this repository cannot supply, so it
+stays open. The checklist to run is in `docs/tls.md` under "Acceptance
+checklist"; everything that can be checked without a public domain is covered
+by the unit tests and the environment validation above.
+
+### M5-004 decisions
+
+- `apps/worker` had no tests at all; it now has Vitest with the same
+  configuration the API uses, so the TLS reading is covered rather than trusted.
+- The TLS reading lives in Valkey rather than in a settings key: it is an
+  observation, not configuration, and `/admin/system` is its only reader.
+- The earlier `RR_TLS_EXPIRES_AT` environment reading on `/admin/system` was a
+  placeholder with nothing writing it; it is replaced by the real measurement.

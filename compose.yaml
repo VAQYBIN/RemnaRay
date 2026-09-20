@@ -163,6 +163,27 @@ services:
     logging: { driver: json-file, options: { max-size: '50m', max-file: '5' } }
     profiles: [nginx]
 
+  # Only with RR_TLS_MODE=certbot; `./rr up` adds the profile automatically.
+  certbot:
+    image: certbot/certbot:latest
+    entrypoint:
+      - /bin/sh
+      - -c
+      - >
+        trap exit TERM;
+        while :; do
+        certbot renew --webroot -w /var/www/certbot
+        --deploy-hook 'touch /etc/letsencrypt/.renewed';
+        sleep 12h & wait $${!};
+        done
+    volumes:
+      - certbot-webroot:/var/www/certbot
+      - certbot-certs:/etc/letsencrypt
+    networks: [rr_net]
+    restart: unless-stopped
+    logging: { driver: json-file, options: { max-size: '50m', max-file: '5' } }
+    profiles: [certbot]
+
   proxy-caddy:
     image: ${RR_CADDY_IMAGE:-ghcr.io/remnaray/caddy:local}
     ports: ['80:80', '443:443', '443:443/udp']

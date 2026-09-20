@@ -11,6 +11,7 @@ import { Audited } from '../admin/audit.interceptor';
 import { RemnawaveService } from '../remnawave/remnawave.service';
 import { SettingsService } from '../settings/settings.service';
 import { caddyHasRateLimit } from '../../tools/proxy-render';
+import { TLS_STATUS_KEY } from './proxy.controller';
 
 function appVersion(): string {
   if (process.env.RR_APP_VERSION) return process.env.RR_APP_VERSION;
@@ -32,6 +33,22 @@ export class SystemService {
     private readonly settings: SettingsService,
     private readonly panel: RemnawaveService,
   ) {}
+
+  /** The last `maintenance.tls-check` reading (section 19.2). */
+  private async tlsStatus(): Promise<{
+    expiresAt: string | null;
+    daysLeft: number | null;
+    checkedAt: string | null;
+  }> {
+    const raw = await this.infra.redis.get(TLS_STATUS_KEY).catch(() => null);
+    if (!raw) return { expiresAt: null, daysLeft: null, checkedAt: null };
+    const parsed = JSON.parse(raw) as Record<string, unknown>;
+    return {
+      expiresAt: typeof parsed['expiresAt'] === 'string' ? parsed['expiresAt'] : null,
+      daysLeft: typeof parsed['daysLeft'] === 'number' ? parsed['daysLeft'] : null,
+      checkedAt: typeof parsed['checkedAt'] === 'string' ? parsed['checkedAt'] : null,
+    };
+  }
 
   async overview() {
     const [panelSync, botMode, botUsername, outboxPending, tlsExpiresAt, dbSize] =
@@ -64,7 +81,7 @@ export class SystemService {
       bot: { mode: botMode, username: botUsername },
       outboxPending,
       database: { sizeBytes: Number(dbSize[0]?.size ?? 0n) },
-      tls: { domain: String(tlsExpiresAt), expiresAt: process.env.RR_TLS_EXPIRES_AT ?? null },
+      tls: { domain: String(tlsExpiresAt), ...(await this.tlsStatus()) },
       proxy: {
         profile: process.env.RR_PROXY_PROFILE ?? 'nginx',
         tlsMode: process.env.RR_TLS_MODE ?? 'acme',

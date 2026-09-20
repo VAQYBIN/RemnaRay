@@ -45,6 +45,21 @@ case "$command" in
     # Re-render the proxy configuration without waiting for a settings change.
     docker compose -f "$compose_file" restart proxy-config
     ;;
+  tls:issue)
+    # Section 21.3: the first certificate of the `certbot` mode. nginx is
+    # already serving the HTTP-only bootstrap configuration, which answers the
+    # HTTP-01 challenge from the shared webroot.
+    if [ "$tls_mode" != "certbot" ]; then
+      echo "tls:issue applies to RR_TLS_MODE=certbot; this deployment uses $tls_mode" >&2
+      exit 1
+    fi
+    domain=$(grep -E '^RR_DOMAIN=' .env | cut -d= -f2-)
+    email=$(grep -E '^RR_ACME_EMAIL=' .env | cut -d= -f2-)
+    docker compose -f "$compose_file" --profile certbot run --rm certbot \
+      certonly --webroot -w /var/www/certbot -d "$domain" -m "$email" --agree-tos -n
+    # The certificate exists now, so the full configuration renders.
+    docker compose -f "$compose_file" restart proxy-config
+    ;;
   proxy:reload)
     # Ask `proxy-reloader` to validate and apply what is currently rendered.
     docker compose -f "$compose_file" exec -T valkey \
@@ -52,7 +67,7 @@ case "$command" in
     ;;
   *)
     cat <<USAGE
-Usage: ./scripts/rr {up|down|logs|ps|config|proxy:render|proxy:reload}
+Usage: ./scripts/rr {up|down|logs|ps|config|proxy:render|proxy:reload|tls:issue}
 
 The proxy profile comes from RR_PROXY_PROFILE in .env (default: nginx), and
 RR_TLS_MODE=certbot adds the certbot profile.

@@ -24,9 +24,22 @@ describe('loadEnv', () => {
 
   it('requires ACME email only for ACME mode', () => {
     expect(() => loadEnv({ ...valid, RR_ACME_EMAIL: undefined })).toThrow('RR_ACME_EMAIL');
-    expect(loadEnv({ ...valid, RR_ACME_EMAIL: undefined, RR_TLS_MODE: 'none' }).RR_TLS_MODE).toBe(
-      'none',
+    expect(loadEnv({ ...valid, RR_ACME_EMAIL: undefined, RR_TLS_MODE: 'custom' }).RR_TLS_MODE).toBe(
+      'custom',
     );
+  });
+
+  it('pairs each TLS mode with the profiles that can serve it', () => {
+    // Section 21.7: `none` means RemnaRay terminates no TLS at all.
+    expect(() => loadEnv({ ...valid, RR_TLS_MODE: 'none' })).toThrow('RR_TLS_MODE');
+    // Section 21.4: Caddy issues and renews its own certificates.
+    expect(() => loadEnv({ ...valid, RR_PROXY_PROFILE: 'caddy', RR_TLS_MODE: 'certbot' })).toThrow(
+      'RR_TLS_MODE',
+    );
+    expect(loadEnv({ ...valid, RR_TLS_MODE: 'certbot' }).RR_TLS_MODE).toBe('certbot');
+    expect(
+      loadEnv({ ...valid, RR_PROXY_PROFILE: 'caddy', RR_TLS_MODE: 'custom' }).RR_TLS_MODE,
+    ).toBe('custom');
   });
 
   it('rejects TLS with an external proxy', () => {
