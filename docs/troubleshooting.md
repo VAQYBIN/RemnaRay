@@ -99,6 +99,10 @@ docker compose ps
 docker compose logs <service> --tail 100
 ```
 
+- **Nothing starts and every image says `error from registry: denied`.** The
+  images are not published for this checkout. Build them once with
+  `./scripts/rr build` — [`install.md`](install.md#running-from-a-source-checkout)
+  explains when that is needed.
 - **`postgres` refuses to start** after an upgrade of the image across a major
   version. PostgreSQL 18 keeps its data in a version-specific directory; the
   volume belongs at `/var/lib/postgresql`, which is what `compose.yaml` mounts.

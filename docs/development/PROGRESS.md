@@ -15,6 +15,44 @@ M5 closure. The one remaining gate is TASK-M5-004, which needs a public server
 and a real domain: the checklist is in `docs/tls.md`. Nothing else in M5 is
 open. **Do not begin M6** until that checklist is run and recorded.
 
+## First-server findings — 2026-09-20
+
+The owner took the repository to a VPS to run the TASK-M5-004 checklist and
+could not start it. Three defects stood between a clone and a running
+deployment; none of them is in M5's artifact lists, and all three are fixed.
+
+- **A fresh checkout does not lint.** `@remnaray/db` exports its types from
+  `src/generated/prisma`, which `prisma generate` writes and `.gitignore`
+  excludes. Without it every type-aware rule that touches a Prisma call sees
+  `any`, and the first CI run of the `dev` branch failed with **3173 errors**
+  — `no-unsafe-member-access` on `.outboxJob`, `$queryRaw`, `$transaction` and
+  the rest. `app.Dockerfile` already ran the generate step, so only the
+  workflows and a developer's own clone were exposed. A root `postinstall`
+  now generates the client on every install; reproduced by moving
+  `packages/db/src/generated` aside, confirmed fixed by deleting all 22
+  `node_modules` trees and reinstalling, and the `web` image still builds.
+- **A release would publish images nobody pulls.** `release.yml` and
+  `rebuild.yml` pushed `ghcr.io/<owner>/remnaray-<image>`; `compose.yaml`
+  pulls `ghcr.io/remnaray/<image>` (section 7.1). Neither workflow built the
+  `backup` image at all, though every profile starts it. Both now publish the
+  five images under the names compose resolves to.
+- **A source checkout has nothing to start.** `compose.yaml` carries no build
+  contexts by design, so with no published release `./scripts/rr up` stops at
+  `error from registry: denied` — which is what the owner hit.
+  `./scripts/rr build` now builds `app`, `web`, `backup` and the proxy of the
+  active profile under exactly the tags compose resolves to, so `up` pulls
+  nothing afterwards. `docs/install.md` gained "Running from a source
+  checkout" and `docs/troubleshooting.md` the symptom.
+
+`test/tooling.test.mjs` covers all three: the wrapper's tags are compared
+against `compose.yaml` image by image, the workflows' names against the same,
+and the `postinstall` against `@remnaray/db`'s generated export. The naming
+test was confirmed to fail against the old workflows.
+
+Note for whoever runs the M5-004 checklist: the branch under test is `dev`.
+`main` is still at M0, where `compose.yaml` pins `:local` tags that exist
+nowhere — a clone of the default branch cannot start.
+
 ## M5-009 verification — 2026-09-20
 
 Verified on 2026-09-20. The acceptance is that the links in the README resolve

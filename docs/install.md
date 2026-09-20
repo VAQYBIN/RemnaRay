@@ -39,6 +39,26 @@ sixty. Then open `https://<your domain>/setup` and follow the eight steps —
 When the wizard finishes, `/setup` answers 404 and `RR_SETUP_TOKEN` can be
 removed from `.env`.
 
+## Running from a source checkout
+
+`compose.yaml` names published images rather than build contexts, so a
+checkout that is ahead of the last release — or a fork that has published
+nothing of its own — has nothing to pull and `./scripts/rr up` stops at
+`error from registry: denied`. Build them first:
+
+```sh
+./scripts/rr build     # app, web, backup and the proxy your profile starts
+./scripts/rr up
+```
+
+The images are tagged with exactly the names `compose.yaml` resolves to, so
+`up` finds them locally and pulls nothing. Budget ten to fifteen minutes and
+2 GB of free RAM for the first build; afterwards Docker's layer cache makes it
+minutes. Name images to build fewer of them: `./scripts/rr build web`.
+
+A published release needs none of this — `./scripts/rr up` pulls
+`ghcr.io/remnaray/<image>:${RR_VERSION:-1}` and starts.
+
 ## The seven variables
 
 Everything else is configured from the administration console and lives in the

@@ -8,7 +8,7 @@ compose_file=${COMPOSE_FILE:-compose.yaml}
 # owner never types it and never edits a proxy configuration by hand.
 if [ -f .env ]; then
   # shellcheck disable=SC2046
-  export $(grep -E '^(RR_PROXY_PROFILE|RR_TLS_MODE)=' .env | xargs) 2>/dev/null || true
+  export $(grep -E '^(RR_PROXY_PROFILE|RR_TLS_MODE|RR_VERSION|RR_[A-Z]+_IMAGE)=' .env | xargs) 2>/dev/null || true
 fi
 profile=${RR_PROXY_PROFILE:-nginx}
 tls_mode=${RR_TLS_MODE:-acme}
@@ -20,17 +20,71 @@ if [ "$tls_mode" = "certbot" ]; then
 fi
 
 usage() {
-  cat <<USAGE
-Usage: ./scripts/rr {up|down|logs|ps|config|proxy:render|proxy:reload|tls:issue|backup|restore|theme:validate}
+  cat <<'USAGE'
+Usage: ./scripts/rr {build|up|down|logs|ps|config|proxy:render|proxy:reload|tls:issue|backup|restore|theme:validate}
 
 The proxy profile comes from RR_PROXY_PROFILE in .env (default: nginx), and
 RR_TLS_MODE=certbot adds the certbot profile.
+
+`build` is only for running from a source checkout: a released deployment
+pulls the published images instead. With no arguments it builds what the
+active profile starts; otherwise name the images (app, web, nginx, caddy,
+backup).
 
 Set COMPOSE_FILE=compose.dev.yaml for the local PostgreSQL/Valkey dependencies.
 USAGE
 }
 
+# The tag `compose.yaml` resolves to for one image, so a local build lands on
+# exactly the name the deployment will look for.
+image_ref() {
+  case "$1" in
+    app) printf '%s' "${RR_APP_IMAGE:-ghcr.io/remnaray/app:${RR_VERSION:-1}}" ;;
+    web) printf '%s' "${RR_WEB_IMAGE:-ghcr.io/remnaray/web:${RR_VERSION:-1}}" ;;
+    nginx) printf '%s' "${RR_NGINX_IMAGE:-ghcr.io/remnaray/nginx:${RR_VERSION:-1}}" ;;
+    caddy) printf '%s' "${RR_CADDY_IMAGE:-ghcr.io/remnaray/caddy:${RR_VERSION:-1}}" ;;
+    backup) printf '%s' "${RR_BACKUP_IMAGE:-ghcr.io/remnaray/backup:${RR_VERSION:-1}}" ;;
+  esac
+}
+
+image_file() {
+  case "$1" in
+    app) printf '%s' deploy/docker/app.Dockerfile ;;
+    web) printf '%s' deploy/docker/web.Dockerfile ;;
+    nginx) printf '%s' deploy/proxy/nginx/Dockerfile ;;
+    caddy) printf '%s' deploy/proxy/caddy/Dockerfile ;;
+    backup) printf '%s' deploy/backup/Dockerfile ;;
+  esac
+}
+
 case "$command" in
+  build)
+    # Section 24.4 publishes the images to GHCR, and `compose.yaml` names them
+    # rather than carrying build contexts. A source checkout that is ahead of
+    # the last release — or a fork that has published nothing — has no images
+    # to pull, so this builds them under the names compose resolves to. Only
+    # the proxy of the active profile is built: the other one is never started.
+    shift
+    if [ $# -gt 0 ]; then
+      images="$*"
+    else
+      images="app web backup"
+      # `external` terminates TLS somewhere else and starts no proxy of ours.
+      if [ "$profile" != external ]; then
+        images="$images $profile"
+      fi
+    fi
+    for image in $images; do
+      file=$(image_file "$image")
+      if [ -z "$file" ]; then
+        echo "unknown image: $image (app, web, nginx, caddy, backup)" >&2
+        exit 2
+      fi
+      ref=$(image_ref "$image")
+      echo "==> $ref"
+      docker build -f "$file" -t "$ref" .
+    done
+    ;;
   up)
     # shellcheck disable=SC2086
     docker compose -f "$compose_file" $profiles up -d

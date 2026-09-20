@@ -210,6 +210,28 @@ test('the local deployment boundary includes Docker, Compose, and safe init scri
   assert.match(mockServer, /request.url === '\/health'/);
 });
 
+// `compose.yaml` carries no build contexts, so a checkout with no published
+// release has nothing to pull and every service stops at `denied`.
+test('a source checkout can build the images compose resolves to', async () => {
+  const wrapper = await readFile('scripts/rr', 'utf8');
+  const makefile = await readFile('Makefile', 'utf8');
+  const compose = await readFile('compose.yaml', 'utf8');
+  const install = await readFile('docs/install.md', 'utf8');
+
+  assert.match(wrapper, /^ {2}build\)$/mu);
+  assert.match(makefile, /^build:/mu);
+  // The tag the wrapper builds has to be the one compose looks for, or the
+  // build succeeds and the start still pulls.
+  for (const image of ['app', 'web', 'nginx', 'caddy', 'backup']) {
+    const variable = `RR_${image.toUpperCase()}_IMAGE`;
+    const reference = `\${${variable}:-ghcr.io/remnaray/${image}:\${RR_VERSION:-1}}`;
+    assert.ok(compose.includes(reference), `compose.yaml does not resolve ${image} that way`);
+    assert.ok(wrapper.includes(reference), `scripts/rr does not tag ${image} that way`);
+    assert.match(wrapper, new RegExp(`${image}\\) printf '%s' deploy/`, 'u'));
+  }
+  assert.match(install, /## Running from a source checkout/u);
+});
+
 // Type-aware linting resolves `@remnaray/db` through its generated client, and
 // a fresh checkout has none: without this every Prisma call lints as `any`.
 test('installing generates the Prisma client', async () => {
