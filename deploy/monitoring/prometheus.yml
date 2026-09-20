@@ -1,0 +1,40 @@
+# Section 20.2. The three application processes expose the section 9.9 metrics
+# on the compose network; none of these ports is published, so Prometheus has
+# to be on that network to reach them, which the monitoring profile arranges.
+global:
+  scrape_interval: 15s
+  scrape_timeout: 10s
+  external_labels:
+    deployment: remnaray
+
+scrape_configs:
+  - job_name: api
+    metrics_path: /metrics
+    static_configs:
+      - targets: ['api:3000']
+        labels: { service: api }
+
+  - job_name: bot
+    metrics_path: /metrics
+    static_configs:
+      - targets: ['bot:3002']
+        labels: { service: bot }
+
+  - job_name: worker
+    metrics_path: /metrics
+    static_configs:
+      - targets: ['worker:3003']
+        labels: { service: worker }
+
+  # Only the Caddy profile answers this. Prometheus keeps the target `down`
+  # under the nginx profile, which is the honest reading: nginx publishes
+  # `stub_status` for an exporter, not Prometheus text (section 20.2).
+  - job_name: caddy
+    metrics_path: /metrics
+    static_configs:
+      - targets: ['proxy-caddy:2019']
+        labels: { service: proxy }
+
+  - job_name: prometheus
+    static_configs:
+      - targets: ['127.0.0.1:9090']

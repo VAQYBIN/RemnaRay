@@ -3,9 +3,10 @@
   "version": "0.1.0",
   "private": false,
   "scripts": {
+    "build": "tsc -p tsconfig.build.json",
     "lint": "eslint .",
-    "typecheck": "tsc --noEmit -p tsconfig.json",
-    "test": "vitest run"
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit -p tsconfig.json"
   },
   "dependencies": {
     "zod": "~4.6.5"
@@ -13,5 +14,13 @@
   "devDependencies": {
     "vitest": "~5.0.1",
     "@types/node": "~24.13.6"
+  },
+  "type": "module",
+  "exports": {
+    ".": {
+      "types": "./src/env.ts",
+      "import": "./dist/env.js",
+      "default": "./dist/env.js"
+    }
   }
 }

@@ -1,0 +1,132 @@
+# Section 22.6: the checks that are too slow or too noisy for a pull request.
+name: nightly
+
+on:
+  schedule:
+    - cron: '0 3 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  security-events: write
+
+jobs:
+  audit:
+    name: pnpm audit
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v6
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24.21.0
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Audit
+        run: pnpm audit --audit-level high
+
+  trivy:
+    name: trivy / ${{ matrix.image }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - image: app
+            file: deploy/docker/app.Dockerfile
+          - image: web
+            file: deploy/docker/web.Dockerfile
+          - image: nginx
+            file: deploy/proxy/nginx/Dockerfile
+          - image: caddy
+            file: deploy/proxy/caddy/Dockerfile
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Set up Buildx
+        uses: docker/setup-buildx-action@v4
+
+      - name: Build ${{ matrix.image }}
+        uses: docker/build-push-action@v7
+        with:
+          context: .
+          file: ${{ matrix.file }}
+          push: false
+          load: true
+          tags: remnaray/${{ matrix.image }}:nightly
+          cache-from: type=gha,scope=${{ matrix.image }}
+
+      - name: Scan
+        uses: aquasecurity/trivy-action@0.28.0
+        with:
+          image-ref: remnaray/${{ matrix.image }}:nightly
+          format: sarif
+          output: trivy-${{ matrix.image }}.sarif
+          severity: CRITICAL,HIGH
+          ignore-unfixed: true
+
+      - name: Upload the findings
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: trivy-${{ matrix.image }}.sarif
+          category: trivy-${{ matrix.image }}
+
+  zap:
+    name: zap-baseline
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v6
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24.21.0
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build the images the stand runs
+        run: |
+          for image in app web nginx; do
+            case "$image" in
+              app) file=deploy/docker/app.Dockerfile ;;
+              web) file=deploy/docker/web.Dockerfile ;;
+              nginx) file=deploy/proxy/nginx/Dockerfile ;;
+            esac
+            docker buildx build --load -f "$file" -t "remnaray/$image:ci" .
+          done
+          docker buildx build --load -f deploy/backup/Dockerfile -t remnaray/backup:ci .
+
+      # The smoke stand of section 22.7, left running for ZAP to crawl.
+      - name: Start the stand
+        run: |
+          echo '127.0.0.1 rr.test www.rr.test' | sudo tee -a /etc/hosts
+          RR_SMOKE_KEEP=true RR_SMOKE_NO_BROWSER=true deploy/ci/proxy-smoke.sh nginx
+
+      - name: Scan the running stand
+        uses: zaproxy/action-baseline@v0.14.0
+        with:
+          target: https://rr.test
+          cmd_options: '-I -j'
+          fail_action: true
+
+      - name: Tear the stand down
+        if: always()
+        run: |
+          docker compose -f compose.yaml -f deploy/ci/compose.smoke.yaml \
+            --profile nginx down -v --remove-orphans || true
+          rm -f .env

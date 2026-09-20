@@ -4,29 +4,160 @@ set -eu
 command=${1:-help}
 compose_file=${COMPOSE_FILE:-compose.yaml}
 
-case "$command" in
-  up)
-    docker compose -f "$compose_file" up -d
-    ;;
-  down)
-    docker compose -f "$compose_file" down
-    ;;
-  logs)
-    shift
-    docker compose -f "$compose_file" logs "$@"
-    ;;
-  ps)
-    docker compose -f "$compose_file" ps
-    ;;
-  config)
-    docker compose -f "$compose_file" config
-    ;;
-  *)
-    cat <<USAGE
-Usage: ./scripts/rr {up|down|logs|ps|config}
+# NFR-013: one start command per profile. The profile comes from `.env`, so the
+# owner never types it and never edits a proxy configuration by hand.
+if [ -f .env ]; then
+  # shellcheck disable=SC2046
+  export $(grep -E '^(RR_PROXY_PROFILE|RR_TLS_MODE|RR_VERSION|RR_REGISTRY|RR_[A-Z]+_IMAGE)=' .env | xargs) 2>/dev/null || true
+fi
+profile=${RR_PROXY_PROFILE:-nginx}
+tls_mode=${RR_TLS_MODE:-acme}
+
+set -- "$@"
+profiles="--profile $profile"
+if [ "$tls_mode" = "certbot" ]; then
+  profiles="$profiles --profile certbot"
+fi
+
+usage() {
+  cat <<'USAGE'
+Usage: ./scripts/rr {build|up|down|logs|ps|config|proxy:render|proxy:reload|tls:issue|backup|restore|theme:validate}
+
+The proxy profile comes from RR_PROXY_PROFILE in .env (default: nginx), and
+RR_TLS_MODE=certbot adds the certbot profile.
+
+`build` is only for running from a source checkout: a released deployment
+pulls the published images instead. With no arguments it builds what the
+active profile starts; otherwise name the images (app, web, nginx, caddy,
+backup).
 
 Set COMPOSE_FILE=compose.dev.yaml for the local PostgreSQL/Valkey dependencies.
 USAGE
+}
+
+# The tag `compose.yaml` resolves to for one image, so a local build lands on
+# exactly the name the deployment will look for.
+image_ref() {
+  case "$1" in
+    app) printf '%s' "${RR_APP_IMAGE:-${RR_REGISTRY:-ghcr.io/remnaray}/app:${RR_VERSION:-1}}" ;;
+    web) printf '%s' "${RR_WEB_IMAGE:-${RR_REGISTRY:-ghcr.io/remnaray}/web:${RR_VERSION:-1}}" ;;
+    nginx) printf '%s' "${RR_NGINX_IMAGE:-${RR_REGISTRY:-ghcr.io/remnaray}/nginx:${RR_VERSION:-1}}" ;;
+    caddy) printf '%s' "${RR_CADDY_IMAGE:-${RR_REGISTRY:-ghcr.io/remnaray}/caddy:${RR_VERSION:-1}}" ;;
+    backup) printf '%s' "${RR_BACKUP_IMAGE:-${RR_REGISTRY:-ghcr.io/remnaray}/backup:${RR_VERSION:-1}}" ;;
+  esac
+}
+
+image_file() {
+  case "$1" in
+    app) printf '%s' deploy/docker/app.Dockerfile ;;
+    web) printf '%s' deploy/docker/web.Dockerfile ;;
+    nginx) printf '%s' deploy/proxy/nginx/Dockerfile ;;
+    caddy) printf '%s' deploy/proxy/caddy/Dockerfile ;;
+    backup) printf '%s' deploy/backup/Dockerfile ;;
+  esac
+}
+
+case "$command" in
+  build)
+    # Section 24.4 publishes the images to GHCR, and `compose.yaml` names them
+    # rather than carrying build contexts. A source checkout that is ahead of
+    # the last release — or a fork that has published nothing — has no images
+    # to pull, so this builds them under the names compose resolves to. Only
+    # the proxy of the active profile is built: the other one is never started.
+    shift
+    if [ $# -gt 0 ]; then
+      images="$*"
+    else
+      images="app web backup"
+      # `external` terminates TLS somewhere else and starts no proxy of ours.
+      if [ "$profile" != external ]; then
+        images="$images $profile"
+      fi
+    fi
+    for image in $images; do
+      file=$(image_file "$image")
+      if [ -z "$file" ]; then
+        echo "unknown image: $image (app, web, nginx, caddy, backup)" >&2
+        exit 2
+      fi
+      ref=$(image_ref "$image")
+      echo "==> $ref"
+      docker build -f "$file" -t "$ref" .
+    done
+    ;;
+  up)
+    # shellcheck disable=SC2086
+    docker compose -f "$compose_file" $profiles up -d
+    ;;
+  down)
+    # shellcheck disable=SC2086
+    docker compose -f "$compose_file" $profiles down
+    ;;
+  logs)
+    shift
+    # shellcheck disable=SC2086
+    docker compose -f "$compose_file" $profiles logs "$@"
+    ;;
+  ps)
+    # shellcheck disable=SC2086
+    docker compose -f "$compose_file" $profiles ps
+    ;;
+  config)
+    # shellcheck disable=SC2086
+    docker compose -f "$compose_file" $profiles config
+    ;;
+  proxy:render)
+    # Re-render the proxy configuration without waiting for a settings change.
+    docker compose -f "$compose_file" restart proxy-config
+    ;;
+  tls:issue)
+    # Section 21.3: the first certificate of the `certbot` mode. nginx is
+    # already serving the HTTP-only bootstrap configuration, which answers the
+    # HTTP-01 challenge from the shared webroot.
+    if [ "$tls_mode" != "certbot" ]; then
+      echo "tls:issue applies to RR_TLS_MODE=certbot; this deployment uses $tls_mode" >&2
+      exit 1
+    fi
+    domain=$(grep -E '^RR_DOMAIN=' .env | cut -d= -f2-)
+    email=$(grep -E '^RR_ACME_EMAIL=' .env | cut -d= -f2-)
+    docker compose -f "$compose_file" --profile certbot run --rm certbot \
+      certonly --webroot -w /var/www/certbot -d "$domain" -m "$email" --agree-tos -n
+    # The certificate exists now, so the full configuration renders.
+    docker compose -f "$compose_file" restart proxy-config
+    ;;
+  proxy:reload)
+    # Ask `proxy-reloader` to validate and apply what is currently rendered.
+    docker compose -f "$compose_file" exec -T valkey \
+      valkey-cli publish rr:proxy.reload '{"reason":"manual"}'
+    ;;
+  backup)
+    # Section 20.5: the same step the schedule runs, on demand. The image's
+    # entrypoint is the script itself, so the subcommand is the whole argument
+    # — naming the script again makes it the subcommand, and it refuses.
+    docker compose -f "$compose_file" run --rm backup once
+    ;;
+  restore)
+    shift
+    if [ $# -lt 1 ]; then
+      echo "Usage: ./scripts/rr restore backups/<file>.dump" >&2
+      exit 2
+    fi
+    # The restore of section 20.5 drives compose itself — it stops the stack,
+    # brings PostgreSQL up alone, restores and starts everything again — so it
+    # runs on the host. Inside the `backup` container there is no compose and
+    # no socket to reach it with.
+    COMPOSE_FILE="$compose_file" RR_PROXY_PROFILE="$profile" \
+      deploy/backup/restore.sh "$1"
+    ;;
+  theme:validate)
+    shift
+    pnpm theme-validate "${1:-themes/manta}"
+    ;;
+  help | --help | -h)
+    usage
+    ;;
+  *)
+    usage >&2
     exit 1
     ;;
 esac

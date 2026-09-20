@@ -1,0 +1,60 @@
+{
+  "$schema": "https://remnaray.dev/schema/theme.v1.json",
+  "slug": "manta",
+  "name": "Manta",
+  "version": 1,
+  "brand": {
+    "name": "RemnaRay",
+    "tagline": {
+      "ru": "Open-source магазин для Remnawave",
+      "en": "Open-source commerce platform for Remnawave"
+    }
+  },
+  "colors": {
+    "primary": "#0EA5A4",
+    "primary-foreground": "#FFFFFF",
+    "secondary": "#22D3EE",
+    "accent": "#A7F36D",
+    "accent-foreground": "#0B1F3B",
+    "background": "#E6F7F9",
+    "foreground": "#0B1F3B",
+    "surface": "#FFFFFF",
+    "muted": "#7DD3FC",
+    "muted-foreground": "#0B1F3B",
+    "border": "#BFE9F0",
+    "ring": "#0EA5A4",
+    "success": "#22C55E",
+    "warning": "#F59E0B",
+    "danger": "#EF4444",
+    "dark": {
+      "background": "#0B1F3B",
+      "foreground": "#E6F7F9",
+      "surface": "#10294B",
+      "muted": "#1E3A5F",
+      "muted-foreground": "#7DD3FC",
+      "border": "#1E3A5F"
+    }
+  },
+  "typography": {
+    "sans": "Inter, system-ui, sans-serif",
+    "mono": "JetBrains Mono, ui-monospace, monospace",
+    "fonts": []
+  },
+  "radius": { "sm": "0.375rem", "md": "0.75rem", "lg": "1.25rem" },
+  "assets": {
+    "logo": "logo.svg",
+    "logoDark": "logo-dark.svg",
+    "mark": "logo-mark.svg",
+    "mascot": {
+      "default": "mascot.svg",
+      "empty": "mascot-empty.svg",
+      "error": "mascot-error.svg",
+      "success": "mascot-success.svg"
+    },
+    "og": "og.png",
+    "favicon": "favicon.svg",
+    "appleTouchIcon": "apple-touch-icon.png",
+    "botAvatar": "bot-avatar.png"
+  },
+  "landing": { "heroStyle": "wave", "showMascot": true }
+}

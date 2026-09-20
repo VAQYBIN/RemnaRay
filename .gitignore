@@ -33,6 +33,10 @@ lerna-debug.log*
 
 .temp
 .tmp
+test-results/
+playwright-report/
+e2e/.stack.json
+e2e/.auth/
 
 .codex
 AGENTS.md
@@ -43,3 +47,6 @@ docs/development/*
 .turbo/
 
 **/src/generated/
+
+# The proxy smoke stand fixture (section 22.7), written by `seed-dev`.
+deploy/ci/.stand.json

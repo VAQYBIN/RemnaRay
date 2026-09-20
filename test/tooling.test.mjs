@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
-import { readFile } from 'node:fs/promises';
+import { execFileSync } from 'node:child_process';
+import { glob, readFile } from 'node:fs/promises';
 import test from 'node:test';
 
 const packageManifest = JSON.parse(await readFile('package.json', 'utf8'));
@@ -194,6 +195,9 @@ test('the local deployment boundary includes Docker, Compose, and safe init scri
 
   assert.match(appDockerfile, /FROM node:24-alpine AS build/);
   assert.match(appDockerfile, /pnpm install --frozen-lockfile/);
+  assert.match(appDockerfile, /pnpm deploy --filter=@remnaray\/runtime --prod \/out\/runtime/);
+  assert.match(appDockerfile, /node_modules\/@remnaray\/api\/dist/);
+  assert.match(appDockerfile, /node_modules\/@remnaray\/db/);
   assert.match(webDockerfile, /\.next\/standalone/);
   assert.match(compose, /172\.28\.0\.0\/16/);
   assert.match(compose, /read_only: true/);
@@ -207,14 +211,169 @@ test('the local deployment boundary includes Docker, Compose, and safe init scri
   assert.match(mockServer, /request.url === '\/health'/);
 });
 
+// `compose.yaml` carries no build contexts, so a checkout with no published
+// release has nothing to pull and every service stops at `denied`.
+test('a source checkout can build the images compose resolves to', async () => {
+  const wrapper = await readFile('scripts/rr', 'utf8');
+  const makefile = await readFile('Makefile', 'utf8');
+  const compose = await readFile('compose.yaml', 'utf8');
+  const install = await readFile('docs/install.md', 'utf8');
+
+  assert.match(wrapper, /^ {2}build\)$/mu);
+  assert.match(makefile, /^build:/mu);
+  // The tag the wrapper builds has to be the one compose looks for, or the
+  // build succeeds and the start still pulls.
+  for (const image of ['app', 'web', 'nginx', 'caddy', 'backup']) {
+    const variable = `RR_${image.toUpperCase()}_IMAGE`;
+    const reference =
+      `\${${variable}:-` + `\${RR_REGISTRY:-ghcr.io/remnaray}/${image}:\${RR_VERSION:-1}}`;
+    assert.ok(compose.includes(reference), `compose.yaml does not resolve ${image} that way`);
+    assert.ok(wrapper.includes(reference), `scripts/rr does not tag ${image} that way`);
+    assert.match(wrapper, new RegExp(`${image}\\) printf '%s' deploy/`, 'u'));
+  }
+  assert.match(install, /## Running from a source checkout/u);
+});
+
+// `tsc -p tsconfig.build.json` compiles whatever the config includes, and a
+// test file that ships in `dist` is both dead weight in the app image and a
+// build that fails on code no deployment runs.
+test('no package compiles its tests into dist', async () => {
+  const configs = await Array.fromAsync(glob('packages/*/tsconfig.build.json'));
+  assert.ok(configs.length > 10, 'found almost no build configs');
+
+  for (const path of configs) {
+    const config = JSON.parse(await readFile(path, 'utf8'));
+    assert.ok(
+      config.exclude?.some((pattern) => pattern.endsWith('*.test.ts')),
+      `${path} does not exclude its tests from the build`,
+    );
+  }
+});
+
+// A clone has to be able to run what the documentation tells it to run, and
+// the `backup` image's crontab executes its entrypoint by path.
+test('the scripts the documentation invokes are executable', () => {
+  const scripts = [
+    'scripts/rr',
+    'scripts/init-env.sh',
+    'scripts/ci-local.sh',
+    'deploy/ci/proxy-smoke.sh',
+    'deploy/ci/gen-selfsigned.sh',
+    'deploy/backup/backup-entrypoint.sh',
+    'deploy/backup/restore.sh',
+  ];
+  // The index, not the working tree: `core.fileMode=false` — which every
+  // checkout on a Windows filesystem sets — hides a missing bit locally and
+  // hands the clone a file it cannot run.
+  const listing = execFileSync('git', ['ls-files', '-s', '--', ...scripts], {
+    encoding: 'utf8',
+  });
+
+  for (const script of scripts) {
+    assert.match(listing, new RegExp(`^100755 [0-9a-f]+ 0\\t${script}$`, 'mu'));
+  }
+});
+
+// The image's entrypoint is the backup script, and the restore drives compose
+// from the host: both wrappers used to name a script the callee then read as
+// its subcommand, and neither ran.
+test('the backup wrappers call what they mean to call', async () => {
+  const wrapper = await readFile('scripts/rr', 'utf8');
+  const entrypoint = await readFile('deploy/backup/Dockerfile', 'utf8');
+  const restore = await readFile('deploy/backup/restore.sh', 'utf8');
+
+  assert.match(entrypoint, /ENTRYPOINT \["\/bin\/sh", "\/scripts\/backup-entrypoint\.sh"\]/u);
+  assert.match(wrapper, /run --rm backup once$/mu);
+  assert.doesNotMatch(wrapper, /run --rm backup \/scripts\//u);
+  // The restore stops the stack and starts it again, which nothing inside the
+  // stack can do.
+  assert.match(restore, /docker compose .* down/u);
+  assert.match(wrapper, /deploy\/backup\/restore\.sh "\$1"/u);
+});
+
+// Type-aware linting reads generated types, and a fresh checkout has none:
+// without the client every Prisma call lints as `any`, and without the route
+// types `next/root-params` does too. Both are gitignored, so only an install
+// can put them there — and CI lints before it builds.
+test('installing generates the types the linter reads', async () => {
+  const db = JSON.parse(await readFile('packages/db/package.json', 'utf8'));
+  const web = JSON.parse(await readFile('apps/web/package.json', 'utf8'));
+  const postinstall = packageManifest.scripts.postinstall ?? '';
+
+  assert.match(postinstall, /pnpm --filter @remnaray\/db db:generate/u);
+  assert.match(postinstall, /pnpm --filter @remnaray\/web typegen/u);
+  assert.equal(db.scripts['db:generate'], 'prisma generate');
+  assert.equal(web.scripts.typegen, 'next typegen');
+  assert.match(db.exports['./generated'].types, /src\/generated\/prisma/u);
+});
+
+// Section 24.4 and 24.6: what the tag publishes must be what `compose.yaml`
+// pulls, down to the last path segment.
+test('the release and rebuild workflows publish the images compose pulls', async () => {
+  const release = await readFile('.github/workflows/release.yml', 'utf8');
+  const rebuild = await readFile('.github/workflows/rebuild.yml', 'utf8');
+  const compose = await readFile('compose.yaml', 'utf8');
+
+  for (const workflow of [release, rebuild]) {
+    for (const image of ['app', 'web', 'nginx', 'caddy', 'backup']) {
+      assert.match(workflow, new RegExp(`^ {10}- image: ${image}$`, 'mu'));
+    }
+    // A `remnaray-` prefix, or any other segment, is a name nothing pulls.
+    assert.match(workflow, /\/\$\{\{ steps\.ns\.outputs\.owner \}\}\/\$\{\{ matrix\.image \}\}/u);
+    assert.doesNotMatch(workflow, /outputs\.owner \}\}\/[a-z-]+\$\{\{ matrix\.image/u);
+    // GHCR refuses an uppercase namespace, and an account's own spelling is
+    // whatever the account chose.
+    assert.match(workflow, /tr '\[:upper:\]' '\[:lower:\]'/u);
+  }
+  for (const image of ['app', 'web', 'nginx', 'caddy', 'backup']) {
+    assert.ok(compose.includes(`ghcr.io/remnaray}/${image}:`), `compose.yaml never pulls ${image}`);
+  }
+});
+
+// A package's tests import its dependencies through their `exports`, which
+// point at `dist`. `pnpm -r test` builds nothing, so on a checkout that has
+// never been built `@remnaray/queues` could not resolve `@remnaray/db` — and
+// CI starts from exactly such a checkout.
+test('workspace tests build what they import', async () => {
+  const turbo = JSON.parse(await readFile('turbo.json', 'utf8'));
+  const workflow = await readFile('.github/workflows/ci.yml', 'utf8');
+  const contributing = await readFile('CONTRIBUTING.md', 'utf8');
+
+  assert.deepEqual(turbo.tasks.test.dependsOn, ['^build']);
+  assert.match(workflow, /run: pnpm turbo run test/u);
+  assert.doesNotMatch(workflow, /run: pnpm -r test/u);
+  assert.doesNotMatch(contributing, /pnpm -r test/u);
+});
+
 test('the CI workflow covers required quality and image gates', async () => {
   const workflow = await readFile('.github/workflows/ci.yml', 'utf8');
   assert.match(workflow, /pnpm install --frozen-lockfile/);
   assert.match(workflow, /pnpm lint/);
+  assert.match(workflow, /pnpm format/);
   assert.match(workflow, /pnpm typecheck/);
+  assert.match(workflow, /pnpm -r typecheck/);
+  assert.match(workflow, /pnpm turbo run test/);
+  assert.match(workflow, /pnpm i18n-check/);
+  assert.match(workflow, /pnpm theme-validate themes\/manta/);
   assert.match(workflow, /pnpm build/);
+  assert.match(workflow, /playwright install --with-deps chromium/);
+  assert.match(workflow, /pnpm test:e2e/);
   assert.match(workflow, /node: \['24\.21\.0', '26\.x'\]/);
   assert.match(workflow, /deploy\/docker\/app\.Dockerfile/);
   assert.match(workflow, /deploy\/docker\/web\.Dockerfile/);
   assert.match(workflow, /push: false/);
+});
+
+test('the API OpenAPI document is generated from shared Zod contracts', async () => {
+  const manifest = JSON.parse(await readFile('apps/api/package.json', 'utf8'));
+  const document = JSON.parse(await readFile('apps/api/openapi.json', 'utf8'));
+  const generator = await readFile('apps/api/src/openapi/generator.ts', 'utf8');
+
+  assert.match(manifest.scripts.build, /dist\/openapi\/generator\.js/);
+  assert.equal(document.openapi, '3.1.0');
+  assert.ok(document.components?.schemas?.Money);
+  assert.ok(document.components?.schemas?.ErrorEnvelope);
+  assert.ok(Object.keys(document.paths).length >= 100);
+  assert.match(generator, /OpenApiGeneratorV31/);
+  assert.match(generator, /@remnaray\/domain/);
 });

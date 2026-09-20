@@ -1,0 +1,12 @@
+{
+  "name": "@remnaray/runtime",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Production dependency closure for the shared API, bot, worker and tools image.",
+  "dependencies": {
+    "@remnaray/api": "workspace:*",
+    "@remnaray/bot": "workspace:*",
+    "@remnaray/worker": "workspace:*",
+    "@remnaray/db": "workspace:*"
+  }
+}

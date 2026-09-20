@@ -1,0 +1,32 @@
+# Section 21.5: the paths whose answer must not depend on which proxy profile
+# is running, and section 22.7 step 2, which compares this table against both.
+#
+# vantage	where the request comes from: `outside` is a client the proxy sees
+#		on a network outside RR_TRUSTED_PROXIES, `inside` is the compose
+#		network. `/metrics` is the path the two must differ on, which is
+#		why the vantage is part of the table rather than of the script.
+# method	the HTTP method
+# path		the path, against a stand seeded with the section 22.3 fixture
+# status	the expected response status
+#
+# vantage	method	path	status	why
+outside	GET	/healthz	200	the proxy answers it itself
+outside	GET	/	307	the locale is chosen and the visitor is sent to it
+outside	GET	/ru	200	the landing page
+outside	GET	/account	307	unlocalized, so the locale prefix is added first
+outside	GET	/ru/account	307	no session cookie, so the login prompt
+outside	GET	/admin	200	the console, which asks for a login in the browser
+outside	GET	/setup	404	the wizard is gone once it has finished (AC-171)
+outside	GET	/api/v1/public/config	200	the public catalog the site renders from
+outside	GET	/api/admin/v1/auth/me	401	no administrator session
+outside	GET	/webhooks/mock	405	webhooks are POST only
+outside	POST	/webhooks/mock	400	a POST with no valid signature is refused by `api`
+outside	GET	/tg/webhook/x	405	the Telegram webhook is POST only
+outside	POST	/tg/webhook/x	403	the secret path and token do not match
+outside	GET	/metrics	403	not reachable from outside the compose network
+outside	POST	/metrics	403	the same, whatever the method
+inside	GET	/healthz	200	the same answer from inside the network
+inside	GET	/metrics	200	the compose network may scrape it (section 9.9)
+outside	GET	/_next/static/does-not-exist.js	404	an asset that was never built
+outside	GET	/themes/manta/logo.svg	200	the active theme's logo
+outside	GET	/api/v1/does-not-exist	404	an unknown API path reaches `api` and is refused there

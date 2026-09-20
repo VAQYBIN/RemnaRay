@@ -1,0 +1,54 @@
+name: Bug report
+description: Something in a deployment does not behave as documented.
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        A security problem goes through
+        [Security advisories](../../security/advisories/new), never here.
+
+  - type: input
+    id: version
+    attributes:
+      label: Version
+      description: The image tag or the commit you are running.
+      placeholder: '1.2.3, or the output of `docker compose images app`'
+    validations: { required: true }
+
+  - type: dropdown
+    id: profile
+    attributes:
+      label: Proxy profile
+      options: [nginx, caddy, external, 'not sure']
+    validations: { required: true }
+
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened
+      description: What you did, what you expected, and what you got instead.
+    validations: { required: true }
+
+  - type: textarea
+    id: repro
+    attributes:
+      label: How to reproduce it
+      description: The shortest sequence that shows the problem.
+    validations: { required: true }
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs
+      description: |
+        `docker compose logs --tail 200 <service>`. Remove tokens, secret
+        paths and anything from `.env` — the logs redact what they can, but
+        check before pasting.
+      render: text
+
+  - type: textarea
+    id: system
+    attributes:
+      label: System
+      description: OS, Docker Engine and Compose versions, Remnawave panel version.

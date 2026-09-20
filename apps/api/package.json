@@ -5,13 +5,16 @@
   "scripts": {
     "lint": "eslint .",
     "typecheck": "tsc --noEmit -p tsconfig.json",
-    "build": "tsc -p tsconfig.json",
+    "build": "tsc -p tsconfig.json && node dist/openapi/generator.js",
+    "generate:openapi": "node dist/openapi/generator.js",
     "dev": "tsx watch src/main.ts",
-    "start": "node dist/main.js"
+    "start": "node dist/main.js",
+    "test": "vitest run"
   },
   "dependencies": {
     "@asteasolutions/zod-to-openapi": "~9.1.0",
     "@fastify/helmet": "~13.1.1",
+    "@fastify/multipart": "~10.1.1",
     "@nestjs/common": "12.0.3",
     "@nestjs/config": "12.0.0",
     "@nestjs/core": "12.0.3",
@@ -19,20 +22,36 @@
     "@nestjs/swagger": "12.0.1",
     "@nestjs/terminus": "12.0.0",
     "@nestjs/throttler": "~6.7.0",
-    "@scalar/nestjs-api-reference": "~1.2.19",
     "@node-rs/argon2": "~2.2.1",
+    "@remnaray/db": "workspace:*",
+    "@remnaray/domain": "workspace:*",
+    "@remnaray/i18n-core": "workspace:*",
+    "@remnaray/metrics": "workspace:*",
+    "@remnaray/payments-mock": "workspace:*",
+    "@remnaray/queues": "workspace:*",
+    "@remnaray/remnawave-sdk": "workspace:*",
+    "@remnaray/theme-schema": "workspace:*",
+    "@scalar/nestjs-api-reference": "~1.2.19",
+    "bullmq": "~6.3.7",
     "dayjs": "~1.11.23",
     "fastify": "~5.12.5",
     "intl-messageformat": "~12.1.1",
+    "ioredis": "~5.11.1",
     "nestjs-pino": "~5.2.0",
     "otpauth": "~9.5.2",
     "pino": "~10.3.1",
     "pino-http": "~11.0.0",
+    "qrcode": "~1.5.4",
+    "rxjs": "~7.8.2",
     "sharp": "~0.35.4",
     "undici": "~8.10.2",
+    "yauzl": "~3.4.0",
     "zod": "~4.6.5"
   },
   "devDependencies": {
-    "@nestjs/testing": "12.0.3"
+    "@nestjs/testing": "12.0.3",
+    "@types/qrcode": "~1.5.6",
+    "@types/yauzl": "~3.4.0",
+    "vitest": "~5.0.1"
   }
 }

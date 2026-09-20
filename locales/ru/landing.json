@@ -1,0 +1,62 @@
+{
+  "landing.hero.eyebrow": "{brand} для Remnawave",
+  "landing.hero.title": "Спокойный и понятный магазин подписок",
+  "landing.hero.description": "Продавайте доступ, принимайте платежи и давайте клиентам понятную подписку — в Telegram и на сайте.",
+  "landing.hero.cta": "Открыть в Telegram",
+  "landing.hero.secondary": "Войти",
+  "landing.hero.imageAlt": "Скат, скользящий в синей воде",
+  "landing.featuresTitle": "Всё, что нужно клиенту",
+  "landing.features": [
+    {
+      "title": "Всё в Telegram",
+      "text": "Покупка, продление и помощь — не выходя из чата."
+    },
+    {
+      "title": "Удобная оплата",
+      "text": "Карты, криптовалюта, Telegram Stars и баланс аккаунта."
+    },
+    {
+      "title": "Одна понятная ссылка",
+      "text": "Единая ссылка подписки с QR-кодом и кнопками клиентов."
+    }
+  ],
+  "landing.plansTitle": "Выберите тариф",
+  "landing.plans.days": "{days, plural, one {# день} few {# дня} many {# дней} other {# дня}}",
+  "landing.plans.devices": "{count, plural, one {# устройство} few {# устройства} many {# устройств} other {# устройства}}",
+  "landing.plans.traffic": "{traffic} трафика",
+  "landing.plans.unlimited": "Безлимитный трафик",
+  "landing.stepsTitle": "Как подключиться",
+  "landing.steps": [
+    "Откройте Telegram-бот или войдите на сайте.",
+    "Выберите тариф и оплатите удобным способом.",
+    "Добавьте ссылку подписки в клиент и подключайтесь."
+  ],
+  "landing.clientsTitle": "Поддерживаемые клиенты",
+  "landing.faqTitle": "Вопросы",
+  "landing.faq": [
+    {
+      "question": "Нужна ли карта для триала?",
+      "answer": "Нет. Если владелец магазина включил триал, он выдаётся прямо в боте."
+    },
+    {
+      "question": "Можно ли поменять тариф позже?",
+      "answer": "Да. Остаток дней текущего тарифа засчитывается в стоимость нового."
+    },
+    {
+      "question": "Что будет, когда подписка закончится?",
+      "answer": "После льготного периода доступ приостановится. После продления ссылка останется прежней."
+    },
+    {
+      "question": "Куда обращаться за помощью?",
+      "answer": "Напишите в поддержку по контакту в подвале сайта или в Telegram-бот."
+    }
+  ],
+  "landing.ctaTitle": "Готовы подключиться?",
+  "landing.ctaText": "Начните в Telegram-боте или войдите, чтобы открыть кабинет на сайте.",
+  "landing.legal.terms": "Условия",
+  "landing.legal.privacy": "Конфиденциальность",
+  "landing.legal.offer": "Оферта",
+  "landing.footer.support": "Поддержка",
+  "landing.footer.language": "Язык",
+  "landing.footer.poweredBy": "Работает на RemnaRay"
+}

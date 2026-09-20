@@ -1,0 +1,20 @@
+[
+  {
+    "id": "v2rayng",
+    "label": "v2rayNG",
+    "platform": "android",
+    "deepLink": "v2rayng://install-config?url={url}"
+  },
+  {
+    "id": "streisand",
+    "label": "Streisand",
+    "platform": "ios",
+    "deepLink": "streisand://import/{url}"
+  },
+  {
+    "id": "hiddify",
+    "label": "Hiddify",
+    "platform": "desktop",
+    "deepLink": "hiddify://import/{url}"
+  }
+]

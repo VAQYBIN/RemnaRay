@@ -32,7 +32,7 @@ export function fromDecimal(value: string, currency = 'RUB'): Money {
   if (!match) {
     throw new Error(`Invalid decimal amount: ${value}`);
   }
-  const [, sign, units, fraction = ''] = match;
+  const [, sign, units = '0', fraction = ''] = match;
   const minor = BigInt(units) * 100n + BigInt(fraction.padEnd(2, '0') || '0');
   return createMoney(sign ? -minor : minor, currency);
 }
@@ -62,4 +62,42 @@ export function formatMoney(value: Money): string {
   const units = absolute / 100n;
   const minor = (absolute % 100n).toString().padStart(2, '0');
   return `${negative ? '-' : ''}${units.toString()}.${minor} ${value.currency}`;
+}
+
+/** Exact decimal string for a minor amount, e.g. `29900n` → `"299.00"`. */
+export function toDecimalString(value: Money): string {
+  const negative = value.amountMinor < 0n;
+  const absolute = negative ? -value.amountMinor : value.amountMinor;
+  return `${negative ? '-' : ''}${(absolute / 100n).toString()}.${(absolute % 100n)
+    .toString()
+    .padStart(2, '0')}`;
+}
+
+/**
+ * Locale-aware display string. The decimal string is produced from the exact
+ * minor units first, so no value ever passes through a binary float.
+ */
+export function formatMoneyLocale(value: Money, locale: string): string {
+  const decimal = toDecimalString(value);
+  const formatter = new Intl.NumberFormat(locale, {
+    style: 'currency',
+    currency: value.currency,
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  });
+  const parts = formatter.formatToParts(0);
+  const [units = '0', fraction = '00'] = decimal.replace('-', '').split('.');
+  const groupedUnits = new Intl.NumberFormat(locale, { useGrouping: true }).format(BigInt(units));
+  const decimalSeparator = parts.find((part) => part.type === 'decimal')?.value ?? '.';
+  const number = fraction === '00' ? groupedUnits : `${groupedUnits}${decimalSeparator}${fraction}`;
+  const sign = decimal.startsWith('-') ? '-' : '';
+  return parts
+    .map((part) => {
+      if (part.type === 'currency') return part.value;
+      if (part.type === 'literal') return part.value;
+      if (part.type === 'minusSign') return '';
+      return part.type === 'integer' ? `${sign}${number}` : '';
+    })
+    .join('')
+    .trim();
 }

@@ -1,0 +1,233 @@
+{
+{{CADDY_ACME_EMAIL_BLOCK}}
+	# Section 21.5: the nginx profile answers `http://` with 301 from its own
+	# `:80` server. Caddy's automatic redirect is a 308 and is inserted ahead
+	# of any catch-all of ours, so it is turned off and the same server is
+	# written out below. Certificate management and the HTTP-01 challenge are
+	# untouched by this — only the redirect is.
+	auto_https disable_redirects
+	# Reachable only inside the compose network: the port is never published.
+	admin 0.0.0.0:2019
+	servers {
+		trusted_proxies static {{DOCKER_CIDR}}
+		client_ip_headers X-Forwarded-For
+		protocols h1 h2 h3
+		timeouts {
+			read_body 30s
+			read_header 15s
+			idle 65s
+		}
+		max_header_size 16KB
+	}
+	log {
+		output stdout
+		format json
+	}
+	metrics
+{{CADDY_RATE_LIMIT_ORDER}}
+}
+
+(rr_security_headers) {
+	header {
+		Strict-Transport-Security "max-age=31536000; includeSubDomains"
+		X-Content-Type-Options "nosniff"
+		X-Frame-Options "DENY"
+		Referrer-Policy "strict-origin-when-cross-origin"
+		Permissions-Policy "camera=(), microphone=(), geolocation=(), payment=()"
+		-Server
+		defer
+	}
+}
+
+(rr_upstream_headers) {
+	header_up Host {host}
+	header_up X-Real-IP {client_ip}
+	header_up X-Forwarded-Host {host}
+	header_up X-Forwarded-Port {server_port}
+	header_up X-Request-Id {http.request.uuid}
+	transport http {
+		dial_timeout 5s
+		response_header_timeout 60s
+		keepalive 65s
+		keepalive_idle_conns 32
+	}
+}
+
+(rr_admin_allow) {
+{{CADDY_ADMIN_ALLOWLIST_BLOCK}}
+}
+
+# ---------- HTTP :80 — the health check and the redirect ----------
+# Host-less, like nginx's `default_server`: the compose health check asks
+# 127.0.0.1 for `/healthz` and no `Host` names the site.
+http:// {
+	handle /healthz {
+		respond "ok" 200
+	}
+	handle {
+		redir https://{host}{uri} permanent
+	}
+}
+
+{{CADDY_EXTRA_DOMAINS_SITE}}
+{{DOMAIN}} {
+{{CADDY_TLS_BLOCK}}
+	encode zstd gzip
+	import rr_security_headers
+	header X-Request-Id {http.request.uuid}
+	request_body {
+		max_size 1MB
+	}
+
+	log {
+		output stdout
+		format filter {
+			wrap json
+			request>headers>Cookie delete
+			request>headers>Authorization delete
+			request>headers>X-Telegram-Bot-Api-Secret-Token delete
+			request>uri query {
+				delete token
+			}
+		}
+	}
+
+	handle /healthz {
+		respond "ok" 200
+	}
+
+	# Provider and panel webhooks: POST only, 256k body.
+	@webhooks {
+		path /webhooks/*
+		method POST
+	}
+	handle @webhooks {
+		request_body {
+			max_size 256KB
+		}
+{{CADDY_RATE_LIMIT_WEBHOOKS}}
+		reverse_proxy api:3000 {
+			import rr_upstream_headers
+		}
+	}
+	@webhooks_bad_method {
+		path /webhooks/*
+		not method POST
+	}
+	# A `handle`, not a bare `respond`: `respond` is ordered after `handle`,
+	# so the catch-all below would answer this request first.
+	handle @webhooks_bad_method {
+		respond 405
+	}
+
+	@tg {
+		path /tg/webhook/*
+		method POST
+	}
+	handle @tg {
+		request_body {
+			max_size 2MB
+		}
+{{CADDY_RATE_LIMIT_WEBHOOKS}}
+		reverse_proxy api:3000 {
+			import rr_upstream_headers
+		}
+	}
+	@tg_bad_method {
+		path /tg/webhook/*
+		not method POST
+	}
+	handle @tg_bad_method {
+		respond 405
+	}
+
+	handle /api/v1/auth/* {
+{{CADDY_RATE_LIMIT_AUTH}}
+		reverse_proxy api:3000 {
+			import rr_upstream_headers
+		}
+	}
+	handle /api/admin/v1/auth/* {
+		import rr_admin_allow
+{{CADDY_RATE_LIMIT_AUTH}}
+		reverse_proxy api:3000 {
+			import rr_upstream_headers
+		}
+	}
+	handle /api/admin/* {
+		import rr_admin_allow
+		request_body {
+			max_size 10MB
+		}
+{{CADDY_RATE_LIMIT_ADMIN}}
+		reverse_proxy api:3000 {
+			import rr_upstream_headers
+		}
+	}
+	handle /api/setup/* {
+		request_body {
+			max_size 5MB
+		}
+{{CADDY_RATE_LIMIT_AUTH}}
+		reverse_proxy api:3000 {
+			import rr_upstream_headers
+		}
+	}
+
+	@metrics {
+		path /metrics
+		not client_ip {{DOCKER_CIDR}}
+	}
+	handle @metrics {
+		respond 403
+	}
+	handle /metrics {
+		reverse_proxy api:3000 {
+			import rr_upstream_headers
+		}
+	}
+{{CADDY_API_DOCS_BLOCK}}
+	handle /api/* {
+{{CADDY_RATE_LIMIT_API}}
+		reverse_proxy api:3000 {
+			import rr_upstream_headers
+		}
+	}
+
+	# Caddy has no response cache; `web` serves these from memory and the
+	# `immutable` headers match the nginx profile exactly.
+	handle /_next/static/* {
+		header Cache-Control "public, max-age=31536000, immutable"
+		header -Set-Cookie
+		reverse_proxy web:3001 {
+			import rr_upstream_headers
+		}
+	}
+	handle /themes/* {
+		header Cache-Control "public, max-age=86400"
+		reverse_proxy web:3001 {
+			import rr_upstream_headers
+		}
+	}
+	handle /admin* {
+		import rr_admin_allow
+{{CADDY_RATE_LIMIT_ADMIN}}
+		reverse_proxy web:3001 {
+			import rr_upstream_headers
+		}
+	}
+	handle /setup* {
+{{CADDY_RATE_LIMIT_AUTH}}
+		reverse_proxy web:3001 {
+			import rr_upstream_headers
+		}
+	}
+	handle {
+{{CADDY_RATE_LIMIT_GENERAL}}
+		reverse_proxy web:3001 {
+			import rr_upstream_headers
+		}
+	}
+
+	import /etc/caddy/custom.d/*.caddy
+}

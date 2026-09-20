@@ -50,12 +50,29 @@ const envSchema = z
         message: 'must be none when RR_PROXY_PROFILE=external',
       });
     }
+
+    if (value.RR_PROXY_PROFILE !== 'external' && value.RR_TLS_MODE === 'none') {
+      context.addIssue({
+        code: 'custom',
+        path: ['RR_TLS_MODE'],
+        message: 'none is only valid when RR_PROXY_PROFILE=external',
+      });
+    }
+
+    // Section 21.4: Caddy issues and renews its own certificates.
+    if (value.RR_PROXY_PROFILE === 'caddy' && value.RR_TLS_MODE === 'certbot') {
+      context.addIssue({
+        code: 'custom',
+        path: ['RR_TLS_MODE'],
+        message: 'certbot is not supported when RR_PROXY_PROFILE=caddy',
+      });
+    }
   });
 
 export type Env = z.infer<typeof envSchema>;
 
 export function loadEnv(source?: Record<string, string | undefined>): Env {
-  const input = source ?? (processEnv as Record<string, string | undefined>);
+  const input = source ?? processEnv;
   const result = envSchema.safeParse(input);
   if (!result.success) {
     const fields = result.error.issues.map((issue) => issue.path.join('.')).join(', ');

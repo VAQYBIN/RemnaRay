@@ -2,8 +2,18 @@
   "name": "@remnaray/remnawave-mock",
   "version": "0.1.0",
   "private": false,
+  "type": "module",
   "scripts": {
     "lint": "eslint .",
-    "typecheck": "tsc --noEmit -p tsconfig.json"
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "build": "tsc -p tsconfig.build.json",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@remnaray/remnawave-sdk": "workspace:*",
+    "fastify": "~5.12.5"
+  },
+  "devDependencies": {
+    "vitest": "~5.0.1"
   }
 }

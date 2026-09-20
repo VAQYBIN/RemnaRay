@@ -1,0 +1,37 @@
+name: Feature request
+description: Something RemnaRay should do and does not.
+labels: [enhancement]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: The problem
+      description: |
+        What you are trying to do, and where the product gets in the way.
+        Describe the situation rather than the feature: the same problem often
+        has a simpler answer than the one that comes to mind first.
+    validations: { required: true }
+
+  - type: textarea
+    id: proposal
+    attributes:
+      label: What you have in mind
+    validations: { required: true }
+
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: What you tried instead
+      description: |
+        Settings, a theme override, a locale override, a custom proxy snippet
+        in `custom.d/` — and why each was not enough.
+
+  - type: dropdown
+    id: who
+    attributes:
+      label: Who is this for
+      options:
+        - The shop owner
+        - The customer buying a subscription
+        - Someone running or extending the code
+    validations: { required: true }

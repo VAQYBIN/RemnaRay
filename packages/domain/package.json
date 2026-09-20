@@ -2,11 +2,29 @@
   "name": "@remnaray/domain",
   "version": "0.1.0",
   "private": false,
+  "type": "module",
+  "exports": {
+    ".": {
+      "types": "./src/index.ts",
+      "import": "./dist/index.js",
+      "default": "./dist/index.js"
+    },
+    "./rbac": {
+      "types": "./src/rbac.ts",
+      "import": "./dist/rbac.js",
+      "default": "./dist/rbac.js"
+    }
+  },
   "scripts": {
+    "build": "tsc -p tsconfig.build.json",
     "lint": "eslint .",
+    "test": "vitest run",
     "typecheck": "tsc --noEmit -p tsconfig.json"
   },
   "dependencies": {
     "zod": "~4.6.5"
+  },
+  "devDependencies": {
+    "vitest": "~5.0.1"
   }
 }

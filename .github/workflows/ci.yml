@@ -39,21 +39,125 @@ jobs:
       - name: Lint
         run: pnpm lint
 
+      - name: Format
+        run: pnpm format
+
       - name: Typecheck
-        run: pnpm typecheck
+        run: |
+          pnpm typecheck
+          pnpm -r typecheck
 
       - name: Repository tests
         run: pnpm test
 
-      - name: Package tests
+      # Through turbo, not `pnpm -r`: the `test` task depends on `^build`, and
+      # a package whose tests import another workspace package cannot resolve
+      # it until that one is built.
+      - name: Workspace tests
+        run: pnpm turbo run test
+
+      - name: Locale and theme checks
         run: |
-          pnpm --filter @remnaray/config test
-          pnpm --filter @remnaray/logger test
-          pnpm --filter @remnaray/money test
-          pnpm --filter @remnaray/db test
+          pnpm i18n-check
+          pnpm theme-validate themes/manta
+          pnpm theme-validate themes/_admin
 
       - name: Build
         run: pnpm build
+
+  e2e:
+    name: e2e
+    runs-on: ubuntu-latest
+    needs: quality
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v6
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24.21.0
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Typecheck the end-to-end suite
+        run: pnpm typecheck:e2e
+
+      - name: Install Playwright browsers
+        run: pnpm exec playwright install --with-deps chromium
+
+      - name: Run end-to-end tests
+        run: pnpm test:e2e
+
+      - name: Upload the Playwright report
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report
+          path: test-results
+          retention-days: 7
+
+  lighthouse:
+    name: lighthouse
+    runs-on: ubuntu-latest
+    needs: quality
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v6
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24.21.0
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Install Playwright browsers
+        run: pnpm exec playwright install --with-deps chromium
+
+      - name: Measure the landing and the account (NFR-010)
+        run: pnpm lighthouse
+
+      - name: Upload the Lighthouse reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: lighthouse-reports
+          path: test-results/lighthouse
+          retention-days: 7
+
+  proxy:
+    name: proxy
+    runs-on: ubuntu-latest
+    needs: quality
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v6
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24.21.0
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Render and validate every TLS mode, and time a reload
+        run: pnpm test:m5
 
   docker:
     name: docker / ${{ matrix.image }}
@@ -67,6 +171,14 @@ jobs:
             file: deploy/docker/app.Dockerfile
           - image: web
             file: deploy/docker/web.Dockerfile
+          # Section 21.3: the ACME module exists only for the exact nginx
+          # patch, so a drifting base image must fail here and not on a server.
+          - image: nginx
+            file: deploy/proxy/nginx/Dockerfile
+          - image: caddy
+            file: deploy/proxy/caddy/Dockerfile
+          - image: backup
+            file: deploy/backup/Dockerfile
     steps:
       - name: Checkout
         uses: actions/checkout@v7
@@ -90,3 +202,72 @@ jobs:
           file: ${{ matrix.file }}
           push: false
           tags: remnaray/${{ matrix.image }}:ci
+          cache-from: type=gha,scope=${{ matrix.image }}
+          cache-to: type=gha,mode=max,scope=${{ matrix.image }}
+
+  # Section 22.7: the same ten checks against both profiles. Section 21.5 is
+  # only an invariant if something compares the two, and this is that thing.
+  proxy-smoke:
+    name: proxy-smoke / ${{ matrix.profile }}
+    runs-on: ubuntu-latest
+    needs: docker
+    strategy:
+      fail-fast: false
+      matrix:
+        profile: [nginx, caddy]
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v6
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24.21.0
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Install Playwright browsers
+        run: pnpm exec playwright install --with-deps chromium
+
+      - name: Set up Buildx
+        uses: docker/setup-buildx-action@v4
+
+      # The `docker` job already built these into the same cache, so this
+      # loads them into the local daemon rather than building them again.
+      - name: Load the stand images
+        run: |
+          for image in app web nginx caddy backup; do
+            case "$image" in
+              app) file=deploy/docker/app.Dockerfile ;;
+              web) file=deploy/docker/web.Dockerfile ;;
+              nginx) file=deploy/proxy/nginx/Dockerfile ;;
+              caddy) file=deploy/proxy/caddy/Dockerfile ;;
+              backup) file=deploy/backup/Dockerfile ;;
+            esac
+            docker buildx build --load -f "$file" -t "remnaray/$image:ci" \
+              --cache-from "type=gha,scope=$image" .
+          done
+
+      - name: Smoke the ${{ matrix.profile }} profile
+        run: deploy/ci/proxy-smoke.sh ${{ matrix.profile }}
+
+      - name: Collect the stand's logs
+        if: failure()
+        run: |
+          docker compose -f compose.yaml -f deploy/ci/compose.smoke.yaml \
+            --profile ${{ matrix.profile }} logs --no-color > stand.log || true
+
+      - name: Upload the failure artifacts
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: proxy-smoke-${{ matrix.profile }}
+          path: |
+            stand.log
+            test-results
+          retention-days: 7

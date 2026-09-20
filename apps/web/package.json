@@ -4,6 +4,8 @@
   "private": true,
   "scripts": {
     "lint": "eslint .",
+    "test": "vitest run",
+    "typegen": "next typegen",
     "typecheck": "tsc --noEmit -p tsconfig.json",
     "build": "next build",
     "dev": "next dev",
@@ -11,16 +13,27 @@
   },
   "dependencies": {
     "@radix-ui/react-dialog": "~1.1.23",
+    "@remnaray/domain": "workspace:*",
+    "@remnaray/i18n-core": "workspace:*",
+    "@remnaray/money": "workspace:*",
+    "@remnaray/theme-schema": "workspace:*",
+    "@remnaray/ui": "workspace:*",
     "class-variance-authority": "~0.7.1",
     "lucide-react": "~1.47.0",
     "next": "~16.3.5",
     "next-intl": "~4.14.5",
     "react": "~19.3.0",
     "react-dom": "~19.3.0",
-    "tailwind-merge": "~3.7.0"
+    "recharts": "~3.10.1",
+    "tailwind-merge": "~3.7.0",
+    "zod": "~4.6.5"
   },
   "devDependencies": {
+    "@tailwindcss/postcss": "~4.3.3",
+    "@types/react": "~19.3.0",
+    "@types/react-dom": "~19.2.7",
+    "jsdom": "~28.0.0",
     "tailwindcss": "~4.3.3",
-    "@tailwindcss/postcss": "~4.3.3"
+    "vitest": "~5.0.1"
   }
 }

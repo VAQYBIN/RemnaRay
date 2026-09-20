@@ -1,0 +1,101 @@
+# Building the images needs more machine than the smallest server has: a
+# 1 vCPU / 2 GB box spends a quarter of an hour on the Next.js build alone, and
+# may not finish it. This publishes the same images a release would, under a
+# tag of the owner's choosing and without making a release, so a deployment
+# pulls in a minute instead of building for twenty.
+#
+# `RR_REGISTRY=ghcr.io/<owner>` and `RR_VERSION=<tag>` in `.env` point a
+# deployment at what this publishes.
+name: images
+
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: The tag to publish under (for example dev, or a commit sha).
+        required: false
+        default: dev
+      platforms:
+        description: Platforms to build for.
+        required: false
+        default: linux/amd64
+        type: choice
+        options:
+          - linux/amd64
+          - linux/amd64,linux/arm64
+
+permissions:
+  contents: read
+  packages: write
+
+env:
+  REGISTRY: ghcr.io
+
+jobs:
+  images:
+    name: ${{ matrix.image }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - image: app
+            file: deploy/docker/app.Dockerfile
+          - image: web
+            file: deploy/docker/web.Dockerfile
+          - image: nginx
+            file: deploy/proxy/nginx/Dockerfile
+          - image: caddy
+            file: deploy/proxy/caddy/Dockerfile
+          - image: backup
+            file: deploy/backup/Dockerfile
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Name the registry namespace
+        id: ns
+        run: |
+          printf 'owner=%s\n' "$(printf '%s' '${{ github.repository_owner }}' | tr '[:upper:]' '[:lower:]')" >> "$GITHUB_OUTPUT"
+
+      - name: Set up QEMU
+        if: contains(inputs.platforms, 'arm64')
+        uses: docker/setup-qemu-action@v3
+
+      - name: Set up Buildx
+        uses: docker/setup-buildx-action@v4
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      # No SBOM, no attestation and no floating tags: those belong to a
+      # release. This is one named build an owner asked for.
+      - name: Build and push
+        uses: docker/build-push-action@v7
+        with:
+          context: .
+          file: ${{ matrix.file }}
+          platforms: ${{ inputs.platforms }}
+          push: true
+          tags: ${{ env.REGISTRY }}/${{ steps.ns.outputs.owner }}/${{ matrix.image }}:${{ inputs.tag }}
+          cache-from: type=gha,scope=images-${{ matrix.image }}
+          cache-to: type=gha,mode=max,scope=images-${{ matrix.image }}
+
+  summary:
+    name: how to pull them
+    runs-on: ubuntu-latest
+    needs: images
+    steps:
+      - name: Write the two lines the server needs
+        run: |
+          owner=$(printf '%s' '${{ github.repository_owner }}' | tr '[:upper:]' '[:lower:]')
+          {
+            printf 'Add to `.env` on the server:\n\n'
+            printf '```\nRR_REGISTRY=ghcr.io/%s\nRR_VERSION=%s\n```\n\n' "$owner" '${{ inputs.tag }}'
+            printf 'Then `./scripts/rr up`. '
+            printf 'A private package needs `docker login ghcr.io` with a token that has `read:packages`.\n'
+          } >> "$GITHUB_STEP_SUMMARY"

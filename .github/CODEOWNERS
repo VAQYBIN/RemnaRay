@@ -1,0 +1,11 @@
+# Every change is reviewed by a maintainer (section 23.3).
+*                       @VAQYBIN
+
+# The areas where a mistake is expensive and review is not optional.
+/deploy/                @VAQYBIN
+/compose.yaml           @VAQYBIN
+/.github/workflows/     @VAQYBIN
+/packages/db/prisma/    @VAQYBIN
+/apps/api/src/modules/ledger/   @VAQYBIN
+/apps/api/src/modules/payments/ @VAQYBIN
+/SECURITY.md            @VAQYBIN

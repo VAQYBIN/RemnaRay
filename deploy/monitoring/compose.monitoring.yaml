@@ -1,0 +1,56 @@
+# Section 20.2: the optional monitoring profile, off unless it is asked for.
+#
+#   docker compose --profile nginx --profile monitoring up -d
+#
+# Both services sit on the compose network because that is the only place the
+# application ports exist: `api`, `bot` and `worker` use `expose`, never
+# `ports` (section 19.7). Neither publishes anything itself — an owner reaches
+# Grafana through an SSH tunnel or their own proxy, and a dashboard published
+# to the internet by default is not a default anyone wants.
+services:
+  prometheus:
+    image: prom/prometheus:v3.7.3
+    command:
+      - --config.file=/etc/prometheus/prometheus.yml
+      - --storage.tsdb.path=/prometheus
+      - --storage.tsdb.retention.time=15d
+      - --web.listen-address=0.0.0.0:9090
+    volumes:
+      - ./prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus-data:/prometheus
+    networks: [rr_net]
+    expose: ['9090']
+    user: '65534:65534'
+    restart: unless-stopped
+    read_only: true
+    security_opt: [no-new-privileges:true]
+    logging: { driver: json-file, options: { max-size: '50m', max-file: '5' } }
+    profiles: [monitoring]
+
+  grafana:
+    image: grafana/grafana:12.3.1
+    environment:
+      GF_SECURITY_ADMIN_PASSWORD: ${RR_GRAFANA_PASSWORD:-admin}
+      GF_USERS_ALLOW_SIGN_UP: 'false'
+      GF_ANALYTICS_REPORTING_ENABLED: 'false'
+      GF_ANALYTICS_CHECK_FOR_UPDATES: 'false'
+      # Grafana otherwise downloads its bundled apps from the internet on the
+      # first start. A deployment that can reach a Remnawave panel and nothing
+      # else should still come up, and none of them is used here.
+      GF_PLUGINS_PREINSTALL_DISABLED: 'true'
+      GF_SERVER_HTTP_PORT: '3010'
+    volumes:
+      - ./grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./grafana/dashboards:/var/lib/grafana/dashboards:ro
+      - grafana-data:/var/lib/grafana
+    networks: [rr_net]
+    expose: ['3010']
+    depends_on: { prometheus: { condition: service_started } }
+    restart: unless-stopped
+    security_opt: [no-new-privileges:true]
+    logging: { driver: json-file, options: { max-size: '50m', max-file: '5' } }
+    profiles: [monitoring]
+
+volumes:
+  prometheus-data: {}
+  grafana-data: {}

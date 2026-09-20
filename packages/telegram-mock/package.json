@@ -2,8 +2,16 @@
   "name": "@remnaray/telegram-mock",
   "version": "0.1.0",
   "private": false,
+  "type": "module",
   "scripts": {
     "lint": "eslint .",
-    "typecheck": "tsc --noEmit -p tsconfig.json"
+    "build": "tsc -p tsconfig.build.json",
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "test": "vitest run src"
+  },
+  "devDependencies": {
+    "@types/node": "~24.13.6",
+    "grammy": "~1.46.0",
+    "vitest": "~5.0.1"
   }
 }

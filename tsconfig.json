@@ -1,4 +1,7 @@
 {
   "extends": "./tsconfig.base.json",
-  "files": ["./types/empty.d.ts"]
+  "compilerOptions": {
+    "types": ["node"]
+  },
+  "include": ["./types/empty.d.ts", "./tools/**/*.ts"]
 }

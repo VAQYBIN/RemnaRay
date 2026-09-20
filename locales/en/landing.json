@@ -1,0 +1,62 @@
+{
+  "landing.hero.eyebrow": "{brand} for Remnawave",
+  "landing.hero.title": "A calm, simple way to run your subscription store",
+  "landing.hero.description": "Sell access, accept payments, and give customers a clear subscription experience through Telegram and the web.",
+  "landing.hero.cta": "Open in Telegram",
+  "landing.hero.secondary": "Sign in",
+  "landing.hero.imageAlt": "Manta gliding through blue water",
+  "landing.featuresTitle": "Everything customers need",
+  "landing.features": [
+    {
+      "title": "Telegram-first",
+      "text": "Buy, renew and get help without leaving the chat."
+    },
+    {
+      "title": "Payments that fit",
+      "text": "Cards, crypto, Telegram Stars and an account balance."
+    },
+    {
+      "title": "One clear link",
+      "text": "A single subscription link with QR and client shortcuts."
+    }
+  ],
+  "landing.plansTitle": "Choose a plan",
+  "landing.plans.days": "{days, plural, one {# day} other {# days}}",
+  "landing.plans.devices": "{count, plural, one {# device} other {# devices}}",
+  "landing.plans.traffic": "{traffic} of traffic",
+  "landing.plans.unlimited": "Unlimited traffic",
+  "landing.stepsTitle": "How to connect",
+  "landing.steps": [
+    "Open the Telegram bot or sign in on the site.",
+    "Choose a plan and pay with a convenient method.",
+    "Add the subscription link to your client and connect."
+  ],
+  "landing.clientsTitle": "Supported clients",
+  "landing.faqTitle": "Questions",
+  "landing.faq": [
+    {
+      "question": "Do I need a card for the trial?",
+      "answer": "No. When the store owner enables the trial, it starts straight from the bot."
+    },
+    {
+      "question": "Can I change my plan later?",
+      "answer": "Yes. The remaining days of the current plan are credited towards the new one."
+    },
+    {
+      "question": "What happens when a subscription expires?",
+      "answer": "Access pauses after the grace period. Renewing restores the same subscription link."
+    },
+    {
+      "question": "Where do I get support?",
+      "answer": "Use the support contact in the footer or write to the Telegram bot."
+    }
+  ],
+  "landing.ctaTitle": "Ready to connect?",
+  "landing.ctaText": "Start in the Telegram bot, or sign in to open your account on the web.",
+  "landing.legal.terms": "Terms",
+  "landing.legal.privacy": "Privacy",
+  "landing.legal.offer": "Offer",
+  "landing.footer.support": "Support",
+  "landing.footer.language": "Language",
+  "landing.footer.poweredBy": "Powered by RemnaRay"
+}
