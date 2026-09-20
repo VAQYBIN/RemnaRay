@@ -224,11 +224,11 @@ export default function BroadcastsClient() {
                               </Button>
                             </>
                           ) : null}
-                          <a download href={`/api/admin/v1/broadcasts/${row.id}/report.csv`}>
-                            <Button size="sm" variant="ghost">
+                          <Button asChild size="sm" variant="ghost">
+                            <a download href={`/api/admin/v1/broadcasts/${row.id}/report.csv`}>
                               {t('broadcasts.downloadFailures')}
-                            </Button>
-                          </a>
+                            </a>
+                          </Button>
                         </div>
                       ),
                     },

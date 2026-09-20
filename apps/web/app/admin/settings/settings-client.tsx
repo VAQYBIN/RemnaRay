@@ -217,9 +217,11 @@ export default function SettingsAdminClient() {
                       <Button disabled={pending || Object.keys(draft).length === 0} onClick={save}>
                         {t('settings.save')}
                       </Button>
-                      <a download href="/api/admin/v1/settings/export">
-                        <Button variant="secondary">{t('settings.export')}</Button>
-                      </a>
+                      <Button asChild variant="secondary">
+                        <a download href="/api/admin/v1/settings/export">
+                          {t('settings.export')}
+                        </a>
+                      </Button>
                     </div>
                   </div>
                 )}

@@ -36,7 +36,7 @@ test.describe('customer account', () => {
     await expect(page.getByRole('heading', { name: 'Подписка' })).toBeVisible();
     await expect(page.locator('[data-state="empty"]')).toBeVisible();
     await expect(page.getByText('У вас нет подписки')).toBeVisible();
-    await expect(page.getByRole('button', { name: 'Выбрать тариф' })).toBeVisible();
+    await expect(page.getByRole('link', { name: 'Выбрать тариф' })).toBeVisible();
   });
 
   test('lists plans with the balance method first and a promo code field', async ({

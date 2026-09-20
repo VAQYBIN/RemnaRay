@@ -2,15 +2,13 @@
 
 ## Current milestone
 
-M4 acceptance reconciliation; requested target: M5.
+M5. M4 acceptance is closed; see "M4-003 Lighthouse verification".
 
 ## Current task
 
-TASK-M4-010 has its implementation and verification commit (`7b99197`).
-The user has opened M5, but M4 is not fully accepted: the review below records
-unmet specification requirements. TASK-M5-001 is the exact next M5 task and
-has not started. AGENTS.md prohibits starting the next milestone before the
-current milestone satisfies its Definition of Done.
+TASK-M5-001 (`setup` module and the eight-step wizard). The last M4 gate —
+the section 13.2 Lighthouse measurement — is now measured by `pnpm lighthouse`
+and enforced by a CI job, so the M4 Definition of Done holds and M5 is open.
 
 ## M5 entry audit — 2026-09-20
 
@@ -53,18 +51,15 @@ current milestone satisfies its Definition of Done.
   M6 remains unopened. Earlier statements that M4 was finished mean the
   implementation sequence was committed, not that all acceptance gates passed.
 
-### Entry blocker and exact continuation
+### Entry blocker and exact continuation — resolved
 
-M5 entry is blocked by the strict milestone rule and the unmet M4 acceptance
-requirements. Opening M5 does not supply the missing reference infrastructure
-or establish that its predecessor passed acceptance.
-
-Before TASK-M5-001: obtain and record the required Lighthouse
-measurements on an accessible reference server and resolve the remaining M4
-Definition of Done gates. The OpenAPI repair is local work, not a credential
-blocker. The reference-server measurement requires external infrastructure
-that has not been supplied. Once M4 acceptance is satisfied, continue at
-TASK-M5-001, then follow section 25.6 dependency order through TASK-M5-009.
+The entry blocker recorded above was the unverified Lighthouse measurement.
+It was wrong to treat it as external: NFR-010 names CI as its verification
+method, and the measurement needs the production artefacts, not a hosted
+reference server. `pnpm lighthouse` now runs the audit against the same
+Testcontainers stack the Playwright suite uses. See "M4-003 Lighthouse
+verification"; continue at TASK-M5-001 and follow section 25.6 dependency
+order through TASK-M5-009.
 
 ## Current handoff correction
 
@@ -73,8 +68,8 @@ TASK-M5-001, then follow section 25.6 dependency order through TASK-M5-009.
   milestone acceptance. Preserve their history; fix gaps in follow-up commits.
 - M4-001 gaps are now closed (see "M4-001 reconciliation" below).
 - M4-002 gaps are now closed (see "M4-002 reconciliation" below).
-- M4-003 gaps are now closed except the Lighthouse ≥ 90/90/95 measurement,
-  which needs the reference server and stays an external gate.
+- M4-003 gaps are now closed, including the Lighthouse ≥ 90/90/95
+  measurement; see "M4-003 Lighthouse verification".
 - M4-004 is implemented and committed; the earlier uncommitted draft was
   replaced.
 - OpenAPI is generated into `apps/api/openapi.json` as 3.1.0 from the shared
@@ -315,12 +310,14 @@ Turbo build.
 
 ## Known blockers
 
-See "M5 entry audit" for the active milestone-entry blocker: unverified
-reference-server Lighthouse acceptance. The OpenAPI generation defect was
-repaired and verified in the section below.
-Hosted GitHub Actions execution and maintainer review also remain external
-Definition of Done gates. Proxy smoke is scheduled in M5; the local M4
-Playwright suite already passed as recorded below.
+None that stop development. Hosted GitHub Actions execution and maintainer
+review remain external Definition of Done gates. Proxy smoke is scheduled in
+M5 (TASK-M5-007) and TASK-M5-004 needs a stand with a real domain for its
+manual certificate checklist.
+
+Local browser runs (`pnpm test:e2e`, `pnpm lighthouse`) need Chromium's system
+libraries. Installing them needs root; `docs/e2e.md` documents the rootless
+loader-prefix alternative, which is what this machine uses.
 
 ## OpenAPI repair verification — 2026-09-20
 
@@ -380,9 +377,8 @@ Playwright suite already passed as recorded below.
 
 ## Next
 
-M5 is authorized but has not started because M4 acceptance is incomplete.
-Resolve the prerequisites listed in "Entry blocker and exact continuation",
-then start TASK-M5-001. Do not begin M6.
+TASK-M5-001, then section 25.6 dependency order through TASK-M5-009.
+Do not begin M6.
 
 ## M3 acceptance reconciliation
 
@@ -832,10 +828,9 @@ Section 25.9, reviewed on 2026-09-20 for TASK-M4-001 … TASK-M4-010.
    (M4-008), AC-061, AC-146 and AC-181 (M4-009), the section 22.1 E2E row
    (M4-010), and `theme-validate` with the AA contrast check (M4-001).
 4. Locales: every key exists in `ru` and `en`; `pnpm i18n-check` is green.
-5. OpenAPI: `apps/api/openapi.json` covers the M4 routes. It remains a
-   hand-maintained 3.0.3 document; the section 9.1 requirement to generate a
-   3.1 document from the Zod contracts is still open and is recorded in
-   "Current handoff correction".
+5. OpenAPI: `apps/api/openapi.json` covers the M4 routes and is generated as
+   a 3.1.0 document from the shared Zod contracts during the API build; see
+   "OpenAPI repair verification".
 6. Migrations: `0003_notification_log_status` and
    `0004_broadcast_delivery_pending` carry the `reversible` header and are
    applied from scratch by every integration run.
@@ -847,6 +842,60 @@ Section 25.9, reviewed on 2026-09-20 for TASK-M4-001 … TASK-M4-010.
    secret value into `audit_log`; provider and panel credentials are stored in
    AES-256-GCM envelopes.
 10. External gates that remain outside this repository's control: maintainer
-    review, a full CI run on the hosted runners, the `proxy-smoke` job for both
-    profiles (its templates land with M5) and the Lighthouse ≥ 90/90/95
-    measurement for M4-003, which needs the reference server.
+    review, a full CI run on the hosted runners and the `proxy-smoke` job for
+    both profiles (its templates land with M5). The Lighthouse ≥ 90/90/95
+    measurement for M4-003 is no longer external; see the section below.
+
+## M4-003 Lighthouse verification
+
+Verified on 2026-09-20; this closes the last TASK-M4-003 acceptance gate.
+
+- `pnpm lighthouse` (`tools/lighthouse-check.mjs`) boots the Playwright
+  harness stack — PostgreSQL 18 and Valkey 9.1 in Testcontainers, the API from
+  `dist`, the site from its standalone build, one reverse proxy in front of
+  both — and audits it with the official Lighthouse desktop preset. NFR-010
+  names CI as its verification method, so a `lighthouse` job runs it after
+  `quality` and always uploads `test-results/lighthouse`.
+- The account audit enters through `/auth/tg?token=<jwt>`, the way the bot's
+  «Открыть кабинет» button does. Lighthouse clears storage before it navigates,
+  so a cookie set up front would not survive; the run fails if the navigation
+  does not end on `/<locale>/account`.
+- Context7 resolved `/googlechrome/lighthouse` and `/radix-ui/primitives`; the
+  programmatic `lighthouse(url, flags, config)` call, the desktop config export
+  and the Slot `asChild` contract were implemented from that documentation.
+- First measurement: performance 100, accessibility **85**, SEO 100. Four axe
+  audits failed, three of them real markup defects:
+  - Every "link that looks like a button" rendered a `<button>` inside an `<a>`
+    or a `<Link>`, which fails `target-size` and nests two interactive
+    elements. `Button` gained `asChild` (Radix `Slot`) and the fourteen call
+    sites in the site, the account and the administration console now render a
+    single element.
+  - The Telegram login container carried `aria-label` on a plain `<div>`
+    (`aria-prohibited-attr`); it is now `role="group"`.
+  - The widget script injects its `<iframe>` next to the `<script>` Next.js
+    appends to `document.body`, without a title (`frame-title`). A
+    `MutationObserver` names `iframe[id^="telegram-login-"]` as it appears.
+  - `color-contrast` stays: the Manta teal and white brand pairing the
+    specification fixes in section 18.1 is 3.03:1, which `theme-validate`
+    reports as a warning for the same reason. The palette is specified data and
+    was not changed.
+- Final measurement: landing `ru` and `en` performance 100, accessibility 96,
+  SEO 100; the signed-in account accessibility 96. Section 13.2 requires
+  90/90/95.
+- Two Playwright assertions named the old roles (`button` «Выбрать тариф» and
+  «Открыть»); both now assert `link`, which is what the corrected markup
+  renders.
+- Checks: `pnpm lighthouse`, `pnpm test:e2e` (25), `pnpm lint`,
+  `pnpm typecheck`, `pnpm -r typecheck`, `pnpm typecheck:e2e`, `pnpm test`
+  (11), `pnpm -r test` (api 109, web 22, bot 12, ui 8 and the remaining
+  packages), `pnpm format`, full `pnpm build`, `pnpm i18n-check` (1264
+  messages), `pnpm theme-validate` for `manta` and `_admin`.
+
+### M4-003 Lighthouse decisions
+
+- `chrome-launcher` rewrites its profile directory into a Windows path when it
+  detects WSL, and a Linux Chrome then creates that literal name in the working
+  directory. The tool passes `userDataDir: false` and its own
+  `--user-data-dir`, so the profile always lands in the system temp directory.
+- The browser is `CHROME_PATH` if set, otherwise Playwright's Chromium, so the
+  rootless loader-prefix workaround in `docs/e2e.md` covers this command too.

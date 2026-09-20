@@ -100,9 +100,9 @@ export default function SubscriptionClient({ locale }: { locale: Locale }) {
                     {t('subscription.tryFree')}
                   </Button>
                 ) : null}
-                <Link href="/account/plans">
-                  <Button variant="secondary">{t('subscription.choosePlan')}</Button>
-                </Link>
+                <Button asChild variant="secondary">
+                  <Link href="/account/plans">{t('subscription.choosePlan')}</Link>
+                </Button>
               </div>
             }
             description={t('subscription.emptyDescription')}
@@ -203,11 +203,11 @@ export default function SubscriptionClient({ locale }: { locale: Locale }) {
                       <ul className="mt-2 flex flex-wrap gap-2">
                         {data.clients.map((client) => (
                           <li key={client.id}>
-                            <a href={client.deepLink ?? '#'} rel="noreferrer">
-                              <Button size="sm" variant="secondary">
+                            <Button asChild size="sm" variant="secondary">
+                              <a href={client.deepLink ?? '#'} rel="noreferrer">
                                 {client.name}
-                              </Button>
-                            </a>
+                              </a>
+                            </Button>
                           </li>
                         ))}
                       </ul>
@@ -220,13 +220,13 @@ export default function SubscriptionClient({ locale }: { locale: Locale }) {
             )}
 
             <div className="flex flex-wrap gap-2">
-              <Link href="/account/plans">
-                <Button>{t('subscription.renew')}</Button>
-              </Link>
+              <Button asChild>
+                <Link href="/account/plans">{t('subscription.renew')}</Link>
+              </Button>
               {data.subscription?.canChangePlan ? (
-                <Link href="/account/plans">
-                  <Button variant="secondary">{t('subscription.changePlan')}</Button>
-                </Link>
+                <Button asChild variant="secondary">
+                  <Link href="/account/plans">{t('subscription.changePlan')}</Link>
+                </Button>
               ) : null}
             </div>
           </div>

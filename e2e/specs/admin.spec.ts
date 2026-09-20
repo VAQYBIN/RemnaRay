@@ -22,7 +22,7 @@ test.describe('administration console', () => {
     await page.getByRole('button', { name: 'Применить' }).click();
 
     await expect(page.getByText('e2euser')).toBeVisible();
-    await page.getByRole('button', { name: 'Открыть' }).click();
+    await page.getByRole('link', { name: 'Открыть' }).click();
     await expect(page.getByRole('heading', { name: 'E2E' })).toBeVisible();
     await expect(page.getByRole('tab', { name: 'Журнал' })).toBeVisible();
   });

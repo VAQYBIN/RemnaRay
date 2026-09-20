@@ -81,15 +81,15 @@ export default async function LandingPage({ params }: PageProps) {
               </p>
               <div className="mt-8 flex flex-wrap gap-3">
                 {botLink ? (
-                  <a href={botLink} rel="noreferrer">
-                    <Button size="lg">{t('hero.cta')}</Button>
-                  </a>
-                ) : null}
-                <a href="#login">
-                  <Button size="lg" variant="secondary">
-                    {t('hero.secondary')}
+                  <Button asChild size="lg">
+                    <a href={botLink} rel="noreferrer">
+                      {t('hero.cta')}
+                    </a>
                   </Button>
-                </a>
+                ) : null}
+                <Button asChild size="lg" variant="secondary">
+                  <a href="#login">{t('hero.secondary')}</a>
+                </Button>
               </div>
             </div>
             <div className="relative mx-auto w-full max-w-md overflow-hidden rounded-3xl border border-border bg-surface p-3 shadow-xl">
@@ -216,9 +216,11 @@ export default async function LandingPage({ params }: PageProps) {
             <p className="text-muted-foreground">{t('ctaText')}</p>
             <div className="flex flex-wrap items-center gap-4">
               {botLink ? (
-                <a href={botLink} rel="noreferrer">
-                  <Button>{t('hero.cta')}</Button>
-                </a>
+                <Button asChild>
+                  <a href={botLink} rel="noreferrer">
+                    {t('hero.cta')}
+                  </a>
+                </Button>
               ) : null}
               <LoginWidget
                 botUsername={config.brand.botUsername}

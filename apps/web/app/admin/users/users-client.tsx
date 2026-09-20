@@ -129,11 +129,9 @@ export default function UsersClient() {
                     key: 'open',
                     header: '',
                     cell: (row) => (
-                      <Link href={`/admin/users/${row.id}`}>
-                        <Button size="sm" variant="secondary">
-                          {t('users.open')}
-                        </Button>
-                      </Link>
+                      <Button asChild size="sm" variant="secondary">
+                        <Link href={`/admin/users/${row.id}`}>{t('users.open')}</Link>
+                      </Button>
                     ),
                   },
                 ]}

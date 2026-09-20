@@ -125,9 +125,11 @@ export default function PromocodesClient() {
           <section className="flex flex-col gap-6">
             <div className="flex flex-wrap items-center justify-between gap-3">
               <h1 className="text-2xl font-bold">{t('promocodes.title')}</h1>
-              <a download href="/api/admin/v1/promocodes/export">
-                <Button variant="secondary">{t('promocodes.export')}</Button>
-              </a>
+              <Button asChild variant="secondary">
+                <a download href="/api/admin/v1/promocodes/export">
+                  {t('promocodes.export')}
+                </a>
+              </Button>
             </div>
 
             <AdminSection refresh={resource.refresh} state={resource.state}>

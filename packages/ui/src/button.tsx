@@ -1,4 +1,5 @@
 import type { ButtonHTMLAttributes } from 'react';
+import { Slot } from '@radix-ui/react-slot';
 import { cva, type VariantProps } from 'class-variance-authority';
 
 import { cn } from './lib/utils';
@@ -26,9 +27,25 @@ export const buttonVariants = cva(
 );
 
 export interface ButtonProps
-  extends ButtonHTMLAttributes<HTMLButtonElement>, VariantProps<typeof buttonVariants> {}
+  extends ButtonHTMLAttributes<HTMLButtonElement>, VariantProps<typeof buttonVariants> {
+  /**
+   * Render the child element with the button styling instead of a `<button>`.
+   * A link that looks like a button must stay a single interactive element:
+   * nesting `<button>` inside `<a>` fails the WCAG target-size check (NFR-010).
+   */
+  asChild?: boolean;
+}
 
-export function Button({ className, variant, size, type = 'button', ...props }: ButtonProps) {
+export function Button({
+  asChild = false,
+  className,
+  variant,
+  size,
+  type = 'button',
+  ...props
+}: ButtonProps) {
+  if (asChild)
+    return <Slot className={cn(buttonVariants({ variant, size }), className)} {...props} />;
   return (
     <button className={cn(buttonVariants({ variant, size }), className)} type={type} {...props} />
   );

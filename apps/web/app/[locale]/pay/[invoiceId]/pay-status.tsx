@@ -138,14 +138,18 @@ export default function PayStatus({
 
               <div className="flex flex-wrap gap-2">
                 {data.status === 'pending' && data.paymentUrl ? (
-                  <a href={data.paymentUrl} rel="noreferrer" target="_blank">
-                    <Button>{t('pay.open')}</Button>
-                  </a>
+                  <Button asChild>
+                    <a href={data.paymentUrl} rel="noreferrer" target="_blank">
+                      {t('pay.open')}
+                    </a>
+                  </Button>
                 ) : null}
                 {data.status === 'pending' && !data.paymentUrl && starsLink ? (
-                  <a href={starsLink} rel="noreferrer" target="_blank">
-                    <Button>{t('pay.openStars')}</Button>
-                  </a>
+                  <Button asChild>
+                    <a href={starsLink} rel="noreferrer" target="_blank">
+                      {t('pay.openStars')}
+                    </a>
+                  </Button>
                 ) : null}
                 {data.terminal ? null : (
                   <Button
@@ -170,9 +174,9 @@ export default function PayStatus({
                   </Button>
                 ) : null}
                 {data.status === 'paid' ? (
-                  <Link href="/account">
-                    <Button>{t('pay.goToSubscription')}</Button>
-                  </Link>
+                  <Button asChild>
+                    <Link href="/account">{t('pay.goToSubscription')}</Link>
+                  </Button>
                 ) : null}
               </div>
             </CardContent>

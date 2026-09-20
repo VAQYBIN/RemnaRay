@@ -49,8 +49,43 @@ dpkg-deb -x libnss3_*.deb ./pw-libs   # and the other two
 LD_LIBRARY_PATH=$PWD/pw-libs/usr/lib/x86_64-linux-gnu pnpm test:e2e
 ```
 
+## Lighthouse (NFR-010)
+
+`pnpm lighthouse` measures the acceptance gate of section 13.2: performance at
+least 90, accessibility at least 90 and SEO at least 95 for the landing, and
+accessibility at least 90 for the account. It reuses the same stack, so the
+numbers describe the production build rather than `next dev`, and audits three
+pages with the official desktop preset:
+
+| Target       | Entry                  | Categories                      |
+| ------------ | ---------------------- | ------------------------------- |
+| `landing-ru` | `/ru`                  | performance, accessibility, SEO |
+| `landing-en` | `/en`                  | performance, accessibility, SEO |
+| `account`    | `/auth/tg?token=<jwt>` | accessibility                   |
+
+Lighthouse clears storage before it navigates, so the account audit signs in
+the way the bot's «Открыть кабинет» button does instead of presenting a
+cookie, and the run fails if the navigation does not end on `/<locale>/account`.
+Reports are written to `test-results/lighthouse/<target>.json`.
+
+The browser is resolved from `CHROME_PATH`, falling back to Playwright's
+Chromium, so the loader-prefix workaround above also covers this command:
+
+```sh
+LD_LIBRARY_PATH=$PWD/pw-libs/usr/lib/x86_64-linux-gnu \
+  CHROME_PATH=$(pnpm exec node -e "console.log(require('@playwright/test').chromium.executablePath())") \
+  pnpm lighthouse
+```
+
+The remaining accessibility deduction is `color-contrast`: the Manta teal and
+white brand pairing the v1 specification fixes reaches 3.03:1, which
+`theme-validate` reports as a warning for the same reason (see
+`docs/theming.md`). Everything else scores clean, so the landing and the
+account sit at 96.
+
 ## CI
 
 The `e2e` job runs after `quality`, installs Chromium with its dependencies and
 typechecks the suite (`pnpm typecheck:e2e`) and runs `pnpm test:e2e`; a failed
-run uploads `test-results` as an artifact.
+run uploads `test-results` as an artifact. The `lighthouse` job runs the same
+way and always uploads `test-results/lighthouse`.

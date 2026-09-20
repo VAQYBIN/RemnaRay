@@ -36,6 +36,24 @@ export default function LoginWidget({
 }) {
   const router = useRouter();
 
+  /**
+   * The widget script injects its own `<iframe>` next to the `<script>` tag
+   * Next.js appends to `document.body`, and it arrives without a title, which
+   * fails the WCAG frame-title check (NFR-010). Name it as soon as it appears.
+   */
+  useEffect(() => {
+    const title = () => {
+      for (const frame of document.querySelectorAll('iframe[id^="telegram-login-"]:not([title])'))
+        frame.setAttribute('title', label);
+    };
+    title();
+    const observer = new MutationObserver(title);
+    observer.observe(document.body, { childList: true, subtree: true });
+    return () => {
+      observer.disconnect();
+    };
+  }, [label]);
+
   useEffect(() => {
     window.onRemnaRayTelegramAuth = (payload) => {
       void fetch('/api/v1/auth/telegram', {
@@ -55,7 +73,7 @@ export default function LoginWidget({
   if (!botUsername) return <p className="text-sm text-muted-foreground">{unavailableLabel}</p>;
 
   return (
-    <div aria-label={label} id="login">
+    <div aria-label={label} id="login" role="group">
       <Script
         data-onauth="onRemnaRayTelegramAuth(user)"
         data-request-access="write"
