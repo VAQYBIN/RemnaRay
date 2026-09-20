@@ -68,6 +68,20 @@ have pushed to a name they could not create for any owner whose login is not
 all lowercase. `docker/metadata-action` lowercases; a raw `tags:` string does
 not. Every workflow lowercases it now.
 
+A sixth, the same class as the first: `pnpm lint` and `pnpm typecheck` read
+generated types that a developer's checkout has and a runner's does not.
+`apps/web/i18n/request.ts` calls `rootLocale()` from `next/root-params`, whose
+declarations Next writes into `.next/types`; CI lints before it builds, so the
+call resolved to `any`. `next typegen` produces them in two seconds without a
+build and now runs in the root `postinstall` beside `prisma generate`.
+
+That is twice a green working tree disagreed with CI for the same reason, so
+`scripts/ci-local.sh` now runs the quality gate from the state a runner starts
+in: it deletes `node_modules`, every `dist`, every `.turbo`, `apps/web/.next`
+and the generated Prisma client, installs, and runs lint, format, both
+typechecks, both test sets, the locale and theme checks and the build. It
+passes on this tree; `CONTRIBUTING.md` points at it.
+
 **Still open, and now the largest item in the project.** ADR-010 recorded on
 2026-09-19 that the panel identifies users by a numeric `id` and carries no
 `uuid`, that `/api/users/by-telegram-id/{telegramId}` does not exist, and that

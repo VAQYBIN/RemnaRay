@@ -256,6 +256,7 @@ test('the scripts the documentation invokes are executable', () => {
   const scripts = [
     'scripts/rr',
     'scripts/init-env.sh',
+    'scripts/ci-local.sh',
     'deploy/ci/proxy-smoke.sh',
     'deploy/ci/gen-selfsigned.sh',
     'deploy/backup/backup-entrypoint.sh',
@@ -290,13 +291,19 @@ test('the backup wrappers call what they mean to call', async () => {
   assert.match(wrapper, /deploy\/backup\/restore\.sh "\$1"/u);
 });
 
-// Type-aware linting resolves `@remnaray/db` through its generated client, and
-// a fresh checkout has none: without this every Prisma call lints as `any`.
-test('installing generates the Prisma client', async () => {
+// Type-aware linting reads generated types, and a fresh checkout has none:
+// without the client every Prisma call lints as `any`, and without the route
+// types `next/root-params` does too. Both are gitignored, so only an install
+// can put them there — and CI lints before it builds.
+test('installing generates the types the linter reads', async () => {
   const db = JSON.parse(await readFile('packages/db/package.json', 'utf8'));
+  const web = JSON.parse(await readFile('apps/web/package.json', 'utf8'));
+  const postinstall = packageManifest.scripts.postinstall ?? '';
 
-  assert.equal(packageManifest.scripts.postinstall, 'pnpm --filter @remnaray/db db:generate');
+  assert.match(postinstall, /pnpm --filter @remnaray\/db db:generate/u);
+  assert.match(postinstall, /pnpm --filter @remnaray\/web typegen/u);
   assert.equal(db.scripts['db:generate'], 'prisma generate');
+  assert.equal(web.scripts.typegen, 'next typegen');
   assert.match(db.exports['./generated'].types, /src\/generated\/prisma/u);
 });
 

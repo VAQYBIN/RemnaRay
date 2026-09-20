@@ -5,6 +5,7 @@
   "scripts": {
     "lint": "eslint .",
     "test": "vitest run",
+    "typegen": "next typegen",
     "typecheck": "tsc --noEmit -p tsconfig.json",
     "build": "next build",
     "dev": "next dev",

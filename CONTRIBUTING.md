@@ -32,6 +32,15 @@ pnpm build
 pnpm i18n-check
 ```
 
+Those read generated types — the Prisma client and the Next.js route types —
+which your checkout has and a runner's does not until `pnpm install` puts them
+there. If CI disagrees with a green working tree, that gap is the usual
+reason, and this runs the same gate from the state CI starts in:
+
+```sh
+./scripts/ci-local.sh   # deletes node_modules, dist, .turbo and .next first
+```
+
 The end-to-end and integration suites need Docker:
 
 ```sh
