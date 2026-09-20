@@ -1,7 +1,18 @@
 import { existsSync, readFileSync, statSync } from 'node:fs';
 import { join } from 'node:path';
-import { Controller, Get, Headers, NotFoundException, Param, Query, Res } from '@nestjs/common';
-import type { FastifyReply } from 'fastify';
+import {
+  Controller,
+  Get,
+  Headers,
+  HttpCode,
+  NotFoundException,
+  Param,
+  Post,
+  Query,
+  Req,
+  Res,
+} from '@nestjs/common';
+import type { FastifyReply, FastifyRequest } from 'fastify';
 
 import { localeDirectory, SUPPORTED_LOCALES } from '@remnaray/i18n-core';
 
@@ -188,5 +199,15 @@ export class AdminThemesController {
   @Get()
   async list() {
     return { items: this.themes.list(), active: await this.themes.activeSlug() };
+  }
+
+  @Post('upload')
+  @Permissions('themes.write')
+  @HttpCode(200)
+  async upload(@Req() request: FastifyRequest) {
+    if (process.env.RR_THEME_UPLOAD !== 'true') throw new NotFoundException('NOT_FOUND');
+    const file = await request.file();
+    if (!file) throw new Error('A theme archive is required');
+    return this.themes.uploadArchive(await file.toBuffer());
   }
 }

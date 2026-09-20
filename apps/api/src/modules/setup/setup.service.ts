@@ -109,6 +109,7 @@ export class SetupService {
         acmeEmail: process.env.RR_ACME_EMAIL ?? '',
         tlsMode: process.env.RR_TLS_MODE ?? 'acme',
         proxyProfile: process.env.RR_PROXY_PROFILE ?? 'nginx',
+        themeUpload: process.env.RR_THEME_UPLOAD === 'true',
       },
       themes: this.themes.list().filter((theme) => !theme.builtin),
       providers: this.providers.list().map((provider) => ({
@@ -197,6 +198,18 @@ export class SetupService {
     } catch (error) {
       return { ok: false, latencyMs: Date.now() - started, error: this.reason(error) };
     }
+  }
+
+  async uploadLogo(
+    sessionId: string,
+    themeSlug: string,
+    filename: string,
+    mimetype: string,
+    contents: Buffer,
+  ) {
+    await this.session(sessionId);
+    if (process.env.RR_THEME_UPLOAD !== 'true') throw new SetupFailure('NOT_FOUND', 404);
+    return this.themes.uploadLogo(themeSlug, filename, mimetype, contents);
   }
 
   /**

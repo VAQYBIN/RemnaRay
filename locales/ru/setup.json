@@ -63,6 +63,7 @@
   "setup.brand.enabledLocales": "Включённые языки",
   "setup.brand.timezone": "Часовой пояс",
   "setup.brand.theme": "Тема",
+  "setup.brand.logo": "Логотип (PNG или SVG)",
   "setup.plan.title": "Тариф и триал",
   "setup.plan.description": "Первый тариф магазина и параметры пробного периода.",
   "setup.plan.slug": "Идентификатор",

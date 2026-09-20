@@ -1,4 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
+import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 
 import { ThemeService, themeDirectory } from './theme.service';
 
@@ -43,5 +46,31 @@ describe('ThemeService', () => {
   it('rejects unknown and malformed slugs', () => {
     expect(() => service().load('../etc')).toThrow();
     expect(() => service().load('missing-theme')).toThrow();
+  });
+
+  it('stores a safe logo override and rejects active SVG content', async () => {
+    const root = mkdtempSync(join(tmpdir(), 'rr-theme-upload-'));
+    const previous = process.env.RR_THEME_UPLOAD_DIR;
+    process.env.RR_THEME_UPLOAD_DIR = root;
+    try {
+      const instance = service();
+      await expect(
+        instance.uploadLogo('manta', 'brand.svg', 'image/svg+xml', Buffer.from('<svg/>')),
+      ).resolves.toMatchObject({ slug: 'manta', asset: 'logo.svg' });
+      expect(readFileSync(join(root, 'manta', 'overrides', 'logo.svg'), 'utf8')).toBe('<svg/>');
+      expect((await instance.active()).assets.logo).toMatch(/^\/themes\/manta\/logo\.svg\?v=/u);
+      await expect(
+        instance.uploadLogo(
+          'manta',
+          'brand.svg',
+          'image/svg+xml',
+          Buffer.from('<svg><script>alert(1)</script></svg>'),
+        ),
+      ).rejects.toThrow('must not contain scripts');
+    } finally {
+      if (previous === undefined) delete process.env.RR_THEME_UPLOAD_DIR;
+      else process.env.RR_THEME_UPLOAD_DIR = previous;
+      rmSync(root, { recursive: true, force: true });
+    }
   });
 });

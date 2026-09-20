@@ -63,6 +63,7 @@
   "setup.brand.enabledLocales": "Enabled languages",
   "setup.brand.timezone": "Time zone",
   "setup.brand.theme": "Theme",
+  "setup.brand.logo": "Logo (PNG or SVG)",
   "setup.plan.title": "Plan and trial",
   "setup.plan.description": "The shop's first plan and the trial parameters.",
   "setup.plan.slug": "Identifier",

@@ -74,6 +74,10 @@ export const setupBrandSchema = z
         }
       }, 'Unknown IANA timezone'),
     themeSlug: z.string().regex(/^(?:_admin|[a-z0-9]+(?:-[a-z0-9]+)*)$/u),
+    logo: z
+      .string()
+      .regex(/^logo\.(?:png|svg)$/u)
+      .optional(),
   })
   .refine((value) => value.enabledLocales.includes(value.defaultLocale), {
     path: ['defaultLocale'],

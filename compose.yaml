@@ -70,6 +70,7 @@ services:
     volumes:
       - ./themes:/themes:ro
       - ./locales:/locales:ro
+      - uploads:/uploads:ro
       - ./backups:/backups
     depends_on:
       postgres: { condition: service_healthy }
@@ -132,6 +133,7 @@ services:
     volumes:
       - ./themes:/themes:ro
       - ./locales:/locales:ro
+      - uploads:/uploads:ro
 
   # --- proxy (section 21.1). `external` starts none of these. ---
   proxy-config:

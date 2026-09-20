@@ -63,6 +63,34 @@ export class SetupController {
     return this.setup.checkProvider(body, session(cookie));
   }
 
+  /** Section 17.4 step 5: the optional PNG/SVG logo upload. */
+  @Post('theme-logo')
+  @HttpCode(200)
+  async themeLogo(@Headers('cookie') cookie: string | undefined, @Req() request: FastifyRequest) {
+    let themeSlug = '';
+    let uploaded: { filename: string; mimetype: string; contents: Buffer } | undefined;
+    for await (const part of request.parts()) {
+      if (part.type === 'file') {
+        if (uploaded) throw new Error('Only one logo file is allowed');
+        uploaded = {
+          filename: part.filename,
+          mimetype: part.mimetype,
+          contents: await part.toBuffer(),
+        };
+      } else if (part.fieldname === 'theme') {
+        themeSlug = String(part.value);
+      }
+    }
+    if (!uploaded) throw new Error('A logo file is required');
+    return this.setup.uploadLogo(
+      session(cookie),
+      themeSlug,
+      uploaded.filename,
+      uploaded.mimetype,
+      uploaded.contents,
+    );
+  }
+
   @Post('finish')
   @HttpCode(200)
   async finish(

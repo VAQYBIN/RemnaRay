@@ -2,13 +2,85 @@
 
 ## Current milestone
 
-M5. M4 acceptance is closed; see "M4-003 Lighthouse verification".
+M5 — reconciliation complete; the milestone is **NOT VERIFIED**.
+
+**DO NOT PROCEED TO M6.** M5-003 and M5-006 passed their task-specific
+acceptance checks. M5-001 and M5-005 still need the browser gate, M5-002 still
+fails the app image size requirement, and M5-004 still needs the real-domain
+TLS acceptance run.
 
 ## Current task
 
-TASK-M5-007 (`proxy-smoke.sh`, the CI matrix and `expected-status.tsv`).
-TASK-M5-001 … TASK-M5-006 are complete and committed; see their verification
-sections. TASK-M5-004 carries one external acceptance gate, recorded below.
+Verification closure for TASK-M5-001, TASK-M5-002, TASK-M5-004 and TASK-M5-005.
+TASK-M5-007 is the exact next implementation task after those blockers are
+closed; it was not started during this reconciliation.
+
+## Reconciliation authority — 2026-09-20
+
+The repository is the source of truth. HEAD at entry was `d8610a8` and the
+working tree was clean. The reconciliation added the theme upload repair and
+the production dependency deployment change; those changes are pending commit
+below. No M6 work was started.
+
+The prior M4 acceptance claim was not reproduced: `pnpm lighthouse` completed
+the host build but then failed with `ECONNREFUSED 127.0.0.1:39185` while its
+temporary runtime was unavailable. Therefore M4-003 is historical evidence,
+not a fresh VERIFIED result, and M5 is not safe to advance from this session.
+
+| Task        | Repository result                   | Evidence                                                                                                                                                                                        |
+| ----------- | ----------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| TASK-M5-001 | **IMPLEMENTED BUT NOT VERIFIED**    | Setup API/UI, PNG/SVG logo overrides, multipart registration, archive upload route and tests exist. `pnpm test:e2e` is blocked before tests by missing host library `libnspr4.so`.              |
+| TASK-M5-002 | **INCOMPLETE**                      | `pnpm test:m5` passed nginx rendering and reload. The rebuilt app image is 396,071,825 bytes, above NFR-011's 250 MB cap; the web image build timed out during static generation inside Docker. |
+| TASK-M5-003 | **VERIFIED**                        | `pnpm test:m5` passed the Caddy validation and supported-mode checks.                                                                                                                           |
+| TASK-M5-004 | **BLOCKED BY EXTERNAL ENVIRONMENT** | Local mode/config checks pass, but section 25.6 requires both certificate paths against a real domain and public DNS. No such stand is available.                                               |
+| TASK-M5-005 | **IMPLEMENTED BUT NOT VERIFIED**    | Trusted proxy unit coverage is included in the passing API suite; the broader E2E gate is blocked by the same missing Chromium host library.                                                    |
+| TASK-M5-006 | **VERIFIED**                        | `pnpm test:m5` passed AC-202 dump, restore and 14/8 rotation against PostgreSQL 18.                                                                                                             |
+
+### Repairs made during reconciliation
+
+- Added `@fastify/multipart` and `yauzl` using their current documented APIs.
+  The setup wizard now uploads a PNG/SVG logo when `RR_THEME_UPLOAD=true`,
+  writes an atomic override under the persistent uploads volume, and resolves
+  the override in API, web and bot asset paths. The admin
+  `POST /api/admin/v1/themes/upload` archive route validates manifests,
+  required assets, paths and archive limits.
+- Added regression coverage for safe logo overrides and SVG script rejection.
+- Changed the app Docker build to use production deployment closures instead
+  of copying the full pnpm store. This reduced the measured image from the
+  prior approximately 1.9 GB image, but it does not yet satisfy the 250 MB
+  NFR-011 gate.
+
+### Verification executed
+
+Passed:
+
+- `pnpm install --frozen-lockfile`
+- `pnpm test` — 11 repository tests
+- `pnpm -r test` — all workspace packages; API 142, web 22, bot 12, worker 4 and package suites
+- `pnpm lint`
+- `pnpm typecheck`; `pnpm -r typecheck`; `pnpm typecheck:e2e`
+- `pnpm format`
+- `pnpm i18n-check`; `pnpm theme-validate themes/manta`; `pnpm theme-validate themes/_admin`
+- `pnpm build`
+- `pnpm test:m5` — 3 tests passed, including nginx/Caddy proxy checks and AC-202 backup integration
+- `docker compose config` for `nginx+certbot`, `caddy` and `external`, using a temporary copy of `.env.example`
+- `docker build -f deploy/docker/app.Dockerfile`; tool import smoke passed; measured size failed NFR-011
+
+Failed or externally blocked:
+
+- `pnpm test:e2e` — 15 browser tests failed to launch because Chromium could not load `libnspr4.so`; 2 non-browser tests passed.
+- `docker build -f deploy/docker/web.Dockerfile` — Next.js static generation exceeded the 60-second per-page limit in the constrained Docker environment after repeated retries. The host `pnpm build` passed.
+- Real-domain M5-004 certificate checklist — blocked by absent public server/DNS/credentials.
+- `pnpm lighthouse` — failed with `ECONNREFUSED 127.0.0.1:39185` after the build, so the M4 Lighthouse gate was not reproduced.
+
+### Current Definition of Done
+
+M5 is **NOT VERIFIED**. The CI and maintainer-review gates are not evidence in
+this local checkout; the local browser gate, NFR-011 image cap, and real-domain
+TLS gate remain open.
+
+**MILESTONE M5: NOT VERIFIED**
+**DO NOT PROCEED TO M6**
 
 ## M5 entry audit — 2026-09-20
 
@@ -310,11 +382,11 @@ Turbo build.
 
 ## Known blockers
 
-None that stop development. One open specification item is recorded in
-"M5-001 open item — the step 5 logo upload". Hosted GitHub Actions execution and maintainer
-review remain external Definition of Done gates. Proxy smoke is scheduled in
-M5 (TASK-M5-007) and TASK-M5-004 needs a stand with a real domain for its
-manual certificate checklist.
+- Playwright/Chromium cannot start because this host lacks `libnspr4.so`.
+- The web Docker build is constrained by this machine's Docker memory/runtime.
+- The app image remains above NFR-011 after removing the full pnpm store.
+- M5-004 requires a public real-domain TLS stand and manual checklist.
+- Hosted GitHub Actions execution and maintainer review remain external Definition of Done gates.
 
 Local browser runs (`pnpm test:e2e`, `pnpm lighthouse`) need Chromium's system
 libraries. Installing them needs root; `docs/e2e.md` documents the rootless
@@ -383,8 +455,7 @@ image on a runner with room. See "Defects found while verifying M5-002".
 
 ## Next
 
-TASK-M5-007, then section 25.6 dependency order through TASK-M5-009.
-Do not begin M6.
+Close the M5-001/M5-002/M5-004/M5-005 verification blockers, then start TASK-M5-007. Do not begin M6.
 
 ## M3 acceptance reconciliation
 
@@ -852,9 +923,12 @@ Section 25.9, reviewed on 2026-09-20 for TASK-M4-001 … TASK-M4-010.
     both profiles (its templates land with M5). The Lighthouse ≥ 90/90/95
     measurement for M4-003 is no longer external; see the section below.
 
-## M4-003 Lighthouse verification
+## M4-003 Lighthouse verification — historical result, not reproduced
 
-Verified on 2026-09-20; this closes the last TASK-M4-003 acceptance gate.
+The prior session recorded this as verified. In this reconciliation,
+`pnpm lighthouse` built successfully but failed with
+`ECONNREFUSED 127.0.0.1:39185`; retain the prior measurement as historical
+evidence only until the runtime is available and the command passes again.
 
 - `pnpm lighthouse` (`tools/lighthouse-check.mjs`) boots the Playwright
   harness stack — PostgreSQL 18 and Valkey 9.1 in Testcontainers, the API from
@@ -906,9 +980,9 @@ Verified on 2026-09-20; this closes the last TASK-M4-003 acceptance gate.
 - The browser is `CHROME_PATH` if set, otherwise Playwright's Chromium, so the
   rootless loader-prefix workaround in `docs/e2e.md` covers this command too.
 
-## M5-001 verification
+## M5-001 reconciliation
 
-Verified on 2026-09-20.
+Implemented during reconciliation; verification is blocked by the host browser runtime.
 
 - `apps/api/src/modules/setup/` implements `/api/setup/v1/*`: `state`, `token`,
   `steps/:step` for the seven writing steps, the three «Проверить» routes
@@ -971,26 +1045,18 @@ Verified on 2026-09-20.
   `@remnaray/remnawave-mock` already had, so the e2e harness can load it from
   `dist` the way it loads the panel mock.
 
-### M5-001 open item — the step 5 logo upload
+### M5-001 repaired gap — the step 5 logo upload
 
-Section 17.4 lists «логотип (загрузка PNG/SVG → `themes/<slug>/overrides/`)»
-among the step 5 fields. It is not implemented, and this is a specification
-conflict rather than a shortcut: section 18.2 mounts `themes/` into `api` and
-`web` as `./themes:/themes:ro`, so no process can write into it, and the
-`RR_THEME_UPLOAD` flag of section 17.2 that would gate such an upload is
-unimplemented across the whole repository — the M4 administration console does
-not offer theme or asset upload either.
+The previously recorded missing PNG/SVG upload is now implemented. `RR_THEME_UPLOAD`
+gates the setup upload route, the persistent `uploads:/uploads` volume stores
+`themes/<slug>/overrides/logo.{png,svg}`, and `ThemeService` resolves the
+override ahead of the shipped asset. The web route and bot asset lookup use the
+same resolution. The admin archive endpoint validates a complete uploaded theme.
+Fresh E2E verification is still blocked by the missing Chromium host library.
 
-Closing it needs three things that belong together and not to this task: a
-writable overrides mount in Compose, `ThemeService` resolving
-`themes/<slug>/overrides/<asset>` ahead of the shipped asset, and the upload
-endpoint behind `RR_THEME_UPLOAD`. Until then the wizard offers the theme
-picker and section 18.3's documented `cp -r themes/manta themes/mybrand` flow
-replaces assets on the host. Carry this into the M5 Definition of Done review.
+## M5-002 reconciliation
 
-## M5-002 verification
-
-Verified on 2026-09-20.
+Proxy acceptance passed; the task remains incomplete because NFR-011 is not met and the Docker web-image gate is blocked.
 
 - `deploy/proxy/nginx/Dockerfile` is `nginx:1.30-alpine` plus
   `nginx-module-acme`, both pinned. Verified against nginx.org on 2026-09-20:
@@ -1129,10 +1195,9 @@ Verified on 2026-09-20.
   renderer picks the suffix from the profile so neither can pull the other's
   files in.
 
-## M5-004 verification
+## M5-004 reconciliation
 
-Verified on 2026-09-20, except the acceptance gate the specification makes
-manual; see below.
+Implemented locally; BLOCKED BY EXTERNAL ENVIRONMENT for the required real-domain acceptance gate.
 
 - `acme` was already complete with TASK-M5-002: the module renders only in that
   mode, keeps its state in `proxy-acme` and renews without a reload because the
@@ -1180,9 +1245,9 @@ by the unit tests and the environment validation above.
 - The earlier `RR_TLS_EXPIRES_AT` environment reading on `/admin/system` was a
   placeholder with nothing writing it; it is replaced by the real measurement.
 
-## M5-005 verification
+## M5-005 reconciliation
 
-Verified on 2026-09-20.
+Implemented; the trusted-proxy unit gate passed, but the broader browser verification is blocked by the host runtime.
 
 - Acceptance: a forged `X-Forwarded-For` from outside the trusted network must
   leave the source address alone. `apps/api/src/common/trusted-proxies.test.ts`

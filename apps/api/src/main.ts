@@ -1,5 +1,6 @@
 import { NestFactory } from '@nestjs/core';
 import { FastifyAdapter, type NestFastifyApplication } from '@nestjs/platform-fastify';
+import multipart from '@fastify/multipart';
 import { Logger } from 'nestjs-pino';
 
 import { AppModule } from './app.module';
@@ -18,6 +19,10 @@ async function bootstrap() {
       rawBody: true,
     },
   );
+
+  await app.register(multipart as never, {
+    limits: { files: 1, parts: 2, fileSize: 10 * 1024 * 1024 },
+  });
 
   app.useLogger(app.get(Logger));
   app.useGlobalPipes(new ZodValidationPipe());

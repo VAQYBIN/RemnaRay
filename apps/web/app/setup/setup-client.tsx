@@ -31,6 +31,7 @@ const stateSchema = z.object({
       acmeEmail: z.string(),
       tlsMode: z.string(),
       proxyProfile: z.string(),
+      themeUpload: z.boolean().optional(),
     })
     .optional(),
   themes: z.array(z.object({ slug: z.string(), name: z.string() })).optional(),
@@ -664,6 +665,8 @@ function BrandStep({ pending, state, run, refresh, setStep }: StepProps) {
   const [enabled, setEnabled] = useState<string[]>([...LOCALES]);
   const [timezone, setTimezone] = useState('Europe/Moscow');
   const [themeSlug, setThemeSlug] = useState(state.themes?.[0]?.slug ?? 'manta');
+  const [logo, setLogo] = useState<File | null>(null);
+  const [logoAsset, setLogoAsset] = useState('');
 
   return (
     <StepCard title={t('brand.title')} description={t('brand.description')}>
@@ -739,6 +742,22 @@ function BrandStep({ pending, state, run, refresh, setStep }: StepProps) {
           ))}
         </select>
       </div>
+      {state.defaults?.themeUpload ? (
+        <div className="flex flex-col gap-2">
+          <Label htmlFor="setup-brand-logo">{t('brand.logo')}</Label>
+          <input
+            accept="image/png,image/svg+xml"
+            className="text-sm"
+            id="setup-brand-logo"
+            type="file"
+            onChange={(event) => {
+              setLogo(event.target.files?.[0] ?? null);
+              setLogoAsset('');
+            }}
+          />
+          {logoAsset ? <span className="text-xs text-muted-foreground">{logoAsset}</span> : null}
+        </div>
+      ) : null}
       <Nav
         back={() => {
           setStep(4);
@@ -748,6 +767,20 @@ function BrandStep({ pending, state, run, refresh, setStep }: StepProps) {
           disabled={pending || name.length === 0 || !enabled.includes(defaultLocale)}
           onClick={() =>
             void run(async () => {
+              let uploadedLogo = logoAsset;
+              if (logo) {
+                const form = new FormData();
+                form.append('theme', themeSlug);
+                form.append('file', logo);
+                const upload = await fetch('/api/setup/v1/theme-logo', {
+                  method: 'POST',
+                  headers: { 'x-requested-with': 'RemnaRay' },
+                  body: form,
+                });
+                if (!upload.ok) throw new Error('Logo upload failed');
+                uploadedLogo = ((await upload.json()) as { asset: string }).asset;
+                setLogoAsset(uploadedLogo);
+              }
               await browserApi().send('POST', 'api/setup/v1/steps/5', savedSchema, {
                 name,
                 slogan: { ru: sloganRu, en: sloganEn },
@@ -755,6 +788,7 @@ function BrandStep({ pending, state, run, refresh, setStep }: StepProps) {
                 enabledLocales: enabled,
                 timezone,
                 themeSlug,
+                ...(uploadedLogo ? { logo: uploadedLogo } : {}),
               });
               return refresh();
             })
