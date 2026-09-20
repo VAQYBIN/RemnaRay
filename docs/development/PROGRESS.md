@@ -2,13 +2,69 @@
 
 ## Current milestone
 
-M4
+M4 acceptance reconciliation; requested target: M5.
 
 ## Current task
 
-TASK-M4-010 is complete and committed. M4 is finished; the milestone review is
-in "M4 Definition of Done review" below. Next: TASK-M5-001, which must not be
-started before the user opens M5.
+TASK-M4-010 has its implementation and verification commit (`7b99197`).
+The user has opened M5, but M4 is not fully accepted: the review below records
+unmet specification requirements. TASK-M5-001 is the exact next M5 task and
+has not started. AGENTS.md prohibits starting the next milestone before the
+current milestone satisfies its Definition of Done.
+
+## M5 entry audit — 2026-09-20
+
+- Read AGENTS.md, this handoff, the relevant implementation, and authoritative
+  specification sections 9.1, 17.4, 25.6, 25.9 and ADR-009. The requested first
+  task is TASK-M5-001, dependent on TASK-M4-009; its acceptance is AC-171 with
+  the Playwright setup flow and a 404 after completion.
+- Initial `git status --short` and `git diff` were empty. Inspected
+  `git log --oneline -15`; HEAD was `7b99197`. No M5 implementation commits
+  were present in that history.
+- Confirmed and repaired the local M4 OpenAPI defect: `apps/api/openapi.json`
+  previously declared
+  `3.0.3`, has no schema components, and many request bodies only declare
+  `type: object`. The API build script previously only ran `tsc -p tsconfig.json`;
+  there was no OpenAPI generation step. `apps/api/openapi/generator.ts` now
+  uses `OpenApiGeneratorV31` and the shared `packages/domain/src/contracts/`
+  schemas, while the existing route map is preserved as
+  `apps/api/openapi.routes.json`; the build regenerates `apps/api/openapi.json`.
+  The generated document is 3.1.0 with eight shared schemas and 128 paths,
+  and the root tooling test asserts the generation boundary. Context7 resolved
+  `/asteasolutions/zod-to-openapi` and confirmed the registry and
+  `OpenApiGeneratorV31` APIs; documentation access is available.
+- The OpenAPI repair now satisfies section 9.1, ADR-009 and section 25.9 item
+  5 for the shared contracts. Its route metadata remains a checked-in source
+  map because the existing Nest controllers do not expose a complete runtime
+  contract registry; future route additions must update that map and the
+  shared Zod contract used by the generator.
+- Confirmed the outstanding external M4-003 acceptance gate: Lighthouse
+  performance >= 90, accessibility >= 90 and SEO >= 95 on the reference
+  server (sections 13.5 and 25.5). No reference-server address/access or
+  measurement report is supplied in the handoff or repository. The running
+  Docker services are the local development PostgreSQL and Valkey containers;
+  they are not evidence of a reference-server run. No Lighthouse check is
+  configured in the current CI workflow.
+- Local tools are available: Node 24.21.0, pnpm 11.26.0 and Docker 29.7.2.
+  This is not a local runtime or Context7 outage. Existing task test results
+  below remain historical results; application tests were rerun for the
+  OpenAPI correction and the checks are recorded below.
+- No M4 implementation is overwritten, no M5 task is claimed complete, and
+  M6 remains unopened. Earlier statements that M4 was finished mean the
+  implementation sequence was committed, not that all acceptance gates passed.
+
+### Entry blocker and exact continuation
+
+M5 entry is blocked by the strict milestone rule and the unmet M4 acceptance
+requirements. Opening M5 does not supply the missing reference infrastructure
+or establish that its predecessor passed acceptance.
+
+Before TASK-M5-001: obtain and record the required Lighthouse
+measurements on an accessible reference server and resolve the remaining M4
+Definition of Done gates. The OpenAPI repair is local work, not a credential
+blocker. The reference-server measurement requires external infrastructure
+that has not been supplied. Once M4 acceptance is satisfied, continue at
+TASK-M5-001, then follow section 25.6 dependency order through TASK-M5-009.
 
 ## Current handoff correction
 
@@ -21,9 +77,10 @@ started before the user opens M5.
   which needs the reference server and stays an external gate.
 - M4-004 is implemented and committed; the earlier uncommitted draft was
   replaced.
-- OpenAPI is maintained by hand (`apps/api/openapi.json`, 3.0.3). Section 9.1
-  requires a 3.1 document generated from Zod contracts; the generator is planned
-  with the `packages/domain/contracts` work in TASK-M4-004.
+- OpenAPI is generated into `apps/api/openapi.json` as 3.1.0 from the shared
+  Zod contracts during the API build. The route source map is
+  `apps/api/openapi.routes.json`; the generator and verification are recorded
+  in "OpenAPI repair verification".
 
 ## Completed tasks
 
@@ -258,9 +315,26 @@ Turbo build.
 
 ## Known blockers
 
-Hosted GitHub Actions execution, maintainer review, provider credential
-healthchecks, and the later proxy-smoke/full e2e gates remain external gates.
-No credentials or external infrastructure were required for TASK-M4-001.
+See "M5 entry audit" for the active milestone-entry blocker: unverified
+reference-server Lighthouse acceptance. The OpenAPI generation defect was
+repaired and verified in the section below.
+Hosted GitHub Actions execution and maintainer review also remain external
+Definition of Done gates. Proxy smoke is scheduled in M5; the local M4
+Playwright suite already passed as recorded below.
+
+## OpenAPI repair verification — 2026-09-20
+
+- `pnpm --filter @remnaray/api build` now regenerates the artifact with
+  `OpenApiGeneratorV31`; the result is OpenAPI 3.1.0 with eight shared Zod
+  schemas and 128 paths.
+- The new tooling test passes, as do API lint/typecheck, root lint, root and
+  workspace typechecks, formatting, and the full Turbo build.
+- The generated route map is kept in `apps/api/openapi.routes.json`; generated
+  output is `apps/api/openapi.json`. No secret or runtime credential is used by
+  generation.
+- This correction is committed separately as a follow-up to the M4 handoff;
+  it does not claim M4 acceptance because the reference-server Lighthouse
+  gate remains unverified.
 
 ## M3-001 verification
 
@@ -306,7 +380,9 @@ No credentials or external infrastructure were required for TASK-M4-001.
 
 ## Next
 
-M4 is complete through TASK-M4-010. M5 remains unopened.
+M5 is authorized but has not started because M4 acceptance is incomplete.
+Resolve the prerequisites listed in "Entry blocker and exact continuation",
+then start TASK-M5-001. Do not begin M6.
 
 ## M3 acceptance reconciliation
 

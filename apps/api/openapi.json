@@ -1,8 +1,487 @@
 {
-  "openapi": "3.0.3",
-  "info": {
-    "title": "RemnaRay API",
-    "version": "0.1.0"
+  "openapi": "3.1.0",
+  "info": { "title": "RemnaRay API", "version": "0.1.0" },
+  "components": {
+    "schemas": {
+      "Money": {
+        "type": "object",
+        "properties": {
+          "amountMinor": {
+            "anyOf": [{ "type": "integer" }, { "type": "string", "pattern": "^-?\\d+$" }]
+          },
+          "currency": { "type": "string", "pattern": "^[A-Z]{3}$" }
+        },
+        "required": ["amountMinor", "currency"]
+      },
+      "ErrorEnvelope": {
+        "type": "object",
+        "properties": {
+          "error": {
+            "type": "object",
+            "properties": {
+              "code": { "type": "string" },
+              "message": { "type": "string" },
+              "messageKey": { "type": "string" },
+              "details": {},
+              "incidentId": { "type": "string" },
+              "requestId": { "type": "string" }
+            },
+            "required": ["code"]
+          }
+        },
+        "required": ["error"]
+      },
+      "PlanPublic": {
+        "type": "object",
+        "properties": {
+          "id": { "type": "string" },
+          "slug": { "type": "string" },
+          "name": {
+            "type": "object",
+            "properties": { "ru": { "type": "string" }, "en": { "type": "string" } },
+            "required": ["ru", "en"]
+          },
+          "description": {
+            "type": "object",
+            "properties": { "ru": { "type": "string" }, "en": { "type": "string" } },
+            "required": ["ru", "en"]
+          },
+          "durationDays": { "type": "integer" },
+          "trafficLimitBytes": { "type": "integer" },
+          "deviceLimit": { "type": "integer" },
+          "price": {
+            "type": "object",
+            "properties": {
+              "amountMinor": {
+                "anyOf": [{ "type": "integer" }, { "type": "string", "pattern": "^-?\\d+$" }]
+              },
+              "currency": { "type": "string", "pattern": "^[A-Z]{3}$" }
+            },
+            "required": ["amountMinor", "currency"]
+          },
+          "sortOrder": { "type": "integer" }
+        },
+        "required": [
+          "id",
+          "slug",
+          "name",
+          "description",
+          "durationDays",
+          "trafficLimitBytes",
+          "deviceLimit",
+          "price",
+          "sortOrder"
+        ]
+      },
+      "PlanList": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "id": { "type": "string" },
+                "slug": { "type": "string" },
+                "name": {
+                  "type": "object",
+                  "properties": { "ru": { "type": "string" }, "en": { "type": "string" } },
+                  "required": ["ru", "en"]
+                },
+                "description": {
+                  "type": "object",
+                  "properties": { "ru": { "type": "string" }, "en": { "type": "string" } },
+                  "required": ["ru", "en"]
+                },
+                "durationDays": { "type": "integer" },
+                "trafficLimitBytes": { "type": "integer" },
+                "deviceLimit": { "type": "integer" },
+                "price": {
+                  "type": "object",
+                  "properties": {
+                    "amountMinor": {
+                      "anyOf": [{ "type": "integer" }, { "type": "string", "pattern": "^-?\\d+$" }]
+                    },
+                    "currency": { "type": "string", "pattern": "^[A-Z]{3}$" }
+                  },
+                  "required": ["amountMinor", "currency"]
+                },
+                "sortOrder": { "type": "integer" }
+              },
+              "required": [
+                "id",
+                "slug",
+                "name",
+                "description",
+                "durationDays",
+                "trafficLimitBytes",
+                "deviceLimit",
+                "price",
+                "sortOrder"
+              ]
+            }
+          }
+        },
+        "required": ["items"]
+      },
+      "UserMe": {
+        "type": "object",
+        "properties": {
+          "id": { "type": "string" },
+          "telegramId": { "type": "number" },
+          "username": { "type": ["string", "null"] },
+          "firstName": { "type": ["string", "null"] },
+          "language": { "type": "string" },
+          "email": { "type": ["string", "null"] },
+          "balance": {
+            "type": "object",
+            "properties": {
+              "amountMinor": {
+                "anyOf": [{ "type": "integer" }, { "type": "string", "pattern": "^-?\\d+$" }]
+              },
+              "currency": { "type": "string", "pattern": "^[A-Z]{3}$" }
+            },
+            "required": ["amountMinor", "currency"]
+          },
+          "referralCode": { "type": "string" },
+          "referralLink": { "type": "string" },
+          "botReferralLink": { "type": "string" },
+          "marketingOptOut": { "type": "boolean" },
+          "trialAvailable": { "type": "boolean" },
+          "createdAt": { "type": "string" }
+        },
+        "required": [
+          "id",
+          "telegramId",
+          "username",
+          "firstName",
+          "language",
+          "email",
+          "balance",
+          "referralCode",
+          "referralLink",
+          "botReferralLink",
+          "marketingOptOut",
+          "trialAvailable",
+          "createdAt"
+        ]
+      },
+      "SubscriptionState": {
+        "type": "object",
+        "properties": {
+          "subscription": {
+            "type": ["object", "null"],
+            "properties": {
+              "id": { "type": "string" },
+              "status": { "type": "string" },
+              "source": { "type": "string" },
+              "plan": {
+                "type": ["object", "null"],
+                "properties": {
+                  "id": { "type": "string" },
+                  "slug": { "type": "string" },
+                  "name": {
+                    "type": "object",
+                    "properties": { "ru": { "type": "string" }, "en": { "type": "string" } },
+                    "required": ["ru", "en"]
+                  },
+                  "description": {
+                    "type": "object",
+                    "properties": { "ru": { "type": "string" }, "en": { "type": "string" } },
+                    "required": ["ru", "en"]
+                  },
+                  "durationDays": { "type": "integer" },
+                  "trafficLimitBytes": { "type": "integer" },
+                  "deviceLimit": { "type": "integer" },
+                  "price": {
+                    "type": "object",
+                    "properties": {
+                      "amountMinor": {
+                        "anyOf": [
+                          { "type": "integer" },
+                          { "type": "string", "pattern": "^-?\\d+$" }
+                        ]
+                      },
+                      "currency": { "type": "string", "pattern": "^[A-Z]{3}$" }
+                    },
+                    "required": ["amountMinor", "currency"]
+                  },
+                  "sortOrder": { "type": "integer" }
+                },
+                "required": [
+                  "id",
+                  "slug",
+                  "name",
+                  "description",
+                  "durationDays",
+                  "trafficLimitBytes",
+                  "deviceLimit",
+                  "price",
+                  "sortOrder"
+                ]
+              },
+              "startsAt": { "type": "string" },
+              "expiresAt": { "type": "string" },
+              "daysLeft": { "type": "number" },
+              "canChangePlan": { "type": "boolean" },
+              "canRevoke": { "type": "boolean" }
+            },
+            "required": [
+              "id",
+              "status",
+              "source",
+              "plan",
+              "startsAt",
+              "expiresAt",
+              "daysLeft",
+              "canChangePlan",
+              "canRevoke"
+            ]
+          },
+          "panel": {
+            "type": ["object", "null"],
+            "properties": {
+              "status": { "type": "string" },
+              "usedTrafficBytes": { "type": "number" },
+              "trafficLimitBytes": { "type": "number" },
+              "expireAt": { "type": ["string", "null"] },
+              "deviceLimit": { "type": ["number", "null"] },
+              "subscriptionUrl": { "type": "string" }
+            },
+            "required": [
+              "status",
+              "usedTrafficBytes",
+              "trafficLimitBytes",
+              "expireAt",
+              "deviceLimit",
+              "subscriptionUrl"
+            ]
+          },
+          "clients": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "id": { "type": "string" },
+                "name": { "type": "string" },
+                "platforms": { "type": "array", "items": { "type": "string" } },
+                "deepLink": { "type": ["string", "null"] },
+                "storeUrls": {
+                  "type": "object",
+                  "additionalProperties": { "type": "string" },
+                  "default": {}
+                }
+              },
+              "required": ["id", "name", "platforms", "deepLink"]
+            }
+          }
+        },
+        "required": ["subscription", "panel", "clients"]
+      },
+      "Invoice": {
+        "type": "object",
+        "properties": {
+          "id": { "type": "string" },
+          "kind": { "type": "string" },
+          "status": { "type": "string" },
+          "terminal": { "type": "boolean" },
+          "plan": {
+            "type": ["object", "null"],
+            "properties": {
+              "id": { "type": "string" },
+              "slug": { "type": "string" },
+              "name": {
+                "type": "object",
+                "properties": { "ru": { "type": "string" }, "en": { "type": "string" } },
+                "required": ["ru", "en"]
+              },
+              "description": {
+                "type": "object",
+                "properties": { "ru": { "type": "string" }, "en": { "type": "string" } },
+                "required": ["ru", "en"]
+              },
+              "durationDays": { "type": "integer" },
+              "trafficLimitBytes": { "type": "integer" },
+              "deviceLimit": { "type": "integer" },
+              "price": {
+                "type": "object",
+                "properties": {
+                  "amountMinor": {
+                    "anyOf": [{ "type": "integer" }, { "type": "string", "pattern": "^-?\\d+$" }]
+                  },
+                  "currency": { "type": "string", "pattern": "^[A-Z]{3}$" }
+                },
+                "required": ["amountMinor", "currency"]
+              },
+              "sortOrder": { "type": "integer" }
+            },
+            "required": [
+              "id",
+              "slug",
+              "name",
+              "description",
+              "durationDays",
+              "trafficLimitBytes",
+              "deviceLimit",
+              "price",
+              "sortOrder"
+            ]
+          },
+          "provider": { "type": "string" },
+          "amount": {
+            "type": "object",
+            "properties": {
+              "amountMinor": {
+                "anyOf": [{ "type": "integer" }, { "type": "string", "pattern": "^-?\\d+$" }]
+              },
+              "currency": { "type": "string", "pattern": "^[A-Z]{3}$" }
+            },
+            "required": ["amountMinor", "currency"]
+          },
+          "discount": {
+            "type": "object",
+            "properties": {
+              "amountMinor": {
+                "anyOf": [{ "type": "integer" }, { "type": "string", "pattern": "^-?\\d+$" }]
+              },
+              "currency": { "type": "string", "pattern": "^[A-Z]{3}$" }
+            },
+            "required": ["amountMinor", "currency"]
+          },
+          "providerAmount": {
+            "type": "object",
+            "properties": { "amount": { "type": "string" }, "currency": { "type": "string" } },
+            "required": ["amount", "currency"]
+          },
+          "paymentUrl": { "type": "string" },
+          "starsInvoiceLink": { "type": "string" },
+          "expiresAt": { "type": "string" },
+          "createdAt": { "type": "string" }
+        },
+        "required": [
+          "id",
+          "kind",
+          "status",
+          "terminal",
+          "plan",
+          "provider",
+          "amount",
+          "discount",
+          "expiresAt",
+          "createdAt"
+        ]
+      },
+      "TransactionPage": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "id": { "type": "string" },
+                "kind": { "type": "string" },
+                "status": { "type": "string" },
+                "terminal": { "type": "boolean" },
+                "plan": {
+                  "type": ["object", "null"],
+                  "properties": {
+                    "id": { "type": "string" },
+                    "slug": { "type": "string" },
+                    "name": {
+                      "type": "object",
+                      "properties": { "ru": { "type": "string" }, "en": { "type": "string" } },
+                      "required": ["ru", "en"]
+                    },
+                    "description": {
+                      "type": "object",
+                      "properties": { "ru": { "type": "string" }, "en": { "type": "string" } },
+                      "required": ["ru", "en"]
+                    },
+                    "durationDays": { "type": "integer" },
+                    "trafficLimitBytes": { "type": "integer" },
+                    "deviceLimit": { "type": "integer" },
+                    "price": {
+                      "type": "object",
+                      "properties": {
+                        "amountMinor": {
+                          "anyOf": [
+                            { "type": "integer" },
+                            { "type": "string", "pattern": "^-?\\d+$" }
+                          ]
+                        },
+                        "currency": { "type": "string", "pattern": "^[A-Z]{3}$" }
+                      },
+                      "required": ["amountMinor", "currency"]
+                    },
+                    "sortOrder": { "type": "integer" }
+                  },
+                  "required": [
+                    "id",
+                    "slug",
+                    "name",
+                    "description",
+                    "durationDays",
+                    "trafficLimitBytes",
+                    "deviceLimit",
+                    "price",
+                    "sortOrder"
+                  ]
+                },
+                "provider": { "type": "string" },
+                "amount": {
+                  "type": "object",
+                  "properties": {
+                    "amountMinor": {
+                      "anyOf": [{ "type": "integer" }, { "type": "string", "pattern": "^-?\\d+$" }]
+                    },
+                    "currency": { "type": "string", "pattern": "^[A-Z]{3}$" }
+                  },
+                  "required": ["amountMinor", "currency"]
+                },
+                "discount": {
+                  "type": "object",
+                  "properties": {
+                    "amountMinor": {
+                      "anyOf": [{ "type": "integer" }, { "type": "string", "pattern": "^-?\\d+$" }]
+                    },
+                    "currency": { "type": "string", "pattern": "^[A-Z]{3}$" }
+                  },
+                  "required": ["amountMinor", "currency"]
+                },
+                "providerAmount": {
+                  "type": "object",
+                  "properties": {
+                    "amount": { "type": "string" },
+                    "currency": { "type": "string" }
+                  },
+                  "required": ["amount", "currency"]
+                },
+                "paymentUrl": { "type": "string" },
+                "starsInvoiceLink": { "type": "string" },
+                "expiresAt": { "type": "string" },
+                "createdAt": { "type": "string" }
+              },
+              "required": [
+                "id",
+                "kind",
+                "status",
+                "terminal",
+                "plan",
+                "provider",
+                "amount",
+                "discount",
+                "expiresAt",
+                "createdAt"
+              ]
+            }
+          },
+          "nextCursor": { "type": ["string", "null"], "default": null }
+        },
+        "required": ["items"]
+      }
+    },
+    "parameters": {}
   },
   "paths": {
     "/api/admin/v1/admins": {
@@ -10,26 +489,16 @@
         "operationId": "listAdmins",
         "summary": "Administrators (FR-143)",
         "responses": {
-          "200": {
-            "description": "Administrators"
-          },
-          "403": {
-            "description": "FORBIDDEN"
-          }
+          "200": { "description": "Administrators" },
+          "403": { "description": "FORBIDDEN" }
         }
       },
       "post": {
         "operationId": "createAdmin",
         "responses": {
-          "201": {
-            "description": "Created"
-          },
-          "409": {
-            "description": "CONFLICT"
-          },
-          "403": {
-            "description": "FORBIDDEN"
-          }
+          "201": { "description": "Created" },
+          "403": { "description": "FORBIDDEN" },
+          "409": { "description": "CONFLICT" }
         }
       }
     },
@@ -41,22 +510,13 @@
             "name": "id",
             "in": "path",
             "required": true,
-            "schema": {
-              "type": "string",
-              "format": "uuid"
-            }
+            "schema": { "type": "string", "format": "uuid" }
           }
         ],
         "responses": {
-          "200": {
-            "description": "Updated"
-          },
-          "404": {
-            "description": "NOT_FOUND"
-          },
-          "409": {
-            "description": "LAST_ADMIN"
-          }
+          "200": { "description": "Updated" },
+          "404": { "description": "NOT_FOUND" },
+          "409": { "description": "LAST_ADMIN" }
         }
       }
     },
@@ -68,22 +528,13 @@
             "name": "id",
             "in": "path",
             "required": true,
-            "schema": {
-              "type": "string",
-              "format": "uuid"
-            }
+            "schema": { "type": "string", "format": "uuid" }
           }
         ],
         "responses": {
-          "200": {
-            "description": "Deactivated"
-          },
-          "404": {
-            "description": "NOT_FOUND"
-          },
-          "409": {
-            "description": "LAST_ADMIN"
-          }
+          "200": { "description": "Deactivated" },
+          "404": { "description": "NOT_FOUND" },
+          "409": { "description": "LAST_ADMIN" }
         }
       }
     },
@@ -95,19 +546,12 @@
             "name": "id",
             "in": "path",
             "required": true,
-            "schema": {
-              "type": "string",
-              "format": "uuid"
-            }
+            "schema": { "type": "string", "format": "uuid" }
           }
         ],
         "responses": {
-          "200": {
-            "description": "Password reset"
-          },
-          "404": {
-            "description": "NOT_FOUND"
-          }
+          "200": { "description": "Password reset" },
+          "404": { "description": "NOT_FOUND" }
         }
       }
     },
@@ -119,19 +563,12 @@
             "name": "id",
             "in": "path",
             "required": true,
-            "schema": {
-              "type": "string",
-              "format": "uuid"
-            }
+            "schema": { "type": "string", "format": "uuid" }
           }
         ],
         "responses": {
-          "200": {
-            "description": "TOTP enrolment cleared"
-          },
-          "404": {
-            "description": "NOT_FOUND"
-          }
+          "200": { "description": "TOTP enrolment cleared" },
+          "404": { "description": "NOT_FOUND" }
         }
       }
     },
@@ -139,49 +576,31 @@
       "get": {
         "operationId": "listAuditLog",
         "summary": "Action journal; an operator only sees their own rows",
-        "responses": {
-          "200": {
-            "description": "OK"
-          }
-        }
+        "responses": { "200": { "description": "OK" } }
       }
     },
     "/api/admin/v1/auth/login": {
       "post": {
         "operationId": "adminLogin",
         "responses": {
-          "200": {
-            "description": "Password challenge"
-          },
-          "401": {
-            "description": "Invalid credentials"
-          },
-          "423": {
-            "description": "Admin locked"
-          }
+          "200": { "description": "Password challenge" },
+          "401": { "description": "Invalid credentials" },
+          "423": { "description": "Admin locked" }
         }
       }
     },
     "/api/admin/v1/auth/logout": {
       "post": {
         "operationId": "adminLogout",
-        "responses": {
-          "204": {
-            "description": "Logged out"
-          }
-        }
+        "responses": { "204": { "description": "Logged out" } }
       }
     },
     "/api/admin/v1/auth/me": {
       "get": {
         "operationId": "adminMe",
         "responses": {
-          "200": {
-            "description": "Current admin and CSRF token"
-          },
-          "401": {
-            "description": "Unauthenticated"
-          }
+          "200": { "description": "Current admin and CSRF token" },
+          "401": { "description": "Unauthenticated" }
         }
       }
     },
@@ -189,12 +608,8 @@
       "post": {
         "operationId": "adminTotpLogin",
         "responses": {
-          "200": {
-            "description": "Authenticated admin session"
-          },
-          "401": {
-            "description": "Invalid TOTP"
-          }
+          "200": { "description": "Authenticated admin session" },
+          "401": { "description": "Invalid TOTP" }
         }
       }
     },
@@ -202,12 +617,8 @@
       "post": {
         "operationId": "adminTotpConfirm",
         "responses": {
-          "200": {
-            "description": "Authenticated first admin session"
-          },
-          "401": {
-            "description": "Invalid TOTP"
-          }
+          "200": { "description": "Authenticated first admin session" },
+          "401": { "description": "Invalid TOTP" }
         }
       }
     },
@@ -215,12 +626,8 @@
       "post": {
         "operationId": "adminTotpSetup",
         "responses": {
-          "200": {
-            "description": "TOTP setup QR"
-          },
-          "401": {
-            "description": "Invalid challenge"
-          }
+          "200": { "description": "TOTP setup QR" },
+          "401": { "description": "Invalid challenge" }
         }
       }
     },
@@ -228,35 +635,15 @@
       "get": {
         "operationId": "getBotSettings",
         "summary": "Bot settings",
-        "responses": {
-          "200": {
-            "description": "OK"
-          },
-          "403": {
-            "description": "FORBIDDEN"
-          }
-        }
+        "responses": { "200": { "description": "OK" }, "403": { "description": "FORBIDDEN" } }
       },
       "put": {
         "operationId": "updateBotSettings",
         "summary": "Update the bot and ask it to reconfigure",
-        "responses": {
-          "200": {
-            "description": "OK"
-          },
-          "403": {
-            "description": "FORBIDDEN"
-          }
-        },
+        "responses": { "200": { "description": "OK" }, "403": { "description": "FORBIDDEN" } },
         "requestBody": {
           "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "type": "object"
-              }
-            }
-          }
+          "content": { "application/json": { "schema": { "type": "object" } } }
         }
       }
     },
@@ -264,51 +651,29 @@
       "post": {
         "operationId": "syncBotCommands",
         "summary": "Ask the bot to re-register its commands",
-        "responses": {
-          "200": {
-            "description": "OK"
-          }
-        }
+        "responses": { "200": { "description": "OK" } }
       }
     },
     "/api/admin/v1/bot/test": {
       "post": {
         "operationId": "testBot",
         "summary": "Telegram getMe",
-        "responses": {
-          "200": {
-            "description": "OK"
-          }
-        }
+        "responses": { "200": { "description": "OK" } }
       }
     },
     "/api/admin/v1/broadcasts": {
       "get": {
         "operationId": "listBroadcasts",
         "summary": "Broadcasts",
-        "responses": {
-          "200": {
-            "description": "OK"
-          }
-        }
+        "responses": { "200": { "description": "OK" } }
       },
       "post": {
         "operationId": "createBroadcast",
         "summary": "Create a broadcast",
-        "responses": {
-          "201": {
-            "description": "Created"
-          }
-        },
+        "responses": { "201": { "description": "Created" } },
         "requestBody": {
           "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "type": "object"
-              }
-            }
-          }
+          "content": { "application/json": { "schema": { "type": "object" } } }
         }
       }
     },
@@ -316,73 +681,43 @@
       "get": {
         "operationId": "getBroadcast",
         "summary": "One broadcast",
-        "responses": {
-          "200": {
-            "description": "OK"
-          }
-        },
+        "responses": { "200": { "description": "OK" } },
         "parameters": [
           {
             "name": "id",
             "in": "path",
             "required": true,
-            "schema": {
-              "type": "string",
-              "format": "uuid"
-            }
+            "schema": { "type": "string", "format": "uuid" }
           }
         ]
       },
       "patch": {
         "operationId": "updateBroadcast",
         "summary": "Edit a draft or paused broadcast",
-        "responses": {
-          "200": {
-            "description": "OK"
-          },
-          "409": {
-            "description": "CONFLICT"
-          }
-        },
+        "responses": { "200": { "description": "OK" }, "409": { "description": "CONFLICT" } },
         "parameters": [
           {
             "name": "id",
             "in": "path",
             "required": true,
-            "schema": {
-              "type": "string",
-              "format": "uuid"
-            }
+            "schema": { "type": "string", "format": "uuid" }
           }
         ],
         "requestBody": {
           "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "type": "object"
-              }
-            }
-          }
+          "content": { "application/json": { "schema": { "type": "object" } } }
         }
       },
       "delete": {
         "operationId": "deleteBroadcast",
         "summary": "Soft-delete a broadcast",
-        "responses": {
-          "200": {
-            "description": "OK"
-          }
-        },
+        "responses": { "200": { "description": "OK" } },
         "parameters": [
           {
             "name": "id",
             "in": "path",
             "required": true,
-            "schema": {
-              "type": "string",
-              "format": "uuid"
-            }
+            "schema": { "type": "string", "format": "uuid" }
           }
         ]
       }
@@ -391,20 +726,13 @@
       "post": {
         "operationId": "cancelBroadcast",
         "summary": "Cancel a broadcast",
-        "responses": {
-          "200": {
-            "description": "OK"
-          }
-        },
+        "responses": { "200": { "description": "OK" } },
         "parameters": [
           {
             "name": "id",
             "in": "path",
             "required": true,
-            "schema": {
-              "type": "string",
-              "format": "uuid"
-            }
+            "schema": { "type": "string", "format": "uuid" }
           }
         ]
       }
@@ -413,20 +741,13 @@
       "post": {
         "operationId": "pauseBroadcast",
         "summary": "Pause a running broadcast",
-        "responses": {
-          "200": {
-            "description": "OK"
-          }
-        },
+        "responses": { "200": { "description": "OK" } },
         "parameters": [
           {
             "name": "id",
             "in": "path",
             "required": true,
-            "schema": {
-              "type": "string",
-              "format": "uuid"
-            }
+            "schema": { "type": "string", "format": "uuid" }
           }
         ]
       }
@@ -435,20 +756,13 @@
       "post": {
         "operationId": "previewBroadcastSegment",
         "summary": "Audience count and masked sample",
-        "responses": {
-          "200": {
-            "description": "OK"
-          }
-        },
+        "responses": { "200": { "description": "OK" } },
         "parameters": [
           {
             "name": "id",
             "in": "path",
             "required": true,
-            "schema": {
-              "type": "string",
-              "format": "uuid"
-            }
+            "schema": { "type": "string", "format": "uuid" }
           }
         ]
       }
@@ -457,20 +771,13 @@
       "get": {
         "operationId": "getBroadcastReport",
         "summary": "Counts, duration and failures",
-        "responses": {
-          "200": {
-            "description": "OK"
-          }
-        },
+        "responses": { "200": { "description": "OK" } },
         "parameters": [
           {
             "name": "id",
             "in": "path",
             "required": true,
-            "schema": {
-              "type": "string",
-              "format": "uuid"
-            }
+            "schema": { "type": "string", "format": "uuid" }
           }
         ]
       }
@@ -479,23 +786,13 @@
       "get": {
         "operationId": "getBroadcastFailuresCsv",
         "summary": "Failed deliveries as CSV",
-        "responses": {
-          "200": {
-            "description": "CSV",
-            "content": {
-              "text/csv": {}
-            }
-          }
-        },
+        "responses": { "200": { "description": "CSV", "content": { "text/csv": {} } } },
         "parameters": [
           {
             "name": "id",
             "in": "path",
             "required": true,
-            "schema": {
-              "type": "string",
-              "format": "uuid"
-            }
+            "schema": { "type": "string", "format": "uuid" }
           }
         ]
       }
@@ -504,20 +801,13 @@
       "post": {
         "operationId": "resumeBroadcast",
         "summary": "Resume, skipping delivered recipients",
-        "responses": {
-          "200": {
-            "description": "OK"
-          }
-        },
+        "responses": { "200": { "description": "OK" } },
         "parameters": [
           {
             "name": "id",
             "in": "path",
             "required": true,
-            "schema": {
-              "type": "string",
-              "format": "uuid"
-            }
+            "schema": { "type": "string", "format": "uuid" }
           }
         ]
       }
@@ -526,23 +816,13 @@
       "post": {
         "operationId": "startBroadcast",
         "summary": "Materialize the audience and queue chunks",
-        "responses": {
-          "200": {
-            "description": "OK"
-          },
-          "409": {
-            "description": "CONFLICT"
-          }
-        },
+        "responses": { "200": { "description": "OK" }, "409": { "description": "CONFLICT" } },
         "parameters": [
           {
             "name": "id",
             "in": "path",
             "required": true,
-            "schema": {
-              "type": "string",
-              "format": "uuid"
-            }
+            "schema": { "type": "string", "format": "uuid" }
           }
         ]
       }
@@ -551,20 +831,13 @@
       "post": {
         "operationId": "testBroadcast",
         "summary": "Send to the administrator's own account",
-        "responses": {
-          "200": {
-            "description": "OK"
-          }
-        },
+        "responses": { "200": { "description": "OK" } },
         "parameters": [
           {
             "name": "id",
             "in": "path",
             "required": true,
-            "schema": {
-              "type": "string",
-              "format": "uuid"
-            }
+            "schema": { "type": "string", "format": "uuid" }
           }
         ]
       }
@@ -573,32 +846,19 @@
       "get": {
         "operationId": "getDashboard",
         "summary": "FR-142 widgets over a period",
-        "responses": {
-          "200": {
-            "description": "OK"
-          },
-          "403": {
-            "description": "FORBIDDEN"
-          }
-        },
+        "responses": { "200": { "description": "OK" }, "403": { "description": "FORBIDDEN" } },
         "parameters": [
           {
             "name": "from",
             "in": "query",
             "required": false,
-            "schema": {
-              "type": "string",
-              "format": "date-time"
-            }
+            "schema": { "type": "string", "format": "date-time" }
           },
           {
             "name": "to",
             "in": "query",
             "required": false,
-            "schema": {
-              "type": "string",
-              "format": "date-time"
-            }
+            "schema": { "type": "string", "format": "date-time" }
           }
         ]
       }
@@ -607,40 +867,26 @@
       "get": {
         "operationId": "getDashboardAttention",
         "summary": "Requires-attention counters",
-        "responses": {
-          "200": {
-            "description": "OK"
-          }
-        }
+        "responses": { "200": { "description": "OK" } }
       }
     },
     "/api/admin/v1/dashboard/series": {
       "get": {
         "operationId": "getDashboardSeries",
         "summary": "Daily revenue and registration series",
-        "responses": {
-          "200": {
-            "description": "OK"
-          }
-        },
+        "responses": { "200": { "description": "OK" } },
         "parameters": [
           {
             "name": "from",
             "in": "query",
             "required": false,
-            "schema": {
-              "type": "string",
-              "format": "date-time"
-            }
+            "schema": { "type": "string", "format": "date-time" }
           },
           {
             "name": "to",
             "in": "query",
             "required": false,
-            "schema": {
-              "type": "string",
-              "format": "date-time"
-            }
+            "schema": { "type": "string", "format": "date-time" }
           }
         ]
       }
@@ -649,72 +895,43 @@
       "get": {
         "operationId": "getLegalDocument",
         "summary": "Legal markdown, override or shipped",
-        "responses": {
-          "200": {
-            "description": "OK"
-          }
-        },
+        "responses": { "200": { "description": "OK" } },
         "parameters": [
           {
             "name": "doc",
             "in": "path",
             "required": true,
-            "schema": {
-              "type": "string",
-              "enum": ["terms", "privacy", "offer"]
-            }
+            "schema": { "type": "string", "enum": ["terms", "privacy", "offer"] }
           },
           {
             "name": "lang",
             "in": "path",
             "required": true,
-            "schema": {
-              "type": "string",
-              "enum": ["ru", "en"]
-            }
+            "schema": { "type": "string", "enum": ["ru", "en"] }
           }
         ]
       },
       "put": {
         "operationId": "setLegalDocument",
         "summary": "Replace a legal document",
-        "responses": {
-          "200": {
-            "description": "OK"
-          },
-          "403": {
-            "description": "FORBIDDEN"
-          }
-        },
+        "responses": { "200": { "description": "OK" }, "403": { "description": "FORBIDDEN" } },
         "parameters": [
           {
             "name": "doc",
             "in": "path",
             "required": true,
-            "schema": {
-              "type": "string",
-              "enum": ["terms", "privacy", "offer"]
-            }
+            "schema": { "type": "string", "enum": ["terms", "privacy", "offer"] }
           },
           {
             "name": "lang",
             "in": "path",
             "required": true,
-            "schema": {
-              "type": "string",
-              "enum": ["ru", "en"]
-            }
+            "schema": { "type": "string", "enum": ["ru", "en"] }
           }
         ],
         "requestBody": {
           "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "type": "object"
-              }
-            }
-          }
+          "content": { "application/json": { "schema": { "type": "object" } } }
         }
       }
     },
@@ -722,73 +939,33 @@
       "get": {
         "operationId": "listLocaleEntries",
         "summary": "Shipped default and active override per key",
-        "responses": {
-          "200": {
-            "description": "OK"
-          },
-          "403": {
-            "description": "FORBIDDEN"
-          }
-        },
+        "responses": { "200": { "description": "OK" }, "403": { "description": "FORBIDDEN" } },
         "parameters": [
           {
             "name": "lang",
             "in": "path",
             "required": true,
-            "schema": {
-              "type": "string",
-              "enum": ["ru", "en"]
-            }
+            "schema": { "type": "string", "enum": ["ru", "en"] }
           },
-          {
-            "name": "namespace",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          }
+          { "name": "namespace", "in": "path", "required": true, "schema": { "type": "string" } }
         ]
       },
       "put": {
         "operationId": "patchLocaleEntries",
         "summary": "Set or clear overrides; every value is ICU-compiled first",
-        "responses": {
-          "200": {
-            "description": "OK"
-          },
-          "403": {
-            "description": "FORBIDDEN"
-          }
-        },
+        "responses": { "200": { "description": "OK" }, "403": { "description": "FORBIDDEN" } },
         "parameters": [
           {
             "name": "lang",
             "in": "path",
             "required": true,
-            "schema": {
-              "type": "string",
-              "enum": ["ru", "en"]
-            }
+            "schema": { "type": "string", "enum": ["ru", "en"] }
           },
-          {
-            "name": "namespace",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          }
+          { "name": "namespace", "in": "path", "required": true, "schema": { "type": "string" } }
         ],
         "requestBody": {
           "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "type": "object"
-              }
-            }
-          }
+          "content": { "application/json": { "schema": { "type": "object" } } }
         }
       }
     },
@@ -796,28 +973,10 @@
       "get": {
         "operationId": "listAdminInvoices",
         "summary": "Invoices",
-        "responses": {
-          "200": {
-            "description": "OK"
-          }
-        },
+        "responses": { "200": { "description": "OK" } },
         "parameters": [
-          {
-            "name": "limit",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "type": "integer"
-            }
-          },
-          {
-            "name": "cursor",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "type": "string"
-            }
-          }
+          { "name": "limit", "in": "query", "required": false, "schema": { "type": "integer" } },
+          { "name": "cursor", "in": "query", "required": false, "schema": { "type": "string" } }
         ]
       }
     },
@@ -825,23 +984,13 @@
       "get": {
         "operationId": "getAdminInvoice",
         "summary": "Invoice with masked payment events",
-        "responses": {
-          "200": {
-            "description": "OK"
-          },
-          "404": {
-            "description": "NOT_FOUND"
-          }
-        },
+        "responses": { "200": { "description": "OK" }, "404": { "description": "NOT_FOUND" } },
         "parameters": [
           {
             "name": "id",
             "in": "path",
             "required": true,
-            "schema": {
-              "type": "string",
-              "format": "uuid"
-            }
+            "schema": { "type": "string", "format": "uuid" }
           }
         ]
       }
@@ -850,20 +999,13 @@
       "post": {
         "operationId": "recheckAdminInvoice",
         "summary": "Re-fetch the provider status",
-        "responses": {
-          "200": {
-            "description": "OK"
-          }
-        },
+        "responses": { "200": { "description": "OK" } },
         "parameters": [
           {
             "name": "id",
             "in": "path",
             "required": true,
-            "schema": {
-              "type": "string",
-              "format": "uuid"
-            }
+            "schema": { "type": "string", "format": "uuid" }
           }
         ]
       }
@@ -872,35 +1014,15 @@
       "get": {
         "operationId": "getPanelSettings",
         "summary": "Panel settings and health",
-        "responses": {
-          "200": {
-            "description": "OK"
-          },
-          "403": {
-            "description": "FORBIDDEN"
-          }
-        }
+        "responses": { "200": { "description": "OK" }, "403": { "description": "FORBIDDEN" } }
       },
       "put": {
         "operationId": "updatePanelSettings",
         "summary": "Update the panel connection",
-        "responses": {
-          "200": {
-            "description": "OK"
-          },
-          "403": {
-            "description": "FORBIDDEN"
-          }
-        },
+        "responses": { "200": { "description": "OK" }, "403": { "description": "FORBIDDEN" } },
         "requestBody": {
           "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "type": "object"
-              }
-            }
-          }
+          "content": { "application/json": { "schema": { "type": "object" } } }
         }
       }
     },
@@ -908,111 +1030,57 @@
       "post": {
         "operationId": "reconcilePanel",
         "summary": "Reconcile users with the panel",
-        "responses": {
-          "200": {
-            "description": "OK"
-          }
-        }
+        "responses": { "200": { "description": "OK" } }
       }
     },
     "/api/admin/v1/panel/test": {
       "post": {
         "operationId": "testPanel",
         "summary": "Check the panel connection",
-        "responses": {
-          "200": {
-            "description": "OK"
-          }
-        }
+        "responses": { "200": { "description": "OK" } }
       }
     },
     "/api/admin/v1/plans": {
-      "get": {
-        "operationId": "listPlans",
-        "responses": {
-          "200": {
-            "description": "Plans"
-          }
-        }
-      },
+      "get": { "operationId": "listPlans", "responses": { "200": { "description": "Plans" } } },
       "post": {
         "operationId": "createPlan",
-        "responses": {
-          "201": {
-            "description": "Created plan"
-          }
-        }
+        "responses": { "201": { "description": "Created plan" } }
       }
     },
     "/api/admin/v1/plans/reorder": {
       "post": {
         "operationId": "reorderPlans",
         "summary": "Persist the drag-and-drop order",
-        "responses": {
-          "200": {
-            "description": "OK"
-          }
-        },
+        "responses": { "200": { "description": "OK" } },
         "requestBody": {
           "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "type": "object"
-              }
-            }
-          }
+          "content": { "application/json": { "schema": { "type": "object" } } }
         }
       }
     },
     "/api/admin/v1/plans/{id}": {
       "patch": {
         "operationId": "updatePlan",
-        "responses": {
-          "200": {
-            "description": "Updated plan"
-          }
-        }
+        "responses": { "200": { "description": "Updated plan" } }
       },
       "delete": {
         "operationId": "deletePlan",
-        "responses": {
-          "200": {
-            "description": "Deleted plan"
-          }
-        }
+        "responses": { "200": { "description": "Deleted plan" } }
       }
     },
     "/api/admin/v1/promocodes": {
       "get": {
         "operationId": "listPromocodes",
         "summary": "Promo codes",
-        "responses": {
-          "200": {
-            "description": "OK"
-          }
-        }
+        "responses": { "200": { "description": "OK" } }
       },
       "post": {
         "operationId": "createPromocode",
         "summary": "Create a promo code",
-        "responses": {
-          "201": {
-            "description": "Created"
-          },
-          "403": {
-            "description": "FORBIDDEN"
-          }
-        },
+        "responses": { "201": { "description": "Created" }, "403": { "description": "FORBIDDEN" } },
         "requestBody": {
           "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "type": "object"
-              }
-            }
-          }
+          "content": { "application/json": { "schema": { "type": "object" } } }
         }
       }
     },
@@ -1020,37 +1088,17 @@
       "get": {
         "operationId": "exportPromocodes",
         "summary": "CSV export",
-        "responses": {
-          "200": {
-            "description": "CSV",
-            "content": {
-              "text/csv": {}
-            }
-          }
-        }
+        "responses": { "200": { "description": "CSV", "content": { "text/csv": {} } } }
       }
     },
     "/api/admin/v1/promocodes/generate": {
       "post": {
         "operationId": "generatePromocodes",
         "summary": "Section 15.6 batch generation",
-        "responses": {
-          "201": {
-            "description": "Created"
-          },
-          "403": {
-            "description": "FORBIDDEN"
-          }
-        },
+        "responses": { "201": { "description": "Created" }, "403": { "description": "FORBIDDEN" } },
         "requestBody": {
           "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "type": "object"
-              }
-            }
-          }
+          "content": { "application/json": { "schema": { "type": "object" } } }
         }
       }
     },
@@ -1058,53 +1106,30 @@
       "patch": {
         "operationId": "updatePromocode",
         "summary": "Update a promo code",
-        "responses": {
-          "200": {
-            "description": "OK"
-          },
-          "403": {
-            "description": "FORBIDDEN"
-          }
-        },
+        "responses": { "200": { "description": "OK" }, "403": { "description": "FORBIDDEN" } },
         "parameters": [
           {
             "name": "id",
             "in": "path",
             "required": true,
-            "schema": {
-              "type": "string",
-              "format": "uuid"
-            }
+            "schema": { "type": "string", "format": "uuid" }
           }
         ],
         "requestBody": {
           "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "type": "object"
-              }
-            }
-          }
+          "content": { "application/json": { "schema": { "type": "object" } } }
         }
       },
       "delete": {
         "operationId": "deletePromocode",
         "summary": "Soft-delete a promo code",
-        "responses": {
-          "200": {
-            "description": "OK"
-          }
-        },
+        "responses": { "200": { "description": "OK" } },
         "parameters": [
           {
             "name": "id",
             "in": "path",
             "required": true,
-            "schema": {
-              "type": "string",
-              "format": "uuid"
-            }
+            "schema": { "type": "string", "format": "uuid" }
           }
         ]
       }
@@ -1113,20 +1138,13 @@
       "get": {
         "operationId": "listPromocodeRedemptions",
         "summary": "Redemptions of one code",
-        "responses": {
-          "200": {
-            "description": "OK"
-          }
-        },
+        "responses": { "200": { "description": "OK" } },
         "parameters": [
           {
             "name": "id",
             "in": "path",
             "required": true,
-            "schema": {
-              "type": "string",
-              "format": "uuid"
-            }
+            "schema": { "type": "string", "format": "uuid" }
           }
         ]
       }
@@ -1135,34 +1153,17 @@
       "get": {
         "operationId": "listProviders",
         "summary": "Providers with their healthcheck state",
-        "responses": {
-          "200": {
-            "description": "OK"
-          },
-          "403": {
-            "description": "FORBIDDEN"
-          }
-        }
+        "responses": { "200": { "description": "OK" }, "403": { "description": "FORBIDDEN" } }
       }
     },
     "/api/admin/v1/providers/reorder": {
       "post": {
         "operationId": "reorderProviders",
         "summary": "Persist the provider order",
-        "responses": {
-          "200": {
-            "description": "OK"
-          }
-        },
+        "responses": { "200": { "description": "OK" } },
         "requestBody": {
           "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "type": "object"
-              }
-            }
-          }
+          "content": { "application/json": { "schema": { "type": "object" } } }
         }
       }
     },
@@ -1170,33 +1171,13 @@
       "put": {
         "operationId": "updateProvider",
         "summary": "Update a provider and run a healthcheck",
-        "responses": {
-          "200": {
-            "description": "OK"
-          },
-          "403": {
-            "description": "FORBIDDEN"
-          }
-        },
+        "responses": { "200": { "description": "OK" }, "403": { "description": "FORBIDDEN" } },
         "parameters": [
-          {
-            "name": "code",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          }
+          { "name": "code", "in": "path", "required": true, "schema": { "type": "string" } }
         ],
         "requestBody": {
           "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "type": "object"
-              }
-            }
-          }
+          "content": { "application/json": { "schema": { "type": "object" } } }
         }
       }
     },
@@ -1204,20 +1185,9 @@
       "post": {
         "operationId": "healthcheckProvider",
         "summary": "Run a provider healthcheck (AC-061)",
-        "responses": {
-          "200": {
-            "description": "OK"
-          }
-        },
+        "responses": { "200": { "description": "OK" } },
         "parameters": [
-          {
-            "name": "code",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          }
+          { "name": "code", "in": "path", "required": true, "schema": { "type": "string" } }
         ]
       }
     },
@@ -1225,32 +1195,15 @@
       "get": {
         "operationId": "getReferralProgram",
         "summary": "settings.referral.*",
-        "responses": {
-          "200": {
-            "description": "OK"
-          }
-        }
+        "responses": { "200": { "description": "OK" } }
       },
       "put": {
         "operationId": "setReferralProgram",
         "summary": "Update the programme; admin only",
-        "responses": {
-          "200": {
-            "description": "OK"
-          },
-          "403": {
-            "description": "FORBIDDEN"
-          }
-        },
+        "responses": { "200": { "description": "OK" }, "403": { "description": "FORBIDDEN" } },
         "requestBody": {
           "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "type": "object"
-              }
-            }
-          }
+          "content": { "application/json": { "schema": { "type": "object" } } }
         }
       }
     },
@@ -1258,122 +1211,64 @@
       "get": {
         "operationId": "listReferralRewards",
         "summary": "Accruals with their hold state",
-        "responses": {
-          "200": {
-            "description": "OK"
-          }
-        }
+        "responses": { "200": { "description": "OK" } }
       }
     },
     "/api/admin/v1/referral/rewards/{id}/reverse": {
       "post": {
         "operationId": "reverseReferralReward",
         "summary": "Manual reversal; reason required",
-        "responses": {
-          "200": {
-            "description": "OK"
-          },
-          "403": {
-            "description": "FORBIDDEN"
-          }
-        },
+        "responses": { "200": { "description": "OK" }, "403": { "description": "FORBIDDEN" } },
         "parameters": [
           {
             "name": "id",
             "in": "path",
             "required": true,
-            "schema": {
-              "type": "string",
-              "format": "uuid"
-            }
+            "schema": { "type": "string", "format": "uuid" }
           }
         ],
         "requestBody": {
           "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "type": "object"
-              }
-            }
-          }
+          "content": { "application/json": { "schema": { "type": "object" } } }
         }
       }
     },
     "/api/admin/v1/settings": {
       "get": {
         "operationId": "getSettings",
-        "responses": {
-          "200": {
-            "description": "Grouped settings"
-          }
-        }
+        "responses": { "200": { "description": "Grouped settings" } }
       },
       "put": {
         "operationId": "updateSettings",
-        "responses": {
-          "200": {
-            "description": "Updated settings"
-          }
-        }
+        "responses": { "200": { "description": "Updated settings" } }
       }
     },
     "/api/admin/v1/settings/export": {
       "get": {
         "operationId": "exportSettings",
-        "responses": {
-          "200": {
-            "description": "Safe settings snapshot"
-          }
-        }
+        "responses": { "200": { "description": "Safe settings snapshot" } }
       }
     },
     "/api/admin/v1/settings/import": {
       "post": {
         "operationId": "importSettings",
-        "responses": {
-          "200": {
-            "description": "Imported settings"
-          }
-        }
+        "responses": { "200": { "description": "Imported settings" } }
       }
     },
     "/api/admin/v1/settings/schema": {
       "get": {
         "operationId": "getSettingsSchema",
-        "responses": {
-          "200": {
-            "description": "Settings schema"
-          }
-        }
+        "responses": { "200": { "description": "Settings schema" } }
       }
     },
     "/api/admin/v1/subscriptions": {
       "get": {
         "operationId": "listAdminSubscriptions",
         "summary": "Filter by status, plan and expiry",
-        "responses": {
-          "200": {
-            "description": "OK"
-          }
-        },
+        "responses": { "200": { "description": "OK" } },
         "parameters": [
-          {
-            "name": "limit",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "type": "integer"
-            }
-          },
-          {
-            "name": "cursor",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "type": "string"
-            }
-          }
+          { "name": "limit", "in": "query", "required": false, "schema": { "type": "integer" } },
+          { "name": "cursor", "in": "query", "required": false, "schema": { "type": "string" } }
         ]
       }
     },
@@ -1381,23 +1276,10 @@
       "post": {
         "operationId": "bulkExtendSubscriptions",
         "summary": "Extend up to 500 subscriptions; admin only, reason required",
-        "responses": {
-          "200": {
-            "description": "OK"
-          },
-          "403": {
-            "description": "FORBIDDEN"
-          }
-        },
+        "responses": { "200": { "description": "OK" }, "403": { "description": "FORBIDDEN" } },
         "requestBody": {
           "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "type": "object"
-              }
-            }
-          }
+          "content": { "application/json": { "schema": { "type": "object" } } }
         }
       }
     },
@@ -1405,45 +1287,23 @@
       "get": {
         "operationId": "getSystemOverview",
         "summary": "FR-146 health page",
-        "responses": {
-          "200": {
-            "description": "OK"
-          }
-        }
+        "responses": { "200": { "description": "OK" } }
       }
     },
     "/api/admin/v1/system/queues": {
       "get": {
         "operationId": "getQueueCounts",
         "summary": "Queue depths",
-        "responses": {
-          "200": {
-            "description": "OK"
-          }
-        }
+        "responses": { "200": { "description": "OK" } }
       }
     },
     "/api/admin/v1/system/queues/{name}/retry-failed": {
       "post": {
         "operationId": "retryFailedJobs",
         "summary": "Retry failed jobs in one queue",
-        "responses": {
-          "200": {
-            "description": "OK"
-          },
-          "403": {
-            "description": "FORBIDDEN"
-          }
-        },
+        "responses": { "200": { "description": "OK" }, "403": { "description": "FORBIDDEN" } },
         "parameters": [
-          {
-            "name": "name",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          }
+          { "name": "name", "in": "path", "required": true, "schema": { "type": "string" } }
         ]
       }
     },
@@ -1451,14 +1311,7 @@
       "post": {
         "operationId": "systemReconcile",
         "summary": "Reconcile with the panel from the system page",
-        "responses": {
-          "200": {
-            "description": "OK"
-          },
-          "403": {
-            "description": "FORBIDDEN"
-          }
-        }
+        "responses": { "200": { "description": "OK" }, "403": { "description": "FORBIDDEN" } }
       }
     },
     "/api/admin/v1/themes": {
@@ -1466,12 +1319,8 @@
         "operationId": "listThemes",
         "summary": "Themes available in the mounted themes directory",
         "responses": {
-          "200": {
-            "description": "Theme list"
-          },
-          "401": {
-            "description": "UNAUTHENTICATED"
-          }
+          "200": { "description": "Theme list" },
+          "401": { "description": "UNAUTHENTICATED" }
         }
       }
     },
@@ -1479,23 +1328,10 @@
       "put": {
         "operationId": "setActiveTheme",
         "summary": "Select the active theme and revalidate the site",
-        "responses": {
-          "200": {
-            "description": "OK"
-          },
-          "403": {
-            "description": "FORBIDDEN"
-          }
-        },
+        "responses": { "200": { "description": "OK" }, "403": { "description": "FORBIDDEN" } },
         "requestBody": {
           "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "type": "object"
-              }
-            }
-          }
+          "content": { "application/json": { "schema": { "type": "object" } } }
         }
       }
     },
@@ -1503,20 +1339,9 @@
       "get": {
         "operationId": "getThemeTokens",
         "summary": "Theme tokens and asset URLs",
-        "responses": {
-          "200": {
-            "description": "OK"
-          }
-        },
+        "responses": { "200": { "description": "OK" } },
         "parameters": [
-          {
-            "name": "slug",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          }
+          { "name": "slug", "in": "path", "required": true, "schema": { "type": "string" } }
         ]
       }
     },
@@ -1524,28 +1349,10 @@
       "get": {
         "operationId": "listAdminTransactions",
         "summary": "Transactions",
-        "responses": {
-          "200": {
-            "description": "OK"
-          }
-        },
+        "responses": { "200": { "description": "OK" } },
         "parameters": [
-          {
-            "name": "limit",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "type": "integer"
-            }
-          },
-          {
-            "name": "cursor",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "type": "string"
-            }
-          }
+          { "name": "limit", "in": "query", "required": false, "schema": { "type": "integer" } },
+          { "name": "cursor", "in": "query", "required": false, "schema": { "type": "string" } }
         ]
       }
     },
@@ -1554,36 +1361,21 @@
         "operationId": "refundAdminTransaction",
         "summary": "Refund to balance; reason required",
         "responses": {
-          "200": {
-            "description": "OK"
-          },
-          "403": {
-            "description": "FORBIDDEN"
-          },
-          "409": {
-            "description": "Refund exceeds the remaining amount"
-          }
+          "200": { "description": "OK" },
+          "403": { "description": "FORBIDDEN" },
+          "409": { "description": "Refund exceeds the remaining amount" }
         },
         "parameters": [
           {
             "name": "id",
             "in": "path",
             "required": true,
-            "schema": {
-              "type": "string",
-              "format": "uuid"
-            }
+            "schema": { "type": "string", "format": "uuid" }
           }
         ],
         "requestBody": {
           "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "type": "object"
-              }
-            }
-          }
+          "content": { "application/json": { "schema": { "type": "object" } } }
         }
       }
     },
@@ -1591,56 +1383,18 @@
       "get": {
         "operationId": "listAdminUsers",
         "summary": "FR-140 search and filters",
-        "responses": {
-          "200": {
-            "description": "OK"
-          },
-          "403": {
-            "description": "FORBIDDEN"
-          }
-        },
+        "responses": { "200": { "description": "OK" }, "403": { "description": "FORBIDDEN" } },
         "parameters": [
-          {
-            "name": "q",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "type": "string"
-            }
-          },
-          {
-            "name": "status",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "type": "string"
-            }
-          },
+          { "name": "q", "in": "query", "required": false, "schema": { "type": "string" } },
+          { "name": "status", "in": "query", "required": false, "schema": { "type": "string" } },
           {
             "name": "referrerId",
             "in": "query",
             "required": false,
-            "schema": {
-              "type": "string",
-              "format": "uuid"
-            }
+            "schema": { "type": "string", "format": "uuid" }
           },
-          {
-            "name": "limit",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "type": "integer"
-            }
-          },
-          {
-            "name": "cursor",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "type": "string"
-            }
-          }
+          { "name": "limit", "in": "query", "required": false, "schema": { "type": "integer" } },
+          { "name": "cursor", "in": "query", "required": false, "schema": { "type": "string" } }
         ]
       }
     },
@@ -1648,23 +1402,13 @@
       "get": {
         "operationId": "getAdminUser",
         "summary": "User card",
-        "responses": {
-          "200": {
-            "description": "OK"
-          },
-          "404": {
-            "description": "NOT_FOUND"
-          }
-        },
+        "responses": { "200": { "description": "OK" }, "404": { "description": "NOT_FOUND" } },
         "parameters": [
           {
             "name": "id",
             "in": "path",
             "required": true,
-            "schema": {
-              "type": "string",
-              "format": "uuid"
-            }
+            "schema": { "type": "string", "format": "uuid" }
           }
         ]
       }
@@ -1674,36 +1418,21 @@
         "operationId": "anonymizeAdminUser",
         "summary": "Section 19.5 anonymization; admin only",
         "responses": {
-          "200": {
-            "description": "OK"
-          },
-          "403": {
-            "description": "FORBIDDEN"
-          },
-          "409": {
-            "description": "CONFLICT"
-          }
+          "200": { "description": "OK" },
+          "403": { "description": "FORBIDDEN" },
+          "409": { "description": "CONFLICT" }
         },
         "parameters": [
           {
             "name": "id",
             "in": "path",
             "required": true,
-            "schema": {
-              "type": "string",
-              "format": "uuid"
-            }
+            "schema": { "type": "string", "format": "uuid" }
           }
         ],
         "requestBody": {
           "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "type": "object"
-              }
-            }
-          }
+          "content": { "application/json": { "schema": { "type": "object" } } }
         }
       }
     },
@@ -1711,20 +1440,13 @@
       "get": {
         "operationId": "listAdminUserAudit",
         "summary": "Journal entries for this user",
-        "responses": {
-          "200": {
-            "description": "OK"
-          }
-        },
+        "responses": { "200": { "description": "OK" } },
         "parameters": [
           {
             "name": "id",
             "in": "path",
             "required": true,
-            "schema": {
-              "type": "string",
-              "format": "uuid"
-            }
+            "schema": { "type": "string", "format": "uuid" }
           }
         ]
       }
@@ -1734,36 +1456,21 @@
         "operationId": "adjustAdminUserBalance",
         "summary": "Credit or debit the balance; reason required",
         "responses": {
-          "200": {
-            "description": "OK"
-          },
-          "403": {
-            "description": "FORBIDDEN"
-          },
-          "409": {
-            "description": "INSUFFICIENT_FUNDS"
-          }
+          "200": { "description": "OK" },
+          "403": { "description": "FORBIDDEN" },
+          "409": { "description": "INSUFFICIENT_FUNDS" }
         },
         "parameters": [
           {
             "name": "id",
             "in": "path",
             "required": true,
-            "schema": {
-              "type": "string",
-              "format": "uuid"
-            }
+            "schema": { "type": "string", "format": "uuid" }
           }
         ],
         "requestBody": {
           "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "type": "object"
-              }
-            }
-          }
+          "content": { "application/json": { "schema": { "type": "object" } } }
         }
       }
     },
@@ -1771,34 +1478,18 @@
       "post": {
         "operationId": "banAdminUser",
         "summary": "Ban and revoke the subscription; reason required",
-        "responses": {
-          "200": {
-            "description": "OK"
-          },
-          "403": {
-            "description": "FORBIDDEN"
-          }
-        },
+        "responses": { "200": { "description": "OK" }, "403": { "description": "FORBIDDEN" } },
         "parameters": [
           {
             "name": "id",
             "in": "path",
             "required": true,
-            "schema": {
-              "type": "string",
-              "format": "uuid"
-            }
+            "schema": { "type": "string", "format": "uuid" }
           }
         ],
         "requestBody": {
           "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "type": "object"
-              }
-            }
-          }
+          "content": { "application/json": { "schema": { "type": "object" } } }
         }
       }
     },
@@ -1806,34 +1497,18 @@
       "post": {
         "operationId": "extendAdminUser",
         "summary": "Extend by N days; reason required",
-        "responses": {
-          "200": {
-            "description": "OK"
-          },
-          "403": {
-            "description": "FORBIDDEN"
-          }
-        },
+        "responses": { "200": { "description": "OK" }, "403": { "description": "FORBIDDEN" } },
         "parameters": [
           {
             "name": "id",
             "in": "path",
             "required": true,
-            "schema": {
-              "type": "string",
-              "format": "uuid"
-            }
+            "schema": { "type": "string", "format": "uuid" }
           }
         ],
         "requestBody": {
           "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "type": "object"
-              }
-            }
-          }
+          "content": { "application/json": { "schema": { "type": "object" } } }
         }
       }
     },
@@ -1841,20 +1516,13 @@
       "get": {
         "operationId": "listAdminUserInvoices",
         "summary": "User invoices",
-        "responses": {
-          "200": {
-            "description": "OK"
-          }
-        },
+        "responses": { "200": { "description": "OK" } },
         "parameters": [
           {
             "name": "id",
             "in": "path",
             "required": true,
-            "schema": {
-              "type": "string",
-              "format": "uuid"
-            }
+            "schema": { "type": "string", "format": "uuid" }
           }
         ]
       }
@@ -1863,31 +1531,18 @@
       "post": {
         "operationId": "messageAdminUser",
         "summary": "Queue a bot message",
-        "responses": {
-          "200": {
-            "description": "OK"
-          }
-        },
+        "responses": { "200": { "description": "OK" } },
         "parameters": [
           {
             "name": "id",
             "in": "path",
             "required": true,
-            "schema": {
-              "type": "string",
-              "format": "uuid"
-            }
+            "schema": { "type": "string", "format": "uuid" }
           }
         ],
         "requestBody": {
           "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "type": "object"
-              }
-            }
-          }
+          "content": { "application/json": { "schema": { "type": "object" } } }
         }
       }
     },
@@ -1895,31 +1550,18 @@
       "patch": {
         "operationId": "setAdminUserNotes",
         "summary": "Operator notes",
-        "responses": {
-          "200": {
-            "description": "OK"
-          }
-        },
+        "responses": { "200": { "description": "OK" } },
         "parameters": [
           {
             "name": "id",
             "in": "path",
             "required": true,
-            "schema": {
-              "type": "string",
-              "format": "uuid"
-            }
+            "schema": { "type": "string", "format": "uuid" }
           }
         ],
         "requestBody": {
           "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "type": "object"
-              }
-            }
-          }
+          "content": { "application/json": { "schema": { "type": "object" } } }
         }
       }
     },
@@ -1927,20 +1569,13 @@
       "get": {
         "operationId": "listAdminUserReferrals",
         "summary": "Users this user invited",
-        "responses": {
-          "200": {
-            "description": "OK"
-          }
-        },
+        "responses": { "200": { "description": "OK" } },
         "parameters": [
           {
             "name": "id",
             "in": "path",
             "required": true,
-            "schema": {
-              "type": "string",
-              "format": "uuid"
-            }
+            "schema": { "type": "string", "format": "uuid" }
           }
         ]
       }
@@ -1949,20 +1584,13 @@
       "post": {
         "operationId": "resetAdminUserTraffic",
         "summary": "Reset used traffic",
-        "responses": {
-          "200": {
-            "description": "OK"
-          }
-        },
+        "responses": { "200": { "description": "OK" } },
         "parameters": [
           {
             "name": "id",
             "in": "path",
             "required": true,
-            "schema": {
-              "type": "string",
-              "format": "uuid"
-            }
+            "schema": { "type": "string", "format": "uuid" }
           }
         ]
       }
@@ -1972,22 +1600,15 @@
         "operationId": "revokeAdminUserLink",
         "summary": "Reset the subscription link",
         "responses": {
-          "200": {
-            "description": "OK"
-          },
-          "503": {
-            "description": "PANEL_UNAVAILABLE"
-          }
+          "200": { "description": "OK" },
+          "503": { "description": "PANEL_UNAVAILABLE" }
         },
         "parameters": [
           {
             "name": "id",
             "in": "path",
             "required": true,
-            "schema": {
-              "type": "string",
-              "format": "uuid"
-            }
+            "schema": { "type": "string", "format": "uuid" }
           }
         ]
       }
@@ -1996,34 +1617,18 @@
       "post": {
         "operationId": "setAdminUserPlan",
         "summary": "Change the plan without payment; reason required",
-        "responses": {
-          "200": {
-            "description": "OK"
-          },
-          "403": {
-            "description": "FORBIDDEN"
-          }
-        },
+        "responses": { "200": { "description": "OK" }, "403": { "description": "FORBIDDEN" } },
         "parameters": [
           {
             "name": "id",
             "in": "path",
             "required": true,
-            "schema": {
-              "type": "string",
-              "format": "uuid"
-            }
+            "schema": { "type": "string", "format": "uuid" }
           }
         ],
         "requestBody": {
           "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "type": "object"
-              }
-            }
-          }
+          "content": { "application/json": { "schema": { "type": "object" } } }
         }
       }
     },
@@ -2031,20 +1636,13 @@
       "get": {
         "operationId": "listAdminUserTransactions",
         "summary": "User transactions",
-        "responses": {
-          "200": {
-            "description": "OK"
-          }
-        },
+        "responses": { "200": { "description": "OK" } },
         "parameters": [
           {
             "name": "id",
             "in": "path",
             "required": true,
-            "schema": {
-              "type": "string",
-              "format": "uuid"
-            }
+            "schema": { "type": "string", "format": "uuid" }
           }
         ]
       }
@@ -2053,107 +1651,59 @@
       "post": {
         "operationId": "unbanAdminUser",
         "summary": "Unban; reason required",
-        "responses": {
-          "200": {
-            "description": "OK"
-          },
-          "403": {
-            "description": "FORBIDDEN"
-          }
-        },
+        "responses": { "200": { "description": "OK" }, "403": { "description": "FORBIDDEN" } },
         "parameters": [
           {
             "name": "id",
             "in": "path",
             "required": true,
-            "schema": {
-              "type": "string",
-              "format": "uuid"
-            }
+            "schema": { "type": "string", "format": "uuid" }
           }
         ],
         "requestBody": {
           "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "type": "object"
-              }
-            }
-          }
+          "content": { "application/json": { "schema": { "type": "object" } } }
         }
       }
     },
     "/api/internal/v1/auth/issue-token": {
       "post": {
         "operationId": "issueBotToken",
-        "responses": {
-          "200": {
-            "description": "Bot JWT"
-          }
-        }
+        "responses": { "200": { "description": "Bot JWT" } }
       }
     },
     "/api/internal/v1/broadcasts/chunk": {
       "post": {
         "operationId": "sendBroadcastChunk",
         "summary": "Queue consumer for broadcast.chunk",
-        "responses": {
-          "200": {
-            "description": "OK"
-          }
-        },
+        "responses": { "200": { "description": "OK" } },
         "requestBody": {
           "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "type": "object"
-              }
-            }
-          }
+          "content": { "application/json": { "schema": { "type": "object" } } }
         }
       }
     },
     "/api/internal/v1/ledger/users/{userId}/available": {
       "get": {
         "operationId": "getLedgerAvailable",
-        "responses": {
-          "200": {
-            "description": "Spendable balance in minor units"
-          }
-        }
+        "responses": { "200": { "description": "Spendable balance in minor units" } }
       }
     },
     "/api/internal/v1/me/plans": {
       "get": {
         "operationId": "listInternalPlans",
         "summary": "PlanPublic list for the bot",
-        "responses": {
-          "200": {
-            "description": "OK"
-          }
-        }
+        "responses": { "200": { "description": "OK" } }
       }
     },
     "/api/internal/v1/notify/alert": {
       "post": {
         "operationId": "sendAdminAlert",
         "summary": "Administrator alert, one per type per hour",
-        "responses": {
-          "200": {
-            "description": "OK"
-          }
-        },
+        "responses": { "200": { "description": "OK" } },
         "requestBody": {
           "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "type": "object"
-              }
-            }
-          }
+          "content": { "application/json": { "schema": { "type": "object" } } }
         }
       }
     },
@@ -2161,92 +1711,52 @@
       "post": {
         "operationId": "scanExpiringSubscriptions",
         "summary": "Cron notify.scan-expiring",
-        "responses": {
-          "200": {
-            "description": "OK"
-          }
-        }
+        "responses": { "200": { "description": "OK" } }
       }
     },
     "/api/internal/v1/notify/send": {
       "post": {
         "operationId": "sendNotification",
         "summary": "Deliver one notification, deduplicated by (user, dedupKey)",
-        "responses": {
-          "200": {
-            "description": "OK"
-          }
-        },
+        "responses": { "200": { "description": "OK" } },
         "requestBody": {
           "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "type": "object"
-              }
-            }
-          }
+          "content": { "application/json": { "schema": { "type": "object" } } }
         }
       }
     },
     "/api/internal/v1/payments/expire": {
       "post": {
         "operationId": "expireInvoices",
-        "responses": {
-          "200": {
-            "description": "Expired count"
-          }
-        }
+        "responses": { "200": { "description": "Expired count" } }
       }
     },
     "/api/internal/v1/payments/poll-pending": {
       "post": {
         "operationId": "pollPendingInvoices",
-        "responses": {
-          "200": {
-            "description": "Polled count"
-          }
-        }
+        "responses": { "200": { "description": "Polled count" } }
       }
     },
     "/api/internal/v1/remnawave/health": {
       "get": {
         "operationId": "remnawaveHealth",
-        "responses": {
-          "200": {
-            "description": "Panel health"
-          }
-        }
+        "responses": { "200": { "description": "Panel health" } }
       }
     },
     "/api/internal/v1/remnawave/reconcile": {
       "post": {
         "operationId": "remnawaveReconcile",
-        "responses": {
-          "200": {
-            "description": "Reconcile result"
-          }
-        }
+        "responses": { "200": { "description": "Reconcile result" } }
       }
     },
     "/api/internal/v1/remnawave/sync-user": {
       "post": {
         "operationId": "syncPanelUser",
         "summary": "Queue consumer for panel.sync-user",
-        "responses": {
-          "200": {
-            "description": "OK"
-          }
-        },
+        "responses": { "200": { "description": "OK" } },
         "requestBody": {
           "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "type": "object"
-              }
-            }
-          }
+          "content": { "application/json": { "schema": { "type": "object" } } }
         }
       }
     },
@@ -2254,107 +1764,57 @@
       "post": {
         "operationId": "releaseHeldRewards",
         "summary": "Cron maintenance.referral-release",
-        "responses": {
-          "200": {
-            "description": "OK"
-          }
-        }
+        "responses": { "200": { "description": "OK" } }
       }
     },
     "/api/internal/v1/subscriptions/expire": {
       "post": {
         "operationId": "expireSubscriptions",
-        "responses": {
-          "201": {
-            "description": "Expired subscription count"
-          }
-        }
+        "responses": { "201": { "description": "Expired subscription count" } }
       }
     },
     "/api/internal/v1/support/forward": {
       "post": {
         "operationId": "forwardSupportMessage",
         "summary": "Forward a support message to the configured chat",
-        "responses": {
-          "204": {
-            "description": "Forwarded"
-          }
-        },
+        "responses": { "204": { "description": "Forwarded" } },
         "requestBody": {
           "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "type": "object"
-              }
-            }
-          }
+          "content": { "application/json": { "schema": { "type": "object" } } }
         }
       }
     },
     "/api/internal/v1/users/upsert": {
       "post": {
         "operationId": "upsertInternalUser",
-        "responses": {
-          "200": {
-            "description": "Upserted user"
-          }
-        }
+        "responses": { "200": { "description": "Upserted user" } }
       }
     },
     "/api/v1/auth/logout": {
-      "post": {
-        "operationId": "logout",
-        "responses": {
-          "204": {
-            "description": "Logged out"
-          }
-        }
-      }
+      "post": { "operationId": "logout", "responses": { "204": { "description": "Logged out" } } }
     },
     "/api/v1/auth/telegram": {
       "post": {
         "operationId": "telegramLogin",
-        "responses": {
-          "200": {
-            "description": "Authenticated user"
-          }
-        }
+        "responses": { "200": { "description": "Authenticated user" } }
       }
     },
     "/api/v1/me": {
       "get": {
         "operationId": "getMe",
         "summary": "UserMe",
-        "responses": {
-          "200": {
-            "description": "OK"
-          },
-          "401": {
-            "description": "UNAUTHENTICATED"
-          }
-        }
+        "responses": { "200": { "description": "OK" }, "401": { "description": "UNAUTHENTICATED" } }
       },
       "patch": {
         "operationId": "patchMe",
         "summary": "Update language, email and marketing opt-out",
         "responses": {
-          "200": {
-            "description": "OK"
-          },
-          "401": {
-            "description": "UNAUTHENTICATED"
-          }
+          "200": { "description": "OK" },
+          "401": { "description": "UNAUTHENTICATED" }
         },
         "requestBody": {
           "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "type": "object"
-              }
-            }
-          }
+          "content": { "application/json": { "schema": { "type": "object" } } }
         }
       }
     },
@@ -2362,14 +1822,7 @@
       "post": {
         "operationId": "requestMyAnonymization",
         "summary": "Section 19.5 self-request; records an audit entry for an administrator",
-        "responses": {
-          "200": {
-            "description": "OK"
-          },
-          "401": {
-            "description": "UNAUTHENTICATED"
-          }
-        }
+        "responses": { "200": { "description": "OK" }, "401": { "description": "UNAUTHENTICATED" } }
       }
     },
     "/api/v1/me/invoices": {
@@ -2377,14 +1830,10 @@
         "operationId": "createMyInvoice",
         "summary": "Create an invoice",
         "responses": {
-          "201": {
-            "description": "Invoice"
-          },
+          "201": { "description": "Invoice" },
+          "400": { "description": "TOPUP_AMOUNT_OUT_OF_RANGE" },
           "409": {
             "description": "PLAN_UNAVAILABLE | PROVIDER_UNAVAILABLE | INSUFFICIENT_FUNDS | PROMO_*"
-          },
-          "400": {
-            "description": "TOPUP_AMOUNT_OUT_OF_RANGE"
           }
         },
         "parameters": [
@@ -2392,21 +1841,12 @@
             "name": "Idempotency-Key",
             "in": "header",
             "required": false,
-            "schema": {
-              "type": "string",
-              "format": "uuid"
-            }
+            "schema": { "type": "string", "format": "uuid" }
           }
         ],
         "requestBody": {
           "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "type": "object"
-              }
-            }
-          }
+          "content": { "application/json": { "schema": { "type": "object" } } }
         }
       }
     },
@@ -2414,23 +1854,13 @@
       "get": {
         "operationId": "getMyInvoice",
         "summary": "Invoice",
-        "responses": {
-          "200": {
-            "description": "OK"
-          },
-          "404": {
-            "description": "NOT_FOUND"
-          }
-        },
+        "responses": { "200": { "description": "OK" }, "404": { "description": "NOT_FOUND" } },
         "parameters": [
           {
             "name": "id",
             "in": "path",
             "required": true,
-            "schema": {
-              "type": "string",
-              "format": "uuid"
-            }
+            "schema": { "type": "string", "format": "uuid" }
           }
         ]
       }
@@ -2440,22 +1870,15 @@
         "operationId": "cancelMyInvoice",
         "summary": "Cancel a pending invoice",
         "responses": {
-          "200": {
-            "description": "OK"
-          },
-          "409": {
-            "description": "INVOICE_NOT_PENDING"
-          }
+          "200": { "description": "OK" },
+          "409": { "description": "INVOICE_NOT_PENDING" }
         },
         "parameters": [
           {
             "name": "id",
             "in": "path",
             "required": true,
-            "schema": {
-              "type": "string",
-              "format": "uuid"
-            }
+            "schema": { "type": "string", "format": "uuid" }
           }
         ]
       }
@@ -2464,23 +1887,13 @@
       "post": {
         "operationId": "checkMyInvoice",
         "summary": "Re-fetch the provider status",
-        "responses": {
-          "200": {
-            "description": "OK"
-          },
-          "404": {
-            "description": "NOT_FOUND"
-          }
-        },
+        "responses": { "200": { "description": "OK" }, "404": { "description": "NOT_FOUND" } },
         "parameters": [
           {
             "name": "id",
             "in": "path",
             "required": true,
-            "schema": {
-              "type": "string",
-              "format": "uuid"
-            }
+            "schema": { "type": "string", "format": "uuid" }
           }
         ]
       }
@@ -2489,14 +1902,7 @@
       "get": {
         "operationId": "listMyPaymentMethods",
         "summary": "Providers offered to this user",
-        "responses": {
-          "200": {
-            "description": "OK"
-          },
-          "401": {
-            "description": "UNAUTHENTICATED"
-          }
-        }
+        "responses": { "200": { "description": "OK" }, "401": { "description": "UNAUTHENTICATED" } }
       }
     },
     "/api/v1/me/plan-change/quote": {
@@ -2504,22 +1910,15 @@
         "operationId": "getMyPlanChangeQuote",
         "summary": "Credit and amount to pay",
         "responses": {
-          "200": {
-            "description": "OK"
-          },
-          "409": {
-            "description": "PLAN_CHANGE_NOT_ALLOWED"
-          }
+          "200": { "description": "OK" },
+          "409": { "description": "PLAN_CHANGE_NOT_ALLOWED" }
         },
         "parameters": [
           {
             "name": "planId",
             "in": "query",
             "required": true,
-            "schema": {
-              "type": "string",
-              "format": "uuid"
-            }
+            "schema": { "type": "string", "format": "uuid" }
           }
         ]
       }
@@ -2528,23 +1927,10 @@
       "post": {
         "operationId": "previewMyPromocode",
         "summary": "Discount preview for a plan",
-        "responses": {
-          "200": {
-            "description": "OK"
-          },
-          "409": {
-            "description": "PROMO_*"
-          }
-        },
+        "responses": { "200": { "description": "OK" }, "409": { "description": "PROMO_*" } },
         "requestBody": {
           "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "type": "object"
-              }
-            }
-          }
+          "content": { "application/json": { "schema": { "type": "object" } } }
         }
       }
     },
@@ -2553,25 +1939,13 @@
         "operationId": "redeemMyPromocode",
         "summary": "Reserve a promo code for the next purchase",
         "responses": {
-          "200": {
-            "description": "OK"
-          },
-          "404": {
-            "description": "PROMO_NOT_FOUND"
-          },
-          "409": {
-            "description": "PROMO_*"
-          }
+          "200": { "description": "OK" },
+          "404": { "description": "PROMO_NOT_FOUND" },
+          "409": { "description": "PROMO_*" }
         },
         "requestBody": {
           "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "type": "object"
-              }
-            }
-          }
+          "content": { "application/json": { "schema": { "type": "object" } } }
         }
       }
     },
@@ -2579,14 +1953,7 @@
       "get": {
         "operationId": "getMyReferrals",
         "summary": "Referral summary and program terms",
-        "responses": {
-          "200": {
-            "description": "OK"
-          },
-          "401": {
-            "description": "UNAUTHENTICATED"
-          }
-        }
+        "responses": { "200": { "description": "OK" }, "401": { "description": "UNAUTHENTICATED" } }
       }
     },
     "/api/v1/me/referrals/list": {
@@ -2594,32 +1961,17 @@
         "operationId": "listMyReferrals",
         "summary": "Invited users with masked names",
         "responses": {
-          "200": {
-            "description": "OK"
-          },
-          "401": {
-            "description": "UNAUTHENTICATED"
-          }
+          "200": { "description": "OK" },
+          "401": { "description": "UNAUTHENTICATED" }
         },
         "parameters": [
           {
             "name": "limit",
             "in": "query",
             "required": false,
-            "schema": {
-              "type": "integer",
-              "minimum": 1,
-              "maximum": 100
-            }
+            "schema": { "type": "integer", "minimum": 1, "maximum": 100 }
           },
-          {
-            "name": "cursor",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "type": "string"
-            }
-          }
+          { "name": "cursor", "in": "query", "required": false, "schema": { "type": "string" } }
         ]
       }
     },
@@ -2627,51 +1979,23 @@
       "get": {
         "operationId": "getMySubscription",
         "summary": "Subscription, panel snapshot and client links",
-        "responses": {
-          "200": {
-            "description": "OK"
-          },
-          "401": {
-            "description": "UNAUTHENTICATED"
-          }
-        }
+        "responses": { "200": { "description": "OK" }, "401": { "description": "UNAUTHENTICATED" } }
       }
     },
     "/api/v1/me/subscription/devices": {
       "get": {
         "operationId": "listMyDevices",
         "summary": "HWID devices from the panel",
-        "responses": {
-          "200": {
-            "description": "OK"
-          },
-          "401": {
-            "description": "UNAUTHENTICATED"
-          }
-        }
+        "responses": { "200": { "description": "OK" }, "401": { "description": "UNAUTHENTICATED" } }
       }
     },
     "/api/v1/me/subscription/devices/{hwid}": {
       "delete": {
         "operationId": "removeMyDevice",
         "summary": "Remove one HWID device",
-        "responses": {
-          "204": {
-            "description": "Removed"
-          },
-          "403": {
-            "description": "FORBIDDEN"
-          }
-        },
+        "responses": { "204": { "description": "Removed" }, "403": { "description": "FORBIDDEN" } },
         "parameters": [
-          {
-            "name": "hwid",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          }
+          { "name": "hwid", "in": "path", "required": true, "schema": { "type": "string" } }
         ]
       }
     },
@@ -2680,15 +2004,8 @@
         "operationId": "getMySubscriptionQr",
         "summary": "512x512 PNG of the subscription link",
         "responses": {
-          "200": {
-            "description": "PNG",
-            "content": {
-              "image/png": {}
-            }
-          },
-          "404": {
-            "description": "NOT_FOUND"
-          }
+          "200": { "description": "PNG", "content": { "image/png": {} } },
+          "404": { "description": "NOT_FOUND" }
         }
       }
     },
@@ -2697,12 +2014,8 @@
         "operationId": "revokeMySubscription",
         "summary": "Reset the subscription link",
         "responses": {
-          "200": {
-            "description": "OK"
-          },
-          "429": {
-            "description": "REVOKE_RATE_LIMITED"
-          }
+          "200": { "description": "OK" },
+          "429": { "description": "REVOKE_RATE_LIMITED" }
         }
       }
     },
@@ -2710,14 +2023,7 @@
       "get": {
         "operationId": "getTopupConfig",
         "summary": "Presets and allowed range",
-        "responses": {
-          "200": {
-            "description": "OK"
-          },
-          "401": {
-            "description": "UNAUTHENTICATED"
-          }
-        }
+        "responses": { "200": { "description": "OK" }, "401": { "description": "UNAUTHENTICATED" } }
       }
     },
     "/api/v1/me/transactions": {
@@ -2725,32 +2031,17 @@
         "operationId": "listMyTransactions",
         "summary": "Cursor-paginated transactions",
         "responses": {
-          "200": {
-            "description": "OK"
-          },
-          "401": {
-            "description": "UNAUTHENTICATED"
-          }
+          "200": { "description": "OK" },
+          "401": { "description": "UNAUTHENTICATED" }
         },
         "parameters": [
           {
             "name": "limit",
             "in": "query",
             "required": false,
-            "schema": {
-              "type": "integer",
-              "minimum": 1,
-              "maximum": 100
-            }
+            "schema": { "type": "integer", "minimum": 1, "maximum": 100 }
           },
-          {
-            "name": "cursor",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "type": "string"
-            }
-          }
+          { "name": "cursor", "in": "query", "required": false, "schema": { "type": "string" } }
         ]
       }
     },
@@ -2759,22 +2050,15 @@
         "operationId": "startMyTrial",
         "summary": "One-time trial",
         "responses": {
-          "200": {
-            "description": "OK"
-          },
-          "409": {
-            "description": "TRIAL_ALREADY_USED | TRIAL_NOT_ELIGIBLE"
-          }
+          "200": { "description": "OK" },
+          "409": { "description": "TRIAL_ALREADY_USED | TRIAL_NOT_ELIGIBLE" }
         },
         "parameters": [
           {
             "name": "Idempotency-Key",
             "in": "header",
             "required": false,
-            "schema": {
-              "type": "string",
-              "format": "uuid"
-            }
+            "schema": { "type": "string", "format": "uuid" }
           }
         ]
       }
@@ -2783,11 +2067,7 @@
       "get": {
         "operationId": "getPublicConfig",
         "summary": "Brand, locales, features and legal revision dates",
-        "responses": {
-          "200": {
-            "description": "Public configuration"
-          }
-        }
+        "responses": { "200": { "description": "Public configuration" } }
       }
     },
     "/api/v1/public/i18n/{lang}/{namespace}": {
@@ -2799,45 +2079,23 @@
             "name": "lang",
             "in": "path",
             "required": true,
-            "schema": {
-              "type": "string",
-              "enum": ["ru", "en"]
-            }
+            "schema": { "type": "string", "enum": ["ru", "en"] }
           },
-          {
-            "name": "namespace",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          },
+          { "name": "namespace", "in": "path", "required": true, "schema": { "type": "string" } },
           {
             "name": "If-None-Match",
             "in": "header",
             "required": false,
-            "schema": {
-              "type": "string"
-            }
+            "schema": { "type": "string" }
           }
         ],
         "responses": {
           "200": {
             "description": "Messages",
-            "headers": {
-              "ETag": {
-                "schema": {
-                  "type": "string"
-                }
-              }
-            }
+            "headers": { "ETag": { "schema": { "type": "string" } } }
           },
-          "304": {
-            "description": "Not modified"
-          },
-          "404": {
-            "description": "NOT_FOUND"
-          }
+          "304": { "description": "Not modified" },
+          "404": { "description": "NOT_FOUND" }
         }
       }
     },
@@ -2850,39 +2108,25 @@
             "name": "doc",
             "in": "path",
             "required": true,
-            "schema": {
-              "type": "string",
-              "enum": ["terms", "privacy", "offer"]
-            }
+            "schema": { "type": "string", "enum": ["terms", "privacy", "offer"] }
           },
           {
             "name": "lang",
             "in": "query",
             "required": false,
-            "schema": {
-              "type": "string",
-              "enum": ["ru", "en"]
-            }
+            "schema": { "type": "string", "enum": ["ru", "en"] }
           }
         ],
         "responses": {
-          "200": {
-            "description": "Legal document"
-          },
-          "404": {
-            "description": "NOT_FOUND"
-          }
+          "200": { "description": "Legal document" },
+          "404": { "description": "NOT_FOUND" }
         }
       }
     },
     "/api/v1/public/plans": {
       "get": {
         "operationId": "getPublicPlans",
-        "responses": {
-          "200": {
-            "description": "Public plans"
-          }
-        }
+        "responses": { "200": { "description": "Public plans" } }
       }
     },
     "/api/v1/public/theme": {
@@ -2894,30 +2138,18 @@
             "name": "If-None-Match",
             "in": "header",
             "required": false,
-            "schema": {
-              "type": "string"
-            }
+            "schema": { "type": "string" }
           }
         ],
         "responses": {
           "200": {
             "description": "Theme tokens",
             "headers": {
-              "ETag": {
-                "schema": {
-                  "type": "string"
-                }
-              },
-              "Cache-Control": {
-                "schema": {
-                  "type": "string"
-                }
-              }
+              "ETag": { "schema": { "type": "string" } },
+              "Cache-Control": { "schema": { "type": "string" } }
             }
           },
-          "304": {
-            "description": "Not modified"
-          }
+          "304": { "description": "Not modified" }
         }
       }
     },
@@ -2926,25 +2158,12 @@
         "operationId": "followReferralLink",
         "summary": "Stores the referral code for 30 days and redirects to the site",
         "parameters": [
-          {
-            "name": "code",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          }
+          { "name": "code", "in": "path", "required": true, "schema": { "type": "string" } }
         ],
         "responses": {
           "302": {
             "description": "Redirect to /",
-            "headers": {
-              "Set-Cookie": {
-                "schema": {
-                  "type": "string"
-                }
-              }
-            }
+            "headers": { "Set-Cookie": { "schema": { "type": "string" } } }
           }
         }
       }
@@ -2952,50 +2171,28 @@
     "/webhooks/remnawave": {
       "post": {
         "operationId": "remnawaveWebhook",
-        "responses": {
-          "200": {
-            "description": "Webhook result"
-          }
-        }
+        "responses": { "200": { "description": "Webhook result" } }
       }
     },
     "/webhooks/{provider}": {
       "post": {
         "operationId": "paymentWebhook",
         "parameters": [
-          {
-            "in": "path",
-            "name": "provider",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          }
+          { "in": "path", "name": "provider", "required": true, "schema": { "type": "string" } }
         ],
         "requestBody": {
           "required": true,
           "content": {
-            "application/json": {
-              "schema": {
-                "type": "object"
-              }
-            },
-            "application/x-www-form-urlencoded": {
-              "schema": {
-                "type": "object"
-              }
-            }
+            "application/json": { "schema": { "type": "object" } },
+            "application/x-www-form-urlencoded": { "schema": { "type": "object" } }
           }
         },
         "responses": {
-          "200": {
-            "description": "Acknowledged"
-          },
-          "400": {
-            "description": "Invalid signature"
-          }
+          "200": { "description": "Acknowledged" },
+          "400": { "description": "Invalid signature" }
         }
       }
     }
-  }
+  },
+  "webhooks": {}
 }

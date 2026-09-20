@@ -225,3 +225,17 @@ test('the CI workflow covers required quality and image gates', async () => {
   assert.match(workflow, /deploy\/docker\/web\.Dockerfile/);
   assert.match(workflow, /push: false/);
 });
+
+test('the API OpenAPI document is generated from shared Zod contracts', async () => {
+  const manifest = JSON.parse(await readFile('apps/api/package.json', 'utf8'));
+  const document = JSON.parse(await readFile('apps/api/openapi.json', 'utf8'));
+  const generator = await readFile('apps/api/src/openapi/generator.ts', 'utf8');
+
+  assert.match(manifest.scripts.build, /dist\/openapi\/generator\.js/);
+  assert.equal(document.openapi, '3.1.0');
+  assert.ok(document.components?.schemas?.Money);
+  assert.ok(document.components?.schemas?.ErrorEnvelope);
+  assert.ok(Object.keys(document.paths).length >= 100);
+  assert.match(generator, /OpenApiGeneratorV31/);
+  assert.match(generator, /@remnaray\/domain/);
+});
