@@ -33,5 +33,6 @@
   "alerts.ledger.mismatch": "Аудит книги нашёл расхождение.",
   "alerts.referral.daily_cap": "Достигнут дневной лимит реферальных начислений.",
   "alerts.disk.low": "На томе базы данных осталось менее 10 % свободного места.",
+  "alerts.setup.completed": "Первичная настройка завершена, магазин запущен.",
   "alerts.title": "RemnaRay: {type}"
 }
