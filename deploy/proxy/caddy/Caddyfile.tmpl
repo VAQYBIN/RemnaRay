@@ -1,5 +1,11 @@
 {
-	email {{ACME_EMAIL}}
+{{CADDY_ACME_EMAIL_BLOCK}}
+	# Section 21.5: the nginx profile answers `http://` with 301 from its own
+	# `:80` server. Caddy's automatic redirect is a 308 and is inserted ahead
+	# of any catch-all of ours, so it is turned off and the same server is
+	# written out below. Certificate management and the HTTP-01 challenge are
+	# untouched by this — only the redirect is.
+	auto_https disable_redirects
 	# Reachable only inside the compose network: the port is never published.
 	admin 0.0.0.0:2019
 	servers {
@@ -51,6 +57,18 @@
 {{CADDY_ADMIN_ALLOWLIST_BLOCK}}
 }
 
+# ---------- HTTP :80 — the health check and the redirect ----------
+# Host-less, like nginx's `default_server`: the compose health check asks
+# 127.0.0.1 for `/healthz` and no `Host` names the site.
+http:// {
+	handle /healthz {
+		respond "ok" 200
+	}
+	handle {
+		redir https://{host}{uri} permanent
+	}
+}
+
 {{CADDY_EXTRA_DOMAINS_SITE}}
 {{DOMAIN}} {
 {{CADDY_TLS_BLOCK}}
@@ -96,7 +114,11 @@
 		path /webhooks/*
 		not method POST
 	}
-	respond @webhooks_bad_method 405
+	# A `handle`, not a bare `respond`: `respond` is ordered after `handle`,
+	# so the catch-all below would answer this request first.
+	handle @webhooks_bad_method {
+		respond 405
+	}
 
 	@tg {
 		path /tg/webhook/*
@@ -115,7 +137,9 @@
 		path /tg/webhook/*
 		not method POST
 	}
-	respond @tg_bad_method 405
+	handle @tg_bad_method {
+		respond 405
+	}
 
 	handle /api/v1/auth/* {
 {{CADDY_RATE_LIMIT_AUTH}}
@@ -154,7 +178,9 @@
 		path /metrics
 		not client_ip {{DOCKER_CIDR}}
 	}
-	respond @metrics 403
+	handle @metrics {
+		respond 403
+	}
 	handle /metrics {
 		reverse_proxy api:3000 {
 			import rr_upstream_headers

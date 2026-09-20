@@ -193,6 +193,7 @@ export async function startStack({ seed = true } = {}) {
   return {
     baseURL: base,
     internalToken: INTERNAL_TOKEN,
+    brand: { name: BRAND_NAME },
     apiUrl: `http://127.0.0.1:${String(apiPort)}`,
     ...(mocks
       ? { panelUrl: mocks.panelUrl, telegramUrl: mocks.telegramUrl, botToken: mocks.botToken }
@@ -325,7 +326,12 @@ async function seedFixtures(databaseUrl) {
   await prisma.$disconnect();
   return {
     admin: { email: admin.email, password, totpSecret: totp.secret.base32 },
-    plan: { id: plan.id, slug: plan.slug },
-    user: { id: user.id, telegramId: user.telegramId.toString() },
+    plan: { id: plan.id, slug: plan.slug, name: plan.name.ru },
+    user: {
+      id: user.id,
+      telegramId: user.telegramId.toString(),
+      username: user.username,
+      firstName: user.firstName,
+    },
   };
 }

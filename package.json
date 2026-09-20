@@ -16,7 +16,7 @@
     "lighthouse": "pnpm build && node tools/lighthouse-check.mjs",
     "lint": "eslint .",
     "prepare": "husky",
-    "test": "node --test test/tooling.test.mjs",
+    "test": "node --test test/tooling.test.mjs test/proxy-smoke.test.mjs",
     "test:e2e": "pnpm build && playwright test -c e2e/playwright.config.ts",
     "test:m1": "pnpm build && node --test test/m1.integration.test.mjs",
     "test:m2": "pnpm build && node --test test/m2.payment.integration.test.mjs",

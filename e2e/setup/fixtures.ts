@@ -8,9 +8,10 @@ export type StackState = {
   baseURL: string;
   apiUrl: string;
   internalToken: string;
+  brand: { name: string };
   admin: { email: string; password: string; totpSecret: string };
-  plan: { id: string; slug: string };
-  user: { id: string; telegramId: string };
+  plan: { id: string; slug: string; name: string };
+  user: { id: string; telegramId: string; username: string; firstName: string };
   wizard: {
     baseURL: string;
     apiUrl: string;
@@ -22,7 +23,40 @@ export type StackState = {
 
 export const ADMIN_STORAGE_STATE = resolve(process.cwd(), 'e2e/.auth/admin.json');
 
+/** What `apps/api/src/tools/seed-dev.ts` wrote about a stand it seeded. */
+type StandFixture = {
+  brand: StackState['brand'];
+  admin: StackState['admin'];
+  plans: StackState['plan'][];
+  user: StackState['user'];
+};
+
+/**
+ * The smoke stand of section 22.7 is seeded by `seed-dev` rather than by this
+ * harness, so its fixture is read from where that tool wrote it and given the
+ * shape the specs expect. Everything reaches it through the proxy, which is
+ * what the base URL already names.
+ */
+function standState(path: string): StackState {
+  const stand = JSON.parse(readFileSync(resolve(process.cwd(), path), 'utf8')) as StandFixture;
+  const baseURL = process.env.RR_E2E_BASE_URL ?? '';
+  const plan = stand.plans[0];
+  if (!plan) throw new Error(`${path} seeded no plans`);
+  return {
+    baseURL,
+    apiUrl: baseURL,
+    internalToken: process.env.RR_E2E_INTERNAL_TOKEN ?? '',
+    brand: stand.brand,
+    admin: stand.admin,
+    plan,
+    user: stand.user,
+    wizard: { baseURL, apiUrl: baseURL, setupToken: '', panelUrl: '', botToken: '' },
+  };
+}
+
 export function stackState(): StackState {
+  const stand = process.env.RR_E2E_STAND_FILE;
+  if (stand) return standState(stand);
   return JSON.parse(readFileSync(resolve(process.cwd(), 'e2e/.stack.json'), 'utf8')) as StackState;
 }
 

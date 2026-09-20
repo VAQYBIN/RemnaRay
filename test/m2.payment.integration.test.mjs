@@ -180,6 +180,17 @@ test(
         await prisma.transaction.count({ where: { invoiceId: late.id, type: 'topup' } }),
         1,
       );
+
+      // Section 9.7: a body that names no event is refused, not stored. With
+      // no guard the insert reached Prisma with a null `type` and the webhook
+      // path answered 500 to anything posted at it.
+      const events = await prisma.paymentEvent.count();
+      await assert.rejects(
+        service.receiveWebhook('mock', Buffer.from('{}'), {}, '127.0.0.1'),
+        (error) => error.name === 'PaymentError' && error.code === 'WEBHOOK_INVALID_SIGNATURE',
+      );
+      assert.equal(await prisma.paymentEvent.count(), events);
+
       await prisma.$disconnect();
     } finally {
       await postgres.stop();

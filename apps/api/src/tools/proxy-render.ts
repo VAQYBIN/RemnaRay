@@ -77,13 +77,34 @@ export function placeholders(
   };
 }
 
-/** Section 21.4 zones; the same numbers the nginx profile uses. */
+/**
+ * `custom` names the owner's files; every other mode Caddy supports is its own
+ * ACME client, which needs no directive.
+ */
+function caddyTls(tlsMode: TlsMode): string {
+  return tlsMode === 'custom' ? '\ttls /certs/fullchain.pem /certs/privkey.pem' : '';
+}
+
+/**
+ * Section 21.4 zones, carrying the same allowance as the nginx profile.
+ *
+ * nginx spends a token bucket: `rate` refills it and `burst` is its depth, so
+ * what a client may send inside one window is `rate × window + burst`. Caddy's
+ * `rate_limit` is a sliding window of `events`, with no separate burst, so the
+ * events are that sum — otherwise the same sign-in that the nginx profile
+ * serves is refused here, which is exactly what section 21.5 forbids.
+ */
 const CADDY_ZONES = {
-  WEBHOOKS: { zone: 'rr_webhooks', events: 300, window: '10s' },
-  AUTH: { zone: 'rr_auth', events: 5, window: '1m' },
-  ADMIN: { zone: 'rr_admin', events: 30, window: '1m' },
-  API: { zone: 'rr_api', events: 100, window: '10s' },
-  GENERAL: { zone: 'rr_general', events: 200, window: '10s' },
+  // 30r/s + burst 60 over 10s.
+  WEBHOOKS: { zone: 'rr_webhooks', events: 360, window: '10s' },
+  // 5r/m + burst 10.
+  AUTH: { zone: 'rr_auth', events: 15, window: '1m' },
+  // 30r/m + burst 60.
+  ADMIN: { zone: 'rr_admin', events: 90, window: '1m' },
+  // 10r/s + burst 30 over 10s.
+  API: { zone: 'rr_api', events: 130, window: '10s' },
+  // 20r/s + burst 50 over 10s.
+  GENERAL: { zone: 'rr_general', events: 250, window: '10s' },
 };
 
 function caddyPlaceholders(sources: ProxySources, options: RenderOptions): Record<string, string> {
@@ -92,8 +113,10 @@ function caddyPlaceholders(sources: ProxySources, options: RenderOptions): Recor
     // Not `/etc/caddy/certs`, which section 21.4 names: `/etc/caddy` is the
     // read-only `proxy-conf` volume, and a nested mount point cannot be
     // created inside it. The owner's directory is mounted at `/certs`.
-    CADDY_TLS_BLOCK:
-      options.tlsMode === 'custom' ? '\ttls /certs/fullchain.pem /certs/privkey.pem' : '',
+    CADDY_TLS_BLOCK: caddyTls(options.tlsMode),
+    // `email` with nothing after it is a parse error, and `custom` mode has
+    // no ACME account to name: the owner brought their own certificate.
+    CADDY_ACME_EMAIL_BLOCK: sources.acmeEmail ? `\temail ${sources.acmeEmail}` : '',
     CADDY_ADMIN_ALLOWLIST_BLOCK:
       sources.adminAllowlist.length > 0
         ? [
@@ -102,9 +125,20 @@ function caddyPlaceholders(sources: ProxySources, options: RenderOptions): Recor
           ].join('\n')
         : '',
     CADDY_API_DOCS_BLOCK: sources.apiDocs ? '' : '\trespond /api/docs 404',
+    // The redirect site needs the same certificate source as the main one:
+    // without it Caddy would try to issue for a name the owner may have
+    // pointed here only for the redirect, and in `custom` mode there is no
+    // issuance to fall back on at all.
     CADDY_EXTRA_DOMAINS_SITE:
       sources.extraDomains.length > 0
-        ? `# Additional domains redirect to the main one.\n${sources.extraDomains.join(', ')} {\n\tredir https://${sources.domain}{uri} permanent\n}\n`
+        ? [
+            '# Additional domains redirect to the main one.',
+            `${sources.extraDomains.join(', ')} {`,
+            ...(caddyTls(options.tlsMode) ? [caddyTls(options.tlsMode)] : []),
+            `\tredir https://${sources.domain}{uri} permanent`,
+            '}',
+            '',
+          ].join('\n')
         : '',
   };
   for (const [name, limit] of Object.entries(CADDY_ZONES))

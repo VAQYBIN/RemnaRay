@@ -48,7 +48,7 @@ test.describe('customer account', () => {
     await page.goto('/ru/account/plans');
 
     await expect(page.locator('[data-state="ready"]')).toBeVisible();
-    await expect(page.getByText('Месяц')).toBeVisible();
+    await expect(page.getByText(stackState().plan.name).first()).toBeVisible();
     await expect(page.getByLabel('Промокод')).toBeVisible();
     const radios = page.locator('input[type="radio"][name="provider"]');
     await expect(radios.first()).toBeVisible();

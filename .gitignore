@@ -47,3 +47,6 @@ docs/development/*
 .turbo/
 
 **/src/generated/
+
+# The proxy smoke stand fixture (section 22.7), written by `seed-dev`.
+deploy/ci/.stand.json

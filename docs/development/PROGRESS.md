@@ -2,17 +2,111 @@
 
 ## Current milestone
 
-M5 — blocker closure audit in progress; the milestone is **NOT VERIFIED**.
+M5 — in progress; the milestone is **NOT VERIFIED**.
 
-**DO NOT PROCEED TO M6.** Local implementation and automated gates are now
-passing for M5-001, M5-002, M5-003, M5-005 and M5-006. M5-004 still requires
-the real-domain certificate checklist. M5-007, M5-008 and M5-009 remain
-unstarted implementation tasks.
+**DO NOT PROCEED TO M6.** M5-001, M5-002, M5-003, M5-005, M5-006 and M5-007
+pass their gates. M5-004 still requires the real-domain certificate checklist,
+which needs a public server and DNS. M5-008 and M5-009 remain unstarted.
 
 ## Current task
 
-Verification closure for TASK-M5-004. Do not begin M6. The exact next
-implementation task after the external TLS gate is TASK-M5-007.
+TASK-M5-008 — monitoring: the optional profile, the section 9.9 metrics in
+every process and the Grafana dashboard. TASK-M5-009 follows it.
+
+## M5-007 verification — 2026-09-20
+
+Verified on 2026-09-20. `deploy/ci/proxy-smoke.sh` passed all ten checks of
+section 22.7 against **both** profiles on a real Compose stand.
+
+- `deploy/ci/proxy-smoke.sh <nginx|caddy>` builds the stand from `compose.yaml`
+  plus `deploy/ci/compose.smoke.yaml`, seeds the section 22.3 fixture, and runs
+  the ten checks. `deploy/ci/expected-status.tsv` holds the section 21.5 path
+  table, read by both profiles, so a divergence is a failed row rather than two
+  scripts that disagree. `deploy/ci/gen-selfsigned.sh` issues the `custom`-mode
+  certificate for the stand and for the domain step 9 adds.
+- The stand adds a second network, `rr_edge`. Without it there is no vantage
+  outside `RR_TRUSTED_PROXIES`: a request from the host is translated to the
+  compose gateway, which is inside the allowed range, so the `/metrics → 403`
+  of step 4 would have passed without proving anything.
+- `apps/api/src/tools/seed-dev.ts` writes the section 22.3 fixture into a
+  running deployment and prints what it seeded, which is how the stand gets an
+  administrator to log in as. It refuses to seed over a finished installation.
+- `POST /api/internal/v1/echo-headers` answers step 5. It exists only when
+  `RR_ECHO_HEADERS=true`, which the stand sets and a deployment never does.
+- CI gained a `proxy-smoke` matrix over both profiles, and the `docker` job now
+  builds the `caddy` and `backup` images too, with a shared Buildx cache the
+  smoke job loads from.
+- Step 10 runs the browser path of E2E-01 — the landing, the account, a
+  purchase through the mock provider and the administration sign-in — against
+  the stand. AC-171 stays on the harness, which is the only place a shop whose
+  wizard has not run exists, and the administration console suite stays there
+  too: it drives `/api/admin` far faster than a person and would measure the
+  30r/m limit of section 19.4 rather than anything about the proxy.
+
+### What the smoke found
+
+Every one of these stopped the stand or broke the section 21.5 invariant, and
+none of them could be seen without running the deployment end to end.
+
+| Defect                                                                                                                                                                   | Fix                                                                                                                                                                                                                                                           |
+| ------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `postgres:18` refuses to start with a volume at `/var/lib/postgresql/data`                                                                                               | mount `pgdata:/var/lib/postgresql`, the path the image declares                                                                                                                                                                                               |
+| `web` bound to the container id, so its health check never passed                                                                                                        | `ENV HOSTNAME=0.0.0.0` in `deploy/docker/web.Dockerfile`                                                                                                                                                                                                      |
+| `proxy-config` could not write `proxy-conf`: Docker seeds a shared named volume from whichever image _creates_ its container first, and that is not the dependency order | `/proxy-conf` and `/uploads` are created in the app image owned by `node`, and both proxy images hand `/etc/nginx/conf.d` and `/etc/caddy` the same owner; their stock `default.conf` and `Caddyfile` are removed so a seeded volume cannot smuggle a site in |
+| the proxy's fixed `172.28.0.10` is inside the automatic address pool, so the tenth service took it and the proxy could not start                                         | `ip_range` reserves it                                                                                                                                                                                                                                        |
+| `proxy-config` started before `migrate` and crash-looped on a missing `settings` table                                                                                   | it now waits for `migrate`, like every other reader                                                                                                                                                                                                           |
+| `proxy-reloader` could not reach the docker socket, so no reload ever happened                                                                                           | it runs as root; the socket is owned by a group whose id differs per host, and a container that may drive the Docker API is already as privileged as the host                                                                                                 |
+| a webhook body naming no event reached Prisma with a null `type` and answered **500**                                                                                    | the service refuses an event with no type or invoice, and the mock provider returns `null` for such a payload (section 9.7)                                                                                                                                   |
+| nginx answered a non-POST webhook with 403 (`limit_except`), Caddy with 405                                                                                              | nginx returns 405                                                                                                                                                                                                                                             |
+| nginx queued the `/admin` burst instead of refusing it, so the console stalled for seconds a page while Caddy refused outright                                           | `nodelay`, like every other zone                                                                                                                                                                                                                              |
+| Caddy's zones carried the nginx _rate_ without its _burst_, so a sign-in the nginx profile served was refused                                                            | the events are `rate × window + burst`                                                                                                                                                                                                                        |
+| Caddy's `respond @matcher` is ordered after `handle`, so the catch-all answered first: a non-POST webhook became 307 and `/metrics` from outside became 404              | each refusal is a `handle`                                                                                                                                                                                                                                    |
+| Caddy had no `/healthz` on `:80` and redirected with 308                                                                                                                 | an explicit `http://` site with the health check and a 301, and `auto_https disable_redirects`                                                                                                                                                                |
+| `email` with an empty value made Caddy refuse the whole file in `custom` mode                                                                                            | the directive is emitted only when there is an address                                                                                                                                                                                                        |
+| the Caddy redirect site had no TLS source and ran its `redir` onto the `tls` line                                                                                        | it takes the same certificate source, one directive per line                                                                                                                                                                                                  |
+
+### M5-007 decisions
+
+- Section 19.3's CSP was not implemented anywhere; step 3 of 22.7 checks for
+  it, so `apps/web/lib/csp.ts` now builds exactly the policy the specification
+  writes out and `apps/web/proxy.ts` sets it with a per-response nonce.
+- That nonce forced a rendering change. Next.js stamps the nonce onto the
+  inline scripts it emits only while it renders, so a prerendered page carries
+  inline scripts the next request's nonce does not cover and the browser
+  refuses them — the site rendered but never hydrated. The localized routes and
+  the administration console are now `force-dynamic`. The data stays cached:
+  `revalidate` on the API fetches is what section 13.2 relies on and what keeps
+  the landing up when the API cannot answer, which is what 26.4 E5 checks.
+  `pnpm lighthouse` after the change: landing RU 100/96/100, landing EN
+  100/96/100, account accessibility 96 — all above the 13.2 thresholds.
+- The specs no longer name the harness's own rows. `StackState` carries the
+  brand, the plan's name and the user's username, and the stand supplies the
+  same fields, so one suite reads two differently seeded shops.
+- Step 9 and step 10 both sign an administrator in, and a TOTP code may be
+  redeemed once per 30-second period. Both now record the period they spent in
+  `e2e/.auth/totp-period`, so neither presents a code the other used.
+- The stand refuses to start when a `.env` is already present, because it
+  writes its own, and removes both when it finishes.
+
+### M5-007 verification
+
+- `deploy/ci/proxy-smoke.sh nginx` and `deploy/ci/proxy-smoke.sh caddy`: all
+  ten checks passed on both, including the 15 browser tests of step 10. Run on
+  a resolvable local domain, since the stand's domain has to be in the host's
+  resolver for Playwright's request context; CI adds the line to `/etc/hosts`.
+- `pnpm test:m5` (3), `pnpm test:m2` (1), `pnpm test:m1` (1), `pnpm test:m4`
+  (4), `pnpm test` (16), `pnpm test:e2e` (26), `pnpm lighthouse`, `pnpm lint`,
+  `pnpm format`, `pnpm typecheck`, `pnpm -r typecheck`, `pnpm typecheck:e2e`,
+  `pnpm -r test` (api 151, web 24, bot 12, worker 4, and the rest), full
+  `pnpm build`, `pnpm i18n-check`, both theme validations, and
+  `docker compose config` for the `nginx`, `caddy`, `external`, `certbot` and
+  smoke-overlay profiles.
+
+### M5-007 finding, not repaired here
+
+`docker image inspect` reports `remnaray/app` at about 878 MB, not the
+187,223,208 bytes the M5-002 closure recorded. The M5-002 measurement should be
+repeated before the milestone is called verified.
 
 ## Latest blocker closure audit — 2026-09-20
 
@@ -24,7 +118,7 @@ implementation task after the external TLS gate is TASK-M5-007.
 | TASK-M5-004 | **LOCAL VERIFIED; EXTERNAL OPEN** | Local TLS mode rendering, certificate-backed nginx validation, Compose profiles and config validation passed. The required real-domain ACME and certbot issuance/renewal checklist has no public DNS/server in this environment.                |
 | TASK-M5-005 | **VERIFIED locally**              | API trusted-proxy suite passed (142 tests); the 26-test browser gate also passed.                                                                                                                                                               |
 | TASK-M5-006 | **VERIFIED**                      | `pnpm test:m5`: real PostgreSQL 18 AC-202 dump, restore and 14/8 retention passed.                                                                                                                                                              |
-| TASK-M5-007 | **NOT STARTED**                   | No implementation or verification was started, per scope.                                                                                                                                                                                       |
+| TASK-M5-007 | **VERIFIED** (2026-09-20)         | `deploy/ci/proxy-smoke.sh` green on both profiles; see "M5-007 verification".                                                                                                                                                                   |
 | TASK-M5-008 | **NOT STARTED**                   | No implementation or verification was started, per scope.                                                                                                                                                                                       |
 | TASK-M5-009 | **NOT STARTED**                   | No implementation or verification was started, per scope.                                                                                                                                                                                       |
 

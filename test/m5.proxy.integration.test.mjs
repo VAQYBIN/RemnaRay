@@ -283,7 +283,7 @@ test(
     const certs = mkdtempSync(join(tmpdir(), 'rr-caddy-certs-'));
     selfSigned(certs);
     const roots = new Map(
-      ['acme', 'custom', 'stock'].map((name) => [
+      ['acme', 'custom', 'stock', 'extra'].map((name) => [
         name,
         mkdtempSync(join(tmpdir(), `rr-caddy-${name}-`)),
       ]),
@@ -291,7 +291,20 @@ test(
 
     try {
       for (const [name, output] of roots) {
-        const mode = name === 'stock' ? 'acme' : name;
+        const mode = name === 'stock' ? 'acme' : name === 'extra' ? 'custom' : name;
+        // Section 21.6 adds the redirect site while the stand is running, and
+        // it is a site of its own: a directive of it on the wrong line makes
+        // Caddy refuse the whole file, which only `validate` catches here.
+        if (name === 'extra') {
+          const { createPrismaClient } = await import('../packages/db/dist/index.js');
+          const prisma = createPrismaClient(databaseUrl);
+          await prisma.setting.upsert({
+            where: { key: 'domain.extra_domains' },
+            update: { value: ['www.shop.example.test'] },
+            create: { key: 'domain.extra_domains', value: ['www.shop.example.test'] },
+          });
+          await prisma.$disconnect();
+        }
         const rendered = spawnSync(
           'node',
           [
@@ -326,6 +339,8 @@ test(
           name !== 'stock',
           `${name} carries the wrong rate-limit blocks`,
         );
+        if (name === 'extra')
+          assert.match(caddyfile, /www\.shop\.example\.test \{/u, 'the redirect site is missing');
 
         const result = docker(
           [

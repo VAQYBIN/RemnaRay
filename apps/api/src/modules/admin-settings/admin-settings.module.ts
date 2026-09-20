@@ -16,7 +16,7 @@ import {
   AdminThemeSettingsController,
 } from './admin-settings.controller';
 import { ForwardedInterceptor, ForwardedObserver } from './forwarded.interceptor';
-import { InternalProxyController } from './proxy.controller';
+import { InternalEchoController, InternalProxyController } from './proxy.controller';
 import { I18nAdminService } from './i18n-admin.service';
 import { ProvidersService } from './providers.service';
 import { SystemService } from './system.service';
@@ -32,6 +32,7 @@ import { SystemService } from './system.service';
     AdminAuditController,
     AdminSystemController,
     InternalProxyController,
+    InternalEchoController,
   ],
   providers: [
     ProvidersService,

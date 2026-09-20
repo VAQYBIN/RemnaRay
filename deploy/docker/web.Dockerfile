@@ -27,6 +27,9 @@ FROM node:24-alpine
 
 ENV NODE_ENV=production
 ENV PORT=3001
+# Next.js `standalone` binds to HOSTNAME, and Docker sets that to the container
+# id — which resolves to one address the healthcheck's 127.0.0.1 is not.
+ENV HOSTNAME=0.0.0.0
 WORKDIR /app
 
 COPY --from=build /workspace/apps/web/.next/standalone ./

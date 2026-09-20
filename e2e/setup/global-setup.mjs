@@ -21,6 +21,7 @@ export default async function globalSetup() {
         baseURL: stack.baseURL,
         apiUrl: stack.apiUrl,
         internalToken: stack.internalToken,
+        brand: stack.brand,
         admin: stack.admin,
         plan: stack.plan,
         user: stack.user,

@@ -37,7 +37,9 @@ server {
     # --- provider and panel webhooks: POST only, their own limit, 256k body ---
     location ^~ /webhooks/ {
         limit_req zone=rr_webhooks burst=60 nodelay;
-        limit_except POST { deny all; }
+        # Section 21.5: both profiles answer a non-POST webhook with 405.
+        # `limit_except` would answer 403, which Caddy never does.
+        if ($request_method != POST) { return 405; }
         client_max_body_size 256k;
         proxy_read_timeout 15s;
         proxy_pass http://rr_api;
@@ -45,7 +47,7 @@ server {
     # --- the Telegram webhook: POST only ---
     location ^~ /tg/webhook/ {
         limit_req zone=rr_webhooks burst=100 nodelay;
-        limit_except POST { deny all; }
+        if ($request_method != POST) { return 405; }
         client_max_body_size 2m;
         proxy_read_timeout 10s;
         proxy_pass http://rr_api;
@@ -99,7 +101,10 @@ server {
     }
     # --- the administration console and the wizard (UI) ---
     location ^~ /admin {
-        limit_req zone=rr_admin burst=100;
+        # `nodelay` like every other zone: without it nginx queues the burst
+        # and releases it at 30r/m, so the console stalls for seconds a page
+        # while the Caddy profile refuses outright (section 21.5).
+        limit_req zone=rr_admin burst=100 nodelay;
 {{ADMIN_ALLOWLIST_BLOCK}}
         proxy_pass http://rr_web;
     }

@@ -12,6 +12,13 @@ export const metadata: Metadata = {
   robots: { index: false, follow: false },
 };
 
+/**
+ * Like the localized routes: the nonce of section 19.3 is stamped onto the
+ * inline scripts while the page renders, so a prerendered console would be
+ * served with scripts the next request's nonce does not cover.
+ */
+export const dynamic = 'force-dynamic';
+
 export default async function AdminLayout({ children }: { children: React.ReactNode }) {
   const locale = adminLocale(await getAdminLanguage());
   const theme = adminTheme();

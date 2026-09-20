@@ -125,3 +125,55 @@ throwaway pair. It also asserts that `certbot` is refused for the profile.
 `apps/api/src/tools/proxy-render.test.ts` covers the rendering itself:
 placeholder substitution, the per-mode file set, the bootstrap configuration,
 the conditional blocks, the Caddy zones and the atomic write.
+
+## The smoke run: both profiles answer the same
+
+Section 21.5 says the only difference between the profiles is which containers
+run. `deploy/ci/proxy-smoke.sh <nginx|caddy>` is what makes that a fact:
+
+```sh
+deploy/ci/proxy-smoke.sh nginx
+deploy/ci/proxy-smoke.sh caddy
+```
+
+It builds a stand from `compose.yaml` plus `deploy/ci/compose.smoke.yaml`, with
+a self-signed certificate for `rr.test` (`RR_TLS_MODE=custom` — ACME has no
+public domain to answer for on a runner), seeds the section 22.3 fixture with
+`dist/tools/seed-dev.js`, and then runs the ten checks of section 22.7:
+`/healthz`, the whole path table, the security headers, the upstream echo,
+compression, HTTP/2, the HTTP redirect, the reload, and the browser suite.
+
+The expected statuses are a file rather than assertions in the script:
+
+```
+# vantage	method	path	status	why
+outside	GET	/webhooks/mock	405	webhooks are POST only
+outside	GET	/metrics	403	not reachable from outside the compose network
+```
+
+`deploy/ci/expected-status.tsv` is read by both profiles, so a divergence is a
+failed row and not two scripts that disagree.
+
+**The vantage matters.** A request from the host to a published port is
+translated to the compose gateway, which is inside `RR_TRUSTED_PROXIES` — so a
+`/metrics` check made from the host would pass without proving anything. The
+overlay puts the proxy on a second network, `rr_edge`, and the `outside`
+requests come from there.
+
+The stand refuses to start if a `.env` is already present, because it writes
+its own, and it removes the stand and that file when it finishes.
+`RR_SMOKE_KEEP=true` leaves both in place to look at.
+
+Section 26.4 X2 runs the same script against a live deployment:
+
+```sh
+RR_SMOKE_NO_STACK=true RR_SMOKE_DOMAIN=shop.example.com \
+  deploy/ci/proxy-smoke.sh nginx
+```
+
+Then nothing is created or removed; the checks run against the deployment as it
+is, and the `outside` and `inside` vantages still need the two networks the
+overlay adds.
+
+CI runs both profiles as a matrix on every pull request, and both have to be
+green to merge.

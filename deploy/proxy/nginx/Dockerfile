@@ -16,9 +16,20 @@ RUN printf 'https://nginx.org/packages/alpine/%s/main\n' "${ALPINE_VERSION}" \
     && test -f /usr/lib/nginx/modules/ngx_http_acme_module.so \
     && rm -rf /var/cache/apk/*
 
-# `proxy-conf` arrives as a volume; these are the paths nginx writes into.
+# `proxy-conf` is one named volume shared with the app image, which renders
+# into it as the unprivileged `node` user. Docker seeds an empty named volume
+# from whichever image *creates* its container first, and that order is not the
+# dependency order, so the directory has to arrive with the same owner
+# whichever image wins. `node` is uid 1000 in `node:24-alpine`.
+ARG APP_UID=1000
+
+# These are the paths nginx writes into. The stock `default.conf` goes too: a
+# default server seeded into the shared volume would answer for every host the
+# rendered configuration does not name.
 RUN mkdir -p /var/cache/nginx/acme /var/cache/nginx/proxy /var/www/certbot /etc/nginx/certs \
-    && chown -R nginx:nginx /var/cache/nginx
+    && chown -R nginx:nginx /var/cache/nginx \
+    && rm -f /etc/nginx/conf.d/default.conf \
+    && chown "${APP_UID}:${APP_UID}" /etc/nginx/conf.d
 
 # The rendered configuration is the whole configuration (section 21.2), so the
 # stock /etc/nginx/nginx.conf is never read.

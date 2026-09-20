@@ -21,9 +21,9 @@ test.describe('administration console', () => {
     await page.getByLabel('Поиск').fill(state.user.telegramId);
     await page.getByRole('button', { name: 'Применить' }).click();
 
-    await expect(page.getByText('e2euser')).toBeVisible();
+    await expect(page.getByText(state.user.username)).toBeVisible();
     await page.getByRole('link', { name: 'Открыть' }).click();
-    await expect(page.getByRole('heading', { name: 'E2E' })).toBeVisible();
+    await expect(page.getByRole('heading', { name: state.user.firstName })).toBeVisible();
     await expect(page.getByRole('tab', { name: 'Журнал' })).toBeVisible();
   });
 

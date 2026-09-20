@@ -158,7 +158,11 @@ export class PaymentsService {
       parsedEvent && providerCode === 'yookassa'
         ? await provider.fetchStatus(parsedEvent.providerInvoiceId, config)
         : parsedEvent;
-    if (!event) throw new PaymentError('WEBHOOK_INVALID_SIGNATURE', 'Invalid event payload');
+    // A payload a provider could not classify is refused here rather than
+    // stored: `payment_events.type` is not nullable, and an event with no type
+    // would turn anything posted at a webhook path into a 500.
+    if (!event?.type || !event.providerInvoiceId)
+      throw new PaymentError('WEBHOOK_INVALID_SIGNATURE', 'Invalid event payload');
     const externalId =
       event.eventId ??
       createHash('sha256')

@@ -44,6 +44,11 @@ RUN mkdir -p dist/apps dist/packages \
     && ln -s ../../node_modules/@remnaray/db dist/packages/db \
     && ln -s apps/api/tools dist/tools
 
+# Docker seeds a fresh named volume from the image, ownership included. The
+# renderer and the uploads both run as `node`, and a volume Docker created
+# root-owned would refuse the first write instead of the hundredth.
+RUN mkdir -p /proxy-conf /uploads && chown node:node /proxy-conf /uploads
+
 USER node
 
 CMD ["node", "dist/apps/api/main.js"]

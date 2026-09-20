@@ -8,8 +8,8 @@ test.describe('public site', () => {
 
     await expect(page.getByRole('heading', { level: 1 })).toBeVisible();
     await expect(page.getByRole('heading', { name: 'Выберите тариф' })).toBeVisible();
-    await expect(page.getByText('299')).toBeVisible();
-    await expect(page.getByText('30 дней')).toBeVisible();
+    await expect(page.getByText('299').first()).toBeVisible();
+    await expect(page.getByText('30 дней').first()).toBeVisible();
     await expect(
       page.getByRole('link', { name: /t\.me|Открыть в Telegram/u }).first(),
     ).toBeVisible();
@@ -51,7 +51,7 @@ test.describe('public site', () => {
     const config = await request.get('/api/v1/public/config');
     expect(config.ok()).toBeTruthy();
     const configBody = (await config.json()) as { brand: { name: string } };
-    expect(configBody.brand.name).toBe('Manta E2E');
+    expect(configBody.brand.name).toBe(state.brand.name);
 
     const theme = await request.get('/api/v1/public/theme');
     expect(theme.ok()).toBeTruthy();
@@ -59,9 +59,10 @@ test.describe('public site', () => {
 
     const plans = await request.get('/api/v1/public/plans');
     const body = (await plans.json()) as { items: { slug: string }[] };
-    expect(body.items).toHaveLength(1);
-    expect(body.items[0]?.slug).toBe(state.plan.slug);
-    expect(body.items[0]).not.toHaveProperty('squads');
+    const seeded = body.items.find((item) => item.slug === state.plan.slug);
+    expect(seeded).toBeDefined();
+    // Section 9.4: the public catalog never carries the panel's squads.
+    for (const item of body.items) expect(item).not.toHaveProperty('squads');
   });
 
   test('a referral link stores the code and returns to the landing', async ({ page, context }) => {

@@ -1,0 +1,29 @@
+# The section 22.7 stand: the deployment of `compose.yaml` exactly as an owner
+# runs it, plus the two things a smoke run needs and a deployment must not have.
+#
+#   * `rr_edge` — a second network the proxy is also on. Without it there is no
+#     vantage point outside `RR_TRUSTED_PROXIES`: a request from the host is
+#     translated to the compose gateway, which is inside the allowed range, so
+#     `/metrics` would answer 200 and the check of step 4 would pass by
+#     accident.
+#   * `RR_ECHO_HEADERS` — the upstream echo of step 5.
+
+services:
+  api:
+    environment:
+      RR_ECHO_HEADERS: 'true'
+
+  proxy-nginx:
+    networks:
+      rr_net: { ipv4_address: 172.28.0.10 }
+      rr_edge: { ipv4_address: 172.29.0.10 }
+
+  proxy-caddy:
+    networks:
+      rr_net: { ipv4_address: 172.28.0.10 }
+      rr_edge: { ipv4_address: 172.29.0.10 }
+
+networks:
+  rr_edge:
+    # Same reservation as `rr_net`: 172.29.0.10 is the proxy's.
+    ipam: { config: [{ subnet: 172.29.0.0/16, ip_range: 172.29.1.0/24 }] }

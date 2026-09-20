@@ -84,6 +84,22 @@ describe('proxy template rendering (section 21.2)', () => {
     expect(render('certbot', {}, true).get('site.conf')).toContain('listen 443 ssl;');
   });
 
+  it('answers a non-POST webhook with 405, like the Caddy profile (section 21.5)', () => {
+    const site = render('acme').get('site.conf') ?? '';
+    const methodGate = 'if ($request_method != POST) { return 405; }';
+    const bodyOf = (location: string) =>
+      site.slice(site.indexOf(location), site.indexOf('proxy_pass', site.indexOf(location)));
+
+    // `limit_except POST { deny all; }` answers 403, and the invariant of
+    // section 21.5 is that the status does not depend on the profile.
+    expect(site).not.toContain('limit_except POST');
+    // A zone that queues instead of refusing makes the same request slow on
+    // one profile and refused on the other.
+    expect(site).not.toMatch(/limit_req zone=\w+ burst=\d+;/u);
+    expect(bodyOf('location ^~ /webhooks/ {')).toContain(methodGate);
+    expect(bodyOf('location ^~ /tg/webhook/ {')).toContain(methodGate);
+  });
+
   it('adds the redirect server only when there are extra domains', () => {
     expect(render('acme').get('site.conf')).not.toContain('return 301 https://shop.example.com');
     const withExtra = render('acme', { extraDomains: ['www.example.com', 'shop.example.net'] });
@@ -173,7 +189,7 @@ describe('Caddy template rendering (section 21.4)', () => {
     expect(caddyfile).toContain('trusted_proxies static 172.28.0.0/16');
     expect(caddyfile).toContain('shop.example.com {');
     expect(caddyfile).toContain('reverse_proxy api:3000');
-    expect(caddyfile).toContain('respond @webhooks_bad_method 405');
+    expect(caddyfile).toContain('handle @webhooks_bad_method {');
   });
 
   it('carries the rate-limit zones only when the image has the module', () => {
@@ -200,6 +216,60 @@ describe('Caddy template rendering (section 21.4)', () => {
     expect(() => renderCaddy('certbot')).toThrow(/certbot is not supported/u);
   });
 
+  it('refuses inside a `handle`, which is ordered before the catch-all', () => {
+    const caddyfile = renderCaddy('acme');
+
+    // A bare `respond @matcher` is ordered after `handle`, so the catch-all
+    // would answer first: a non-POST webhook became a 307 to the site and
+    // `/metrics` from outside reached `api` and became a 404.
+    expect(caddyfile).not.toMatch(/^\s*respond @\w+ \d+$/mu);
+    for (const matcher of ['@webhooks_bad_method', '@tg_bad_method', '@metrics'])
+      expect(caddyfile).toContain(`handle ${matcher} {`);
+  });
+
+  it('carries the same allowance per zone as the nginx profile', () => {
+    const caddyfile = renderCaddy('acme');
+
+    // nginx spends `rate × window + burst`; Caddy has no burst, so the events
+    // are that sum. With the rate alone, a sign-in the nginx profile serves
+    // is refused here (section 21.5).
+    for (const [zone, events] of [
+      ['rr_auth', 15],
+      ['rr_admin', 90],
+      ['rr_api', 130],
+      ['rr_general', 250],
+      ['rr_webhooks', 360],
+    ])
+      expect(caddyfile).toMatch(
+        new RegExp(
+          `zone ${String(zone)} \\{\\s*key \\{client_ip\\}\\s*events ${String(events)}\\b`,
+          'u',
+        ),
+      );
+  });
+
+  it('answers /healthz and redirects with 301 on :80, like the nginx profile', () => {
+    const caddyfile = renderCaddy('acme');
+
+    // Section 21.5: the compose health check asks 127.0.0.1 for `/healthz`
+    // with no `Host`, and section 26.4 A3 expects `http://` to answer 301.
+    expect(caddyfile).toContain('auto_https disable_redirects');
+    expect(caddyfile).toContain('http:// {');
+    const httpSite = caddyfile.slice(caddyfile.indexOf('http:// {'));
+    expect(httpSite).toContain('respond "ok" 200');
+    expect(httpSite).toContain('redir https://{host}{uri} permanent');
+  });
+
+  it('names an ACME account only when there is one', () => {
+    expect(renderCaddy('acme')).toContain('email ops@example.com');
+
+    // `custom` mode needs no account, and `email` with nothing after it is a
+    // parse error that stops Caddy from starting at all.
+    const owned = renderCaddy('custom', { acmeEmail: '' });
+    expect(owned).not.toMatch(/^\s*email\s*$/mu);
+    expect(owned).not.toContain('email');
+  });
+
   it('adds the redirect site and the administration allowlist only when they apply', () => {
     expect(renderCaddy('acme')).not.toContain('redir https://shop.example.com');
     expect(renderCaddy('acme')).toContain('respond /api/docs 404');
@@ -211,6 +281,12 @@ describe('Caddy template rendering (section 21.4)', () => {
     });
     expect(restricted).toContain('www.example.com, shop.example.net {');
     expect(restricted).toContain('redir https://shop.example.com{uri} permanent');
+    // The redirect site would otherwise try to issue its own certificate,
+    // which `custom` mode has no issuance for at all — and each directive
+    // needs its own line, or Caddy refuses the whole file.
+    expect(renderCaddy('custom', { extraDomains: ['www.example.com'] })).toContain(
+      ['www.example.com {', '\ttls /certs/fullchain.pem /certs/privkey.pem', '\tredir'].join('\n'),
+    );
     expect(restricted).toContain('@rr_denied not client_ip 203.0.113.0/24');
     expect(restricted).not.toContain('respond /api/docs 404');
   });

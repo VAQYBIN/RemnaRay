@@ -44,14 +44,18 @@ export class MockPaymentProvider {
   }
 
   parseWebhook(raw: Buffer) {
-    const value = JSON.parse(raw.toString('utf8')) as {
+    // Whatever arrived, not what a provider promised: a webhook body is
+    // attacker-reachable and this is where that is decided.
+    const value = JSON.parse(raw.toString('utf8')) as Partial<{
       eventId: string;
       providerInvoiceId: string;
       type: MockEvent['type'];
-      paidAmountMinorRub?: string;
-    };
+      paidAmountMinorRub: string;
+    }>;
+    // Anything that does not name an invoice and an event is not an event.
+    if (!value.providerInvoiceId || !value.type) return null;
     return {
-      eventId: value.eventId,
+      ...(value.eventId ? { eventId: value.eventId } : {}),
       providerInvoiceId: value.providerInvoiceId,
       type: value.type,
       ...(value.paidAmountMinorRub ? { paidAmountMinorRub: BigInt(value.paidAmountMinorRub) } : {}),

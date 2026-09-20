@@ -14,6 +14,17 @@ export function generateStaticParams() {
   return routing.locales.map((locale) => ({ locale }));
 }
 
+/**
+ * Section 19.3 puts a per-response nonce in the CSP, and Next.js stamps that
+ * nonce onto the inline scripts it emits only while it is rendering. Prerender
+ * the page and the HTML carries inline scripts the nonce of the next request
+ * does not cover, so the browser refuses them and the page never hydrates.
+ *
+ * The data stays cached: `revalidate` on the API fetches is what section 13.2
+ * relies on, and what keeps the landing up when the API cannot answer.
+ */
+export const dynamic = 'force-dynamic';
+
 export async function generateMetadata(): Promise<Metadata> {
   const theme = await getTheme();
   return {

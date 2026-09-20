@@ -1,4 +1,13 @@
-import { Body, Controller, HttpCode, Post, UseGuards } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  HttpCode,
+  NotFoundException,
+  Post,
+  Req,
+  UseGuards,
+} from '@nestjs/common';
+import type { FastifyRequest } from 'fastify';
 import { z } from 'zod';
 
 import { Infrastructure } from '../../infra/infra.module';
@@ -103,5 +112,38 @@ export class InternalProxyController {
             : `${input.state}, ${input.ageHours.toFixed(1)} h old`,
       });
     return { recorded: true, alerted: !input.ok };
+  }
+}
+
+/**
+ * Section 21.5: the proxy invariant is checked by comparing what reaches the
+ * upstream under each profile, so the upstream has to be able to say what it
+ * received. The endpoint exists only when `RR_ECHO_HEADERS=true`, which the
+ * smoke stand of section 22.7 sets and a deployment never does; without it the
+ * route answers 404 like any path the application does not serve.
+ */
+@Controller('api/internal/v1')
+@UseGuards(InternalTokenGuard)
+export class InternalEchoController {
+  @Post('echo-headers')
+  @HttpCode(200)
+  echo(@Req() request: FastifyRequest) {
+    if (process.env.RR_ECHO_HEADERS !== 'true') throw new NotFoundException('NOT_FOUND');
+    const header = (name: string) => {
+      const value = request.headers[name];
+      return (Array.isArray(value) ? value[0] : value) ?? null;
+    };
+    return {
+      host: header('host'),
+      // `request.ip` is the address Fastify resolved through
+      // `RR_TRUSTED_PROXIES`; the raw headers are what the proxy actually sent.
+      clientIp: request.ip,
+      protocol: request.protocol,
+      forwardedFor: header('x-forwarded-for'),
+      forwardedProto: header('x-forwarded-proto'),
+      forwardedHost: header('x-forwarded-host'),
+      realIp: header('x-real-ip'),
+      requestId: header('x-request-id'),
+    };
   }
 }
