@@ -410,9 +410,11 @@ A reading of about 878 MB was recorded here against the M5-002 closure's
 187,223,208 bytes, and the measurement was asked to be repeated. It was: a
 clean `docker build -f deploy/docker/app.Dockerfile` gives
 `docker image inspect --format '{{.Size}}'` = **188,499,066 bytes**, which is
-the M5-002 figure plus everything added since. The 878 MB reading did not
-measure the released image and the doubt is withdrawn; the section 26.1 budget
-of 250 MB holds.
+the M5-002 figure plus everything added since. The 878 MB came from the
+`DISK USAGE` column of `docker image ls`, which counts the uncompressed layers
+as they sit in the store, not the image: the same row shows
+`CONTENT SIZE 187MB`. The doubt is withdrawn and the section 26.1 budget of
+250 MB holds.
 
 ## Latest blocker closure audit — 2026-09-20
 
