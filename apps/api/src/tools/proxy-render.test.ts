@@ -4,6 +4,7 @@ import { join, resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
 
 import {
+  caddyHasRateLimit,
   customFiles,
   fill,
   renderProfile,
@@ -15,7 +16,8 @@ import {
 
 // The API compiles to CommonJS (section 6.1), so `__dirname` is the portable
 // anchor here; Vitest provides it for the TypeScript source as well.
-const templates = resolve(__dirname, '../../../../deploy/proxy/nginx');
+const proxyRoot = resolve(__dirname, '../../../../deploy/proxy');
+const templates = resolve(proxyRoot, 'nginx');
 
 const sources: ProxySources = {
   domain: 'shop.example.com',
@@ -24,6 +26,7 @@ const sources: ProxySources = {
   adminAllowlist: [],
   dockerCidr: '172.28.0.0/16',
   apiDocs: false,
+  caddyRateLimit: true,
 };
 
 function render(tlsMode: TlsMode, overrides: Partial<ProxySources> = {}, certificate = true) {
@@ -149,5 +152,66 @@ describe('proxy sources and atomic writes', () => {
     } finally {
       rmSync(directory, { recursive: true, force: true });
     }
+  });
+});
+
+function renderCaddy(tlsMode: TlsMode, overrides: Partial<ProxySources> = {}) {
+  const files = renderProfile(
+    resolve(proxyRoot, 'caddy'),
+    { ...sources, ...overrides },
+    { profile: 'caddy', tlsMode, certificatePresent: true },
+  );
+  return files.find((file) => file.name === 'Caddyfile')?.content ?? '';
+}
+
+describe('Caddy template rendering (section 21.4)', () => {
+  it('renders one Caddyfile with every placeholder resolved', () => {
+    const caddyfile = renderCaddy('acme');
+
+    expect(caddyfile).not.toContain('{{');
+    expect(caddyfile).toContain('email ops@example.com');
+    expect(caddyfile).toContain('trusted_proxies static 172.28.0.0/16');
+    expect(caddyfile).toContain('shop.example.com {');
+    expect(caddyfile).toContain('reverse_proxy api:3000');
+    expect(caddyfile).toContain('respond @webhooks_bad_method 405');
+  });
+
+  it('carries the rate-limit zones only when the image has the module', () => {
+    const withModule = renderCaddy('acme');
+    expect(withModule).toContain('order rate_limit before basicauth');
+    for (const zone of ['rr_webhooks', 'rr_auth', 'rr_admin', 'rr_api', 'rr_general'])
+      expect(withModule).toContain(`zone ${zone} {`);
+
+    const stock = renderCaddy('acme', { caddyRateLimit: false });
+    expect(stock).not.toContain('rate_limit');
+    expect(stock).not.toContain('order rate_limit');
+  });
+
+  it('knows which image carries `caddy-ratelimit`', () => {
+    expect(caddyHasRateLimit('ghcr.io/remnaray/caddy:1')).toBe(true);
+    expect(caddyHasRateLimit(undefined)).toBe(true);
+    expect(caddyHasRateLimit('caddy:2-alpine')).toBe(false);
+    expect(caddyHasRateLimit('docker.io/library/caddy:2')).toBe(false);
+  });
+
+  it('names the owner`s certificate only in `custom` mode, and refuses certbot', () => {
+    expect(renderCaddy('acme')).not.toContain('tls /certs');
+    expect(renderCaddy('custom')).toContain('tls /certs/fullchain.pem /certs/privkey.pem');
+    expect(() => renderCaddy('certbot')).toThrow(/certbot is not supported/u);
+  });
+
+  it('adds the redirect site and the administration allowlist only when they apply', () => {
+    expect(renderCaddy('acme')).not.toContain('redir https://shop.example.com');
+    expect(renderCaddy('acme')).toContain('respond /api/docs 404');
+
+    const restricted = renderCaddy('acme', {
+      extraDomains: ['www.example.com', 'shop.example.net'],
+      adminAllowlist: ['203.0.113.0/24'],
+      apiDocs: true,
+    });
+    expect(restricted).toContain('www.example.com, shop.example.net {');
+    expect(restricted).toContain('redir https://shop.example.com{uri} permanent');
+    expect(restricted).toContain('@rr_denied not client_ip 203.0.113.0/24');
+    expect(restricted).not.toContain('respond /api/docs 404');
   });
 });

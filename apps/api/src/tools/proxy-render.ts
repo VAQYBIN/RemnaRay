@@ -21,6 +21,12 @@ export type ProxySources = {
   adminAllowlist: string[];
   dockerCidr: string;
   apiDocs: boolean;
+  /**
+   * Section 21.4: the stock `caddy:2-alpine` has no rate-limit module, and the
+   * renderer then drops the `rate_limit` blocks rather than emit a
+   * configuration Caddy cannot load. The throttler keeps the limits.
+   */
+  caddyRateLimit: boolean;
 };
 
 export type RenderOptions = {
@@ -67,7 +73,53 @@ export function placeholders(
     API_DOCS_BLOCK: sources.apiDocs ? '' : indentedBlock(['deny all;'], '        '),
     LOAD_MODULE_BLOCK:
       options.tlsMode === 'acme' ? 'load_module modules/ngx_http_acme_module.so;\n' : '',
+    ...caddyPlaceholders(sources, options),
   };
+}
+
+/** Section 21.4 zones; the same numbers the nginx profile uses. */
+const CADDY_ZONES = {
+  WEBHOOKS: { zone: 'rr_webhooks', events: 300, window: '10s' },
+  AUTH: { zone: 'rr_auth', events: 5, window: '1m' },
+  ADMIN: { zone: 'rr_admin', events: 30, window: '1m' },
+  API: { zone: 'rr_api', events: 100, window: '10s' },
+  GENERAL: { zone: 'rr_general', events: 200, window: '10s' },
+};
+
+function caddyPlaceholders(sources: ProxySources, options: RenderOptions): Record<string, string> {
+  const values: Record<string, string> = {
+    CADDY_RATE_LIMIT_ORDER: sources.caddyRateLimit ? '\torder rate_limit before basicauth' : '',
+    // Not `/etc/caddy/certs`, which section 21.4 names: `/etc/caddy` is the
+    // read-only `proxy-conf` volume, and a nested mount point cannot be
+    // created inside it. The owner's directory is mounted at `/certs`.
+    CADDY_TLS_BLOCK:
+      options.tlsMode === 'custom' ? '\ttls /certs/fullchain.pem /certs/privkey.pem' : '',
+    CADDY_ADMIN_ALLOWLIST_BLOCK:
+      sources.adminAllowlist.length > 0
+        ? [
+            `\t@rr_denied not client_ip ${sources.adminAllowlist.join(' ')}`,
+            '\trespond @rr_denied 403',
+          ].join('\n')
+        : '',
+    CADDY_API_DOCS_BLOCK: sources.apiDocs ? '' : '\trespond /api/docs 404',
+    CADDY_EXTRA_DOMAINS_SITE:
+      sources.extraDomains.length > 0
+        ? `# Additional domains redirect to the main one.\n${sources.extraDomains.join(', ')} {\n\tredir https://${sources.domain}{uri} permanent\n}\n`
+        : '',
+  };
+  for (const [name, limit] of Object.entries(CADDY_ZONES))
+    values[`CADDY_RATE_LIMIT_${name}`] = sources.caddyRateLimit
+      ? [
+          '\t\trate_limit {',
+          `\t\t\tzone ${limit.zone} {`,
+          '\t\t\t\tkey {client_ip}',
+          `\t\t\t\tevents ${String(limit.events)}`,
+          `\t\t\t\twindow ${limit.window}`,
+          '\t\t\t}',
+          '\t\t}',
+        ].join('\n')
+      : '';
+  return values;
 }
 
 /**
@@ -106,8 +158,12 @@ export function renderProfile(
   options: RenderOptions,
 ): RenderedFile[] {
   if (!existsSync(directory)) throw new Error(`No proxy templates for profile ${options.profile}`);
-  if (options.tlsMode === 'none' && options.profile !== 'caddy')
+  if (options.tlsMode === 'none')
     throw new Error('RR_TLS_MODE=none is only valid with the external profile');
+  // Section 21.4: Caddy issues and renews its own certificates, so `certbot`
+  // has no meaning there and is refused rather than silently ignored.
+  if (options.profile === 'caddy' && options.tlsMode === 'certbot')
+    throw new Error('RR_TLS_MODE=certbot is not supported by the caddy profile');
 
   const values = placeholders(sources, options);
   values['EXTRA_DOMAINS_SERVER'] = extraDomainsServer(values);
@@ -151,12 +207,13 @@ export function renderProfile(
   return files;
 }
 
-/** `custom.d/*.conf` is the owner's extension point and is never rewritten. */
-export function customFiles(directory: string): RenderedFile[] {
+/** The owner's extension point; never rewritten, never deleted. */
+export function customFiles(directory: string, profile: ProxyProfile = 'nginx'): RenderedFile[] {
   const custom = resolve(directory, 'custom.d');
+  const suffix = profile === 'caddy' ? '.caddy' : '.conf';
   if (!existsSync(custom)) return [];
   return readdirSync(custom, { withFileTypes: true })
-    .filter((entry) => entry.isFile() && entry.name.endsWith('.conf'))
+    .filter((entry) => entry.isFile() && entry.name.endsWith(suffix))
     .map((entry) => ({
       name: `custom.d/${entry.name}`,
       content: readFileSync(resolve(custom, entry.name), 'utf8'),
@@ -192,7 +249,17 @@ export function sourcesFrom(rows: SettingRow[]): ProxySources {
     adminAllowlist: listOf(settingValue(rows, 'admin.ip_allowlist')),
     dockerCidr: process.env.RR_DOCKER_CIDR ?? '172.28.0.0/16',
     apiDocs: process.env.RR_API_DOCS === 'true',
+    caddyRateLimit: caddyHasRateLimit(process.env.RR_CADDY_IMAGE),
   };
+}
+
+/**
+ * Section 21.4: only the RemnaRay image carries `caddy-ratelimit`. An owner who
+ * prefers the official image gets a configuration without the `rate_limit`
+ * blocks, which is the documented degradation.
+ */
+export function caddyHasRateLimit(image: string | undefined): boolean {
+  return !/^(?:docker\.io\/)?(?:library\/)?caddy:/u.test(image ?? '');
 }
 
 export const PROXY_SETTING_KEYS = [

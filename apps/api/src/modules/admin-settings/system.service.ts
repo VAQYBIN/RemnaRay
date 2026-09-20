@@ -10,6 +10,7 @@ import { Infrastructure } from '../../infra/infra.module';
 import { Audited } from '../admin/audit.interceptor';
 import { RemnawaveService } from '../remnawave/remnawave.service';
 import { SettingsService } from '../settings/settings.service';
+import { caddyHasRateLimit } from '../../tools/proxy-render';
 
 function appVersion(): string {
   if (process.env.RR_APP_VERSION) return process.env.RR_APP_VERSION;
@@ -64,6 +65,15 @@ export class SystemService {
       outboxPending,
       database: { sizeBytes: Number(dbSize[0]?.size ?? 0n) },
       tls: { domain: String(tlsExpiresAt), expiresAt: process.env.RR_TLS_EXPIRES_AT ?? null },
+      proxy: {
+        profile: process.env.RR_PROXY_PROFILE ?? 'nginx',
+        tlsMode: process.env.RR_TLS_MODE ?? 'acme',
+        // Section 21.4: the official Caddy image has no rate-limit module, and
+        // that degradation is surfaced here rather than left silent.
+        rateLimited:
+          (process.env.RR_PROXY_PROFILE ?? 'nginx') !== 'caddy' ||
+          caddyHasRateLimit(process.env.RR_CADDY_IMAGE),
+      },
       backups: { lastRunAt: process.env.RR_LAST_BACKUP_AT ?? null },
       healthUrl: '/api/v1/health',
     };

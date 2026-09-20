@@ -8,8 +8,9 @@ deploy/proxy/certs/fullchain.pem
 deploy/proxy/certs/privkey.pem
 ```
 
-They are mounted read-only at `/etc/nginx/certs` and named by the rendered
-`tls-cert.inc`. Renewal is the owner's job: drop the new files in and run
+They are mounted read-only at `/etc/nginx/certs` for the nginx profile, named
+by the rendered `tls-cert.inc`, and at `/certs` for the Caddy profile, named by
+the rendered `tls` directive. Renewal is the owner's job: drop the new files in and run
 `./rr proxy:reload`.
 
 Neither file is tracked by git.

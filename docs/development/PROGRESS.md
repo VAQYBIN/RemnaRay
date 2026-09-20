@@ -6,9 +6,10 @@ M5. M4 acceptance is closed; see "M4-003 Lighthouse verification".
 
 ## Current task
 
-TASK-M5-003 (the section 21.4 Caddyfile, the `caddy` image with the rate-limit
-module and its `acme`/`custom` modes). TASK-M5-001 and TASK-M5-002 are complete
-and committed; see "M5-001 verification" and "M5-002 verification".
+TASK-M5-004 (the TLS modes end to end: `acme`, the `certbot` container with its
+bootstrap configuration and flag reload, `custom`, and `tls-check`).
+TASK-M5-001 … TASK-M5-003 are complete and committed; see their verification
+sections.
 
 ## M5 entry audit — 2026-09-20
 
@@ -383,7 +384,7 @@ image on a runner with room. See "Defects found while verifying M5-002".
 
 ## Next
 
-TASK-M5-003, then section 25.6 dependency order through TASK-M5-009.
+TASK-M5-004, then section 25.6 dependency order through TASK-M5-009.
 Do not begin M6.
 
 ## M3 acceptance reconciliation
@@ -1085,3 +1086,46 @@ task; both are fixed in the same commit and neither is an M5-002 requirement.
   note and NFR-011 both point at `pnpm deploy --prod` as the remedy. This
   belongs to the image work, not to the proxy profile, and is carried into the
   M5 Definition of Done review.
+
+## M5-003 verification
+
+Verified on 2026-09-20.
+
+- `deploy/proxy/caddy/Caddyfile.tmpl` is the section 21.4 configuration in
+  full, rendered by the same `render-proxy` into the same `proxy-conf` volume
+  and applied by the same `proxy-reloader`, so section 21.5's invariant holds:
+  the profiles differ only in which containers run.
+- `ghcr.io/remnaray/caddy` was already `caddy:2.11.4` rebuilt with
+  `github.com/mholt/caddy-ratelimit` from TASK-M0-003; the acceptance test now
+  asserts `http.handlers.rate_limit` is in the image it builds. The five zones
+  carry the nginx numbers: `rr_webhooks` 300/10s, `rr_auth` 5/1m, `rr_admin`
+  30/1m, `rr_api` 100/10s, `rr_general` 200/10s, plus the
+  `order rate_limit before basicauth` the module needs.
+- `RR_CADDY_IMAGE=caddy:2-alpine` renders the same file without any
+  `rate_limit` block — the documented degradation of section 21.4 — and
+  `GET /api/admin/v1/system` now answers `proxy.rateLimited`, so the console
+  can show it instead of leaving it silent.
+- Caddy owns its certificates, so the profile takes `acme` (default) and
+  `custom`, and the renderer refuses `certbot` rather than emit a
+  configuration that would quietly not work.
+- Acceptance: `pnpm test:m5` builds the image, renders `acme`, `custom` and the
+  stock-image variant and runs `caddy validate` on each — all three report
+  `Valid configuration` — and asserts the `certbot` refusal. The nginx half of
+  the suite still passes, with the reload after a domain change at **569 ms**.
+- Checks: `pnpm test:m5` (2), `pnpm lint`, `pnpm typecheck`, `pnpm -r typecheck`,
+  `pnpm typecheck:e2e`, `pnpm test` (11), `pnpm -r test` (api 136, web 22,
+  bot 12, ui 8 and the remaining packages), `pnpm format`, full `pnpm build`,
+  `pnpm i18n-check` (1476 messages), and
+  `docker compose --profile caddy config`.
+
+### M5-003 decisions
+
+- Section 21.4 names the owner's certificate path `/etc/caddy/certs`, which
+  cannot work: `/etc/caddy` is the read-only `proxy-conf` volume, and Docker
+  cannot create a mount point inside a read-only mount — the acceptance test
+  failed on exactly that. The directory is mounted at `/certs` instead and the
+  rendered `tls` directive names it. The nginx profile is unaffected, because
+  `/etc/nginx` there is not a volume.
+- `custom.d/*.caddy` mirrors the nginx profile's `custom.d/*.conf`; the
+  renderer picks the suffix from the profile so neither can pull the other's
+  files in.

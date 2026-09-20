@@ -163,6 +163,29 @@ services:
     logging: { driver: json-file, options: { max-size: '50m', max-file: '5' } }
     profiles: [nginx]
 
+  proxy-caddy:
+    image: ${RR_CADDY_IMAGE:-ghcr.io/remnaray/caddy:local}
+    ports: ['80:80', '443:443', '443:443/udp']
+    volumes:
+      - proxy-conf:/etc/caddy:ro
+      - caddy-data:/data
+      - caddy-config:/config
+      # Not inside /etc/caddy: that path is the read-only `proxy-conf` volume.
+      - ./deploy/proxy/certs:/certs:ro
+    networks: { rr_net: { ipv4_address: 172.28.0.10 } }
+    depends_on:
+      proxy-config: { condition: service_started }
+      web: { condition: service_healthy }
+      api: { condition: service_healthy }
+    healthcheck:
+      test: [CMD, wget, -qO-, 'http://127.0.0.1/healthz']
+      interval: 10s
+      timeout: 3s
+      retries: 5
+    restart: unless-stopped
+    logging: { driver: json-file, options: { max-size: '50m', max-file: '5' } }
+    profiles: [caddy]
+
   # The only container with the docker socket, and it is read-only.
   proxy-reloader:
     <<: *app-common
@@ -188,3 +211,5 @@ volumes:
   proxy-cache: {}
   certbot-webroot: {}
   certbot-certs: {}
+  caddy-data: {}
+  caddy-config: {}

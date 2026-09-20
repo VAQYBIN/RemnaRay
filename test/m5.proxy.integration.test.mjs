@@ -12,6 +12,7 @@ import { PostgreSqlContainer } from '@testcontainers/postgresql';
 import { GenericContainer } from 'testcontainers';
 
 const IMAGE = 'remnaray/nginx:test';
+const CADDY_IMAGE = 'remnaray/caddy:test';
 const TEMPLATES = resolve(process.cwd(), 'deploy/proxy');
 const MODES = ['acme', 'certbot', 'custom'];
 
@@ -250,3 +251,128 @@ async function waitFor(condition, timeoutMs) {
   }
   throw new Error('Timed out waiting for the condition');
 }
+
+test(
+  'TASK-M5-003: the rendered Caddyfile is valid in both supported TLS modes',
+  { timeout: 600_000 },
+  async () => {
+    docker(['build', '-f', 'deploy/proxy/caddy/Dockerfile', '-t', CADDY_IMAGE, '.']);
+
+    const modules = docker(['run', '--rm', CADDY_IMAGE, 'caddy', 'list-modules']);
+    assert.match(
+      modules,
+      /http\.handlers\.rate_limit/u,
+      'the rate-limit module must be in the image',
+    );
+
+    const postgres = await new PostgreSqlContainer('postgres:18-alpine')
+      .withDatabase('remnaray')
+      .withUsername('remnaray')
+      .withPassword('remnaray')
+      .start();
+    const valkey = await new GenericContainer('valkey/valkey:9.1-alpine')
+      .withExposedPorts(6379)
+      .start();
+    const databaseUrl = postgres.getConnectionUri();
+    const valkeyUrl = `redis://${valkey.getHost()}:${String(valkey.getMappedPort(6379))}/0`;
+    execFileSync('pnpm', ['--filter', '@remnaray/db', 'db:migrate:deploy'], {
+      env: { ...process.env, DATABASE_URL: databaseUrl },
+      stdio: 'pipe',
+    });
+
+    const certs = mkdtempSync(join(tmpdir(), 'rr-caddy-certs-'));
+    selfSigned(certs);
+    const roots = new Map(
+      ['acme', 'custom', 'stock'].map((name) => [
+        name,
+        mkdtempSync(join(tmpdir(), `rr-caddy-${name}-`)),
+      ]),
+    );
+
+    try {
+      for (const [name, output] of roots) {
+        const mode = name === 'stock' ? 'acme' : name;
+        const rendered = spawnSync(
+          'node',
+          [
+            'apps/api/dist/tools/render-proxy.js',
+            '--profile',
+            'caddy',
+            '--tls',
+            mode,
+            '--templates',
+            TEMPLATES,
+            '--out',
+            output,
+          ],
+          {
+            encoding: 'utf8',
+            env: {
+              ...process.env,
+              DATABASE_URL: databaseUrl,
+              VALKEY_URL: valkeyUrl,
+              RR_DOMAIN: 'shop.example.test',
+              RR_ACME_EMAIL: 'ops@example.test',
+              // Section 21.4: the official image has no rate-limit module.
+              ...(name === 'stock' ? { RR_CADDY_IMAGE: 'caddy:2-alpine' } : {}),
+            },
+          },
+        );
+        assert.equal(rendered.status, 0, `${rendered.stdout ?? ''}${rendered.stderr ?? ''}`);
+
+        const caddyfile = readFileSync(join(output, 'Caddyfile'), 'utf8');
+        assert.equal(
+          caddyfile.includes('rate_limit'),
+          name !== 'stock',
+          `${name} carries the wrong rate-limit blocks`,
+        );
+
+        const result = docker(
+          [
+            'run',
+            '--rm',
+            '-v',
+            `${output}:/etc/caddy:ro`,
+            '-v',
+            `${certs}:/certs:ro`,
+            CADDY_IMAGE,
+            'caddy',
+            'validate',
+            '--config',
+            '/etc/caddy/Caddyfile',
+            '--adapter',
+            'caddyfile',
+          ],
+          { expectSuccess: false },
+        );
+        assert.match(result, /Valid configuration/u, `caddy validate failed for ${name}`);
+      }
+
+      // Section 21.4: `certbot` has no meaning for Caddy and must be refused.
+      const refused = spawnSync(
+        'node',
+        [
+          'apps/api/dist/tools/render-proxy.js',
+          '--profile',
+          'caddy',
+          '--tls',
+          'certbot',
+          '--templates',
+          TEMPLATES,
+          '--out',
+          roots.get('acme'),
+        ],
+        {
+          encoding: 'utf8',
+          env: { ...process.env, DATABASE_URL: databaseUrl, VALKEY_URL: valkeyUrl },
+        },
+      );
+      assert.notEqual(refused.status, 0, 'certbot must not render for the caddy profile');
+    } finally {
+      rmSync(certs, { recursive: true, force: true });
+      for (const directory of roots.values()) rmSync(directory, { recursive: true, force: true });
+      await valkey.stop();
+      await postgres.stop();
+    }
+  },
+);

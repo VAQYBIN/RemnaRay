@@ -68,6 +68,37 @@ stapling is enabled for `certbot` only: the ACME module serves the certificate
 through variables, which stapling does not support, and a `custom` certificate
 may be self-signed.
 
+## The Caddy profile
+
+`RR_PROXY_PROFILE=caddy` renders `deploy/proxy/caddy/Caddyfile.tmpl` into the
+same `proxy-conf` volume, and `proxy-reloader` applies it with
+`caddy reload --config /etc/caddy/Caddyfile --adapter caddyfile`. Section 21.5
+requires the two profiles to be indistinguishable from outside: the same paths,
+the same statuses, the same security headers, the same `405` on a non-POST
+webhook and the same `403` on `/metrics` from outside the compose network.
+
+Caddy issues and renews its own certificates, so only two TLS modes apply.
+`acme` is the default and needs no configuration; `custom` renders
+`tls /certs/fullchain.pem /certs/privkey.pem` from the same
+`deploy/proxy/certs/` directory the nginx profile uses. Section 21.4 writes
+that path as `/etc/caddy/certs`, but `/etc/caddy` is the read-only `proxy-conf`
+volume and Docker cannot create a mount point inside it, so the directory is
+mounted at `/certs` instead. `certbot` has no
+meaning here and the renderer refuses it rather than emit something that would
+silently not work.
+
+`ghcr.io/remnaray/caddy` is `caddy:2.11.4-alpine` rebuilt with
+`github.com/mholt/caddy-ratelimit`, because the official image has no
+rate-limit module. The five zones carry the nginx numbers: `rr_webhooks`
+300/10s, `rr_auth` 5/1m, `rr_admin` 30/1m, `rr_api` 100/10s and `rr_general`
+200/10s. An owner who sets `RR_CADDY_IMAGE=caddy:2-alpine` gets a Caddyfile
+with no `rate_limit` blocks — the documented degradation of section 21.4, with
+the limits left to `@nestjs/throttler`. `GET /api/admin/v1/system` reports it
+as `proxy.rateLimited: false` so the administration console can say so.
+
+`custom.d/*.caddy` is the extension point, imported at the end of the site
+block exactly as `custom.d/*.conf` is in the nginx profile.
+
 ## The image
 
 `deploy/proxy/nginx/Dockerfile` is `nginx:1.30-alpine` plus
@@ -86,6 +117,11 @@ apply — the section 25.6 budget is fifteen seconds. `nginx -t` loads the
 certificate files, so the test mounts a throwaway self-signed pair for the two
 modes that name real paths.
 
+It then builds the Caddy image, asserts the rate-limit module is in it, renders
+`acme`, `custom` and a stock-image variant, and runs `caddy validate` on each —
+`caddy validate` loads the certificate files too, so `custom` gets the same
+throwaway pair. It also asserts that `certbot` is refused for the profile.
+
 `apps/api/src/tools/proxy-render.test.ts` covers the rendering itself:
 placeholder substitution, the per-mode file set, the bootstrap configuration,
-the conditional blocks and the atomic write.
+the conditional blocks, the Caddy zones and the atomic write.
