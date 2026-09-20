@@ -7,6 +7,7 @@ x-app-common: &app-common
     TZ: UTC
     RR_THEMES_DIR: /themes
     RR_LOCALES_DIR: /locales
+    RR_API_URL: http://api:3000
     DATABASE_URL: ${DATABASE_URL:-postgresql://${POSTGRES_USER:-remnaray}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-remnaray}}
     VALKEY_URL: ${VALKEY_URL:-redis://valkey:6379/0}
   networks: [rr_net]
@@ -115,6 +116,66 @@ services:
       - ./themes:/themes:ro
       - ./locales:/locales:ro
 
+  # --- proxy (section 21.1). `external` starts none of these. ---
+  proxy-config:
+    <<: *app-common
+    command:
+      [
+        node,
+        dist/tools/render-proxy.js,
+        --profile,
+        '${RR_PROXY_PROFILE:-nginx}',
+        --tls,
+        '${RR_TLS_MODE:-acme}',
+        --watch,
+      ]
+    read_only: false
+    volumes:
+      - proxy-conf:/proxy-conf
+      - ./deploy/proxy:/templates:ro
+      - certbot-certs:/etc/letsencrypt:ro
+    depends_on:
+      postgres: { condition: service_healthy }
+      valkey: { condition: service_healthy }
+    profiles: [nginx, caddy]
+
+  proxy-nginx:
+    image: ${RR_NGINX_IMAGE:-ghcr.io/remnaray/nginx:local}
+    ports: ['80:80', '443:443', '443:443/udp']
+    volumes:
+      - proxy-conf:/etc/nginx/conf.d:ro
+      - proxy-acme:/var/cache/nginx/acme
+      - proxy-cache:/var/cache/nginx/proxy
+      - certbot-webroot:/var/www/certbot:ro
+      - certbot-certs:/etc/letsencrypt:ro
+      - ./deploy/proxy/certs:/etc/nginx/certs:ro
+    networks: { rr_net: { ipv4_address: 172.28.0.10 } }
+    depends_on:
+      proxy-config: { condition: service_started }
+      web: { condition: service_healthy }
+      api: { condition: service_healthy }
+    healthcheck:
+      test: [CMD, wget, -qO-, 'http://127.0.0.1/healthz']
+      interval: 10s
+      timeout: 3s
+      retries: 5
+    restart: unless-stopped
+    logging: { driver: json-file, options: { max-size: '50m', max-file: '5' } }
+    profiles: [nginx]
+
+  # The only container with the docker socket, and it is read-only.
+  proxy-reloader:
+    <<: *app-common
+    command: [node, dist/tools/proxy-reloader.js, --profile, '${RR_PROXY_PROFILE:-nginx}']
+    read_only: false
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - proxy-conf:/proxy-conf:ro
+      - certbot-certs:/etc/letsencrypt:ro
+    depends_on:
+      valkey: { condition: service_healthy }
+    profiles: [nginx, caddy]
+
 networks:
   rr_net:
     ipam: { config: [{ subnet: 172.28.0.0/16 }] }
@@ -122,3 +183,8 @@ networks:
 volumes:
   pgdata: {}
   valkeydata: {}
+  proxy-conf: {}
+  proxy-acme: {}
+  proxy-cache: {}
+  certbot-webroot: {}
+  certbot-certs: {}

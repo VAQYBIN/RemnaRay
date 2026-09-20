@@ -4,26 +4,58 @@ set -eu
 command=${1:-help}
 compose_file=${COMPOSE_FILE:-compose.yaml}
 
+# NFR-013: one start command per profile. The profile comes from `.env`, so the
+# owner never types it and never edits a proxy configuration by hand.
+if [ -f .env ]; then
+  # shellcheck disable=SC2046
+  export $(grep -E '^(RR_PROXY_PROFILE|RR_TLS_MODE)=' .env | xargs) 2>/dev/null || true
+fi
+profile=${RR_PROXY_PROFILE:-nginx}
+tls_mode=${RR_TLS_MODE:-acme}
+
+set -- "$@"
+profiles="--profile $profile"
+if [ "$tls_mode" = "certbot" ]; then
+  profiles="$profiles --profile certbot"
+fi
+
 case "$command" in
   up)
-    docker compose -f "$compose_file" up -d
+    # shellcheck disable=SC2086
+    docker compose -f "$compose_file" $profiles up -d
     ;;
   down)
-    docker compose -f "$compose_file" down
+    # shellcheck disable=SC2086
+    docker compose -f "$compose_file" $profiles down
     ;;
   logs)
     shift
-    docker compose -f "$compose_file" logs "$@"
+    # shellcheck disable=SC2086
+    docker compose -f "$compose_file" $profiles logs "$@"
     ;;
   ps)
-    docker compose -f "$compose_file" ps
+    # shellcheck disable=SC2086
+    docker compose -f "$compose_file" $profiles ps
     ;;
   config)
-    docker compose -f "$compose_file" config
+    # shellcheck disable=SC2086
+    docker compose -f "$compose_file" $profiles config
+    ;;
+  proxy:render)
+    # Re-render the proxy configuration without waiting for a settings change.
+    docker compose -f "$compose_file" restart proxy-config
+    ;;
+  proxy:reload)
+    # Ask `proxy-reloader` to validate and apply what is currently rendered.
+    docker compose -f "$compose_file" exec -T valkey \
+      valkey-cli publish rr:proxy.reload '{"reason":"manual"}'
     ;;
   *)
     cat <<USAGE
-Usage: ./scripts/rr {up|down|logs|ps|config}
+Usage: ./scripts/rr {up|down|logs|ps|config|proxy:render|proxy:reload}
+
+The proxy profile comes from RR_PROXY_PROFILE in .env (default: nginx), and
+RR_TLS_MODE=certbot adds the certbot profile.
 
 Set COMPOSE_FILE=compose.dev.yaml for the local PostgreSQL/Valkey dependencies.
 USAGE

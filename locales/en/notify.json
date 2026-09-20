@@ -33,6 +33,7 @@
   "alerts.ledger.mismatch": "The ledger audit found a mismatch.",
   "alerts.referral.daily_cap": "The daily referral reward cap was reached.",
   "alerts.disk.low": "Less than 10% free space is left on the database volume.",
+  "alerts.proxy.config_invalid": "The proxy configuration failed validation; the previous one is still serving.",
   "alerts.setup.completed": "The initial setup finished and the shop is running.",
   "alerts.title": "RemnaRay: {type}"
 }

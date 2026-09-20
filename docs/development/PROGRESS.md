@@ -6,9 +6,9 @@ M5. M4 acceptance is closed; see "M4-003 Lighthouse verification".
 
 ## Current task
 
-TASK-M5-002 (the `nginx` image with `nginx-module-acme`, the section 21.3
-templates, `render-proxy.ts` and `proxy-reloader.ts`). TASK-M5-001 is complete
-and committed; see "M5-001 verification".
+TASK-M5-003 (the section 21.4 Caddyfile, the `caddy` image with the rate-limit
+module and its `acme`/`custom` modes). TASK-M5-001 and TASK-M5-002 are complete
+and committed; see "M5-001 verification" and "M5-002 verification".
 
 ## M5 entry audit — 2026-09-20
 
@@ -320,6 +320,11 @@ Local browser runs (`pnpm test:e2e`, `pnpm lighthouse`) need Chromium's system
 libraries. Installing them needs root; `docs/e2e.md` documents the rootless
 loader-prefix alternative, which is what this machine uses.
 
+The `web` image cannot be built on this machine: Next.js static generation runs
+out of memory inside the Docker VM, which shares the same 7.9 GB. The same
+build succeeds on the host in 22.5 seconds, and the CI `docker` job builds the
+image on a runner with room. See "Defects found while verifying M5-002".
+
 ## OpenAPI repair verification — 2026-09-20
 
 - `pnpm --filter @remnaray/api build` now regenerates the artifact with
@@ -378,7 +383,7 @@ loader-prefix alternative, which is what this machine uses.
 
 ## Next
 
-TASK-M5-002, then section 25.6 dependency order through TASK-M5-009.
+TASK-M5-003, then section 25.6 dependency order through TASK-M5-009.
 Do not begin M6.
 
 ## M3 acceptance reconciliation
@@ -982,3 +987,101 @@ writable overrides mount in Compose, `ThemeService` resolving
 endpoint behind `RR_THEME_UPLOAD`. Until then the wizard offers the theme
 picker and section 18.3's documented `cp -r themes/manta themes/mybrand` flow
 replaces assets on the host. Carry this into the M5 Definition of Done review.
+
+## M5-002 verification
+
+Verified on 2026-09-20.
+
+- `deploy/proxy/nginx/Dockerfile` is `nginx:1.30-alpine` plus
+  `nginx-module-acme`, both pinned. Verified against nginx.org on 2026-09-20:
+  the Alpine v3.24 repository publishes `nginx-module-acme-1.30.5.0.4.1-r1`,
+  which is the build for the `nginx/1.30.5` the base image carries, and the
+  base image already ships nginx.org's signing key in `/etc/apk/keys`. The
+  Dockerfile asserts `ngx_http_acme_module.so` exists, so a base image that
+  moves ahead of the module fails the build.
+- `deploy/proxy/nginx/` carries the whole section 21.3 configuration:
+  `nginx.conf.tmpl`, `site.conf.tmpl`, the HTTP-only `site-bootstrap.conf.tmpl`,
+  `tls-{acme,certbot,custom}.inc.tmpl`, `tls-cert-{acme,certbot,custom}.inc.tmpl`,
+  and the verbatim `ratelimits.inc`, `security-headers.inc` and
+  `common-proxy.inc`. `custom.d/` is the documented extension point and is
+  copied through without ever being rewritten.
+- `apps/api/src/tools/render-proxy.ts` renders them from `settings.domain.*`,
+  `settings.admin.ip_allowlist` and `.env`, writes `tmp` + `rename` and, with
+  `--watch`, re-renders on `rr:settings.changed` and publishes
+  `rr:proxy.reload` only when the output actually changed.
+- `apps/api/src/tools/proxy-reloader.ts` talks to the Engine API over the
+  read-only docker socket, runs `nginx -t` before `nginx -s reload`, and reports
+  every apply to the new `POST /api/internal/v1/system/proxy-reload-result`,
+  which writes `audit_log(action=proxy.reload)` and raises `proxy.config_invalid`
+  on a refusal. It also watches certbot's `/etc/letsencrypt/.renewed` flag.
+- Compose gained `proxy-config`, `proxy-nginx` and `proxy-reloader` under the
+  `nginx`/`caddy` profiles with the section 21.1 volumes, and `./rr` now reads
+  `RR_PROXY_PROFILE`/`RR_TLS_MODE` from `.env` so one command starts a profile
+  (NFR-013), plus `proxy:render` and `proxy:reload`.
+- Acceptance: `pnpm test:m5` builds the image, asserts the module is in it,
+  renders `acme`, `certbot` and `custom` and runs `nginx -t` on each — all three
+  pass — then changes `settings.domain.main` and measures the reload. It took
+  **1277 ms** against a fifteen-second budget. A `proxy` CI job runs it, and the
+  nginx image joined the CI docker matrix.
+- Checks: `pnpm test:m5`, `pnpm lint`, `pnpm typecheck`, `pnpm -r typecheck`,
+  `pnpm typecheck:e2e`, `pnpm test` (11), `pnpm -r test` (api 131, web 22,
+  bot 12, ui 8 and the remaining packages), `pnpm test:e2e` (26), `pnpm format`,
+  full `pnpm build`, `pnpm i18n-check` (1476 messages),
+  `docker compose --profile nginx config`, the nginx image build with its
+  module assertion, and the app image build including a runtime check that
+  `dist/tools` resolves its modules through the symlink. The web image build is
+  recorded below as blocked by this machine's memory.
+
+### M5-002 decisions
+
+- The deployment tools live in `apps/api/src/tools/` so they are built with the
+  API and share its `node_modules`; the runtime image links
+  `dist/tools -> apps/api/tools`, so section 21.1's documented
+  `node dist/tools/render-proxy.js` command works unchanged and Node still
+  resolves modules next to the real files.
+- `nginx -t` loads the certificate files, so the `certbot` and `custom` modes
+  cannot be validated without one. The acceptance test mounts a throwaway
+  self-signed pair at both documented paths; `acme` needs none because the
+  module serves the certificate through variables.
+- OCSP stapling is rendered for the `certbot` mode only. Section 21.3 puts it
+  in the shared server block, but the ACME module's `$acme_certificate`
+  variables do not support stapling and a `custom` certificate may be
+  self-signed, so the directive moved into `tls-cert-certbot.inc`.
+- The `extra_domains` redirect server, the administration allowlist and the
+  `/api/docs` denial are emitted only when they apply. An empty `server_name`
+  would make nginx redirect every unmatched host, and an unconditional
+  `deny all;` would lock out the very surfaces the settings leave open.
+- `.prettierignore` now covers `deploy/proxy/**`: Prettier infers the `html`
+  parser for `.inc` and reflows an nginx include into an invalid file. The
+  acceptance test caught it, which is what it is for.
+
+### Defects found while verifying M5-002
+
+Rebuilding the images for the `dist/tools` link surfaced two that predate this
+task; both are fixed in the same commit and neither is an M5-002 requirement.
+
+- Both `deploy/docker/app.Dockerfile` and `deploy/docker/web.Dockerfile` ran
+  `pnpm --filter <app> build`, which does not build the workspace packages the
+  application consumes from `dist`. The API's OpenAPI generation (added with
+  `1396dbc`) and every `apps/web` import of `@remnaray/domain` therefore failed
+  inside the image while `pnpm build` stayed green locally, because Turbo
+  resolves `^build`. Both images now run their application through Turbo, and
+  the web image copies `locales/` and `themes/` into the build stage because
+  prerendering reads them.
+- With that fixed, the web image still fails to build on this machine, and it
+  is an environment limit rather than a repository defect. Inside Docker the
+  Next.js static generation runs seven workers, pages exceed the sixty-second
+  per-page budget and a worker finally exits with code 1 — the signature of
+  memory pressure. The identical build on the host, with `.next` deleted and
+  the same `INTERNAL_API_URL`, finishes in **22.5 seconds with no timeouts**,
+  so the inputs are sound; the Docker VM shares this machine's 7.9 GB and the
+  build also installs the workspace and builds four packages first. The CI
+  `docker` job, which now includes the web image, verifies it on a runner with
+  room. An earlier diagnosis blaming DNS was wrong: setting
+  `INTERNAL_API_URL` did not change the symptom. The setting is kept anyway,
+  because a build should not depend on what a resolver does with `api`.
+- NFR-011 caps `api`/`bot`/`worker` at 250 MB and `web` at 300 MB. The app
+  image copies the whole `.pnpm` store and is far above that; the section 6.1
+  note and NFR-011 both point at `pnpm deploy --prod` as the remedy. This
+  belongs to the image work, not to the proxy profile, and is carried into the
+  M5 Definition of Done review.

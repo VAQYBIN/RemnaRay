@@ -133,6 +133,29 @@ jobs:
           path: test-results/lighthouse
           retention-days: 7
 
+  proxy:
+    name: proxy
+    runs-on: ubuntu-latest
+    needs: quality
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v6
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24.21.0
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Render and validate every TLS mode, and time a reload
+        run: pnpm test:m5
+
   docker:
     name: docker / ${{ matrix.image }}
     runs-on: ubuntu-latest
@@ -145,6 +168,10 @@ jobs:
             file: deploy/docker/app.Dockerfile
           - image: web
             file: deploy/docker/web.Dockerfile
+          # Section 21.3: the ACME module exists only for the exact nginx
+          # patch, so a drifting base image must fail here and not on a server.
+          - image: nginx
+            file: deploy/proxy/nginx/Dockerfile
     steps:
       - name: Checkout
         uses: actions/checkout@v7

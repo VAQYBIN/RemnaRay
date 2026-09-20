@@ -1,0 +1,4 @@
+acme_certificate letsencrypt;
+ssl_certificate     $acme_certificate;
+ssl_certificate_key $acme_certificate_key;
+ssl_certificate_cache max=4;

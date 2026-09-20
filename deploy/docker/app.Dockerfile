@@ -9,9 +9,13 @@ COPY packages ./packages
 
 RUN pnpm install --frozen-lockfile
 RUN pnpm --filter @remnaray/db db:generate
-RUN pnpm --filter @remnaray/api build
-RUN pnpm --filter @remnaray/bot build
-RUN pnpm --filter @remnaray/worker build
+# Turbo, not three plain filters: the API's OpenAPI generation loads
+# `@remnaray/domain` from its build output, so the workspace packages have to
+# be built first.
+RUN pnpm turbo run build \
+      --filter=@remnaray/api \
+      --filter=@remnaray/bot \
+      --filter=@remnaray/worker
 
 FROM node:24-alpine
 
@@ -25,6 +29,11 @@ COPY --from=build /workspace/apps/bot/dist ./dist/apps/bot
 COPY --from=build /workspace/apps/bot/node_modules ./dist/apps/bot/node_modules
 COPY --from=build /workspace/apps/worker/dist ./dist/apps/worker
 COPY --from=build /workspace/apps/worker/node_modules ./dist/apps/worker/node_modules
+
+# Section 21.1 runs the deployment tools as `dist/tools/*.js`. They are built
+# with the API so they share its `node_modules`; Node resolves through the
+# symlink, so the modules are found next to the real files.
+RUN ln -s apps/api/tools dist/tools
 
 USER node
 

@@ -1,5 +1,6 @@
 import { Module } from '@nestjs/common';
 
+import { NotifyModule } from '../notify/notify.module';
 import { PaymentsModule } from '../payments/payments.module';
 import { PublicModule } from '../public/public.module';
 import { RemnawaveModule } from '../remnawave/remnawave.module';
@@ -13,12 +14,13 @@ import {
   AdminSystemController,
   AdminThemeSettingsController,
 } from './admin-settings.controller';
+import { InternalProxyController } from './proxy.controller';
 import { I18nAdminService } from './i18n-admin.service';
 import { ProvidersService } from './providers.service';
 import { SystemService } from './system.service';
 
 @Module({
-  imports: [SettingsModule, PaymentsModule, RemnawaveModule, PublicModule],
+  imports: [SettingsModule, PaymentsModule, RemnawaveModule, PublicModule, NotifyModule],
   controllers: [
     AdminProvidersController,
     AdminPanelController,
@@ -27,6 +29,7 @@ import { SystemService } from './system.service';
     AdminThemeSettingsController,
     AdminAuditController,
     AdminSystemController,
+    InternalProxyController,
   ],
   providers: [ProvidersService, I18nAdminService, SystemService],
   exports: [ProvidersService, I18nAdminService, SystemService],

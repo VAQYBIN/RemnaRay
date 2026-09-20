@@ -7,3 +7,10 @@ coverage
 .turbo
 
 .env*
+
+# nginx include files infer the `html` parser, which reflows them into an
+# invalid configuration. The proxy templates are not Prettier's to format.
+deploy/proxy/**/*.inc
+deploy/proxy/**/*.tmpl
+deploy/proxy/**/*.conf
+deploy/proxy/**/Caddyfile*
