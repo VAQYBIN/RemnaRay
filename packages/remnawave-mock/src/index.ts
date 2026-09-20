@@ -21,10 +21,20 @@ export function createRemnawaveMock(): RemnawaveMock {
   app.get('/api/system/stats', () => ({
     response: { version: 'mock-1', users: app.users.size },
   }));
+  // A page, exactly as the panel's own document describes it: the mock exists
+  // to catch a client that assumes otherwise, and a bare array here hid a
+  // `squads.map is not a function` until a real panel answered.
   app.get('/api/internal-squads', () => ({
-    response: [
-      { uuid: '01a0b9f0-e699-7032-9841-6d516d4591ad', name: 'Default', info: { membersCount: 0 } },
-    ],
+    response: {
+      total: 1,
+      internalSquads: [
+        {
+          uuid: '01a0b9f0-e699-7032-9841-6d516d4591ad',
+          name: 'Default',
+          info: { membersCount: 0 },
+        },
+      ],
+    },
   }));
   app.post<{ Body: CreateUserInput }>('/api/users', (request, reply) => {
     const now = new Date().toISOString();
@@ -123,8 +133,8 @@ export function createRemnawaveMock(): RemnawaveMock {
     app.users.delete(request.params.uuid);
     return reply.code(204).send();
   });
-  app.get('/api/hwid/devices/:userUuid', () => ({ response: [] }));
-  app.post('/api/hwid/devices/delete', (_request, reply) => reply.code(204).send());
+  app.get('/api/hwid/devices/:userUuid', () => ({ response: { total: 0, devices: [] } }));
+  app.post('/api/hwid/devices/delete', () => ({ response: { total: 0, devices: [] } }));
   return app;
 }
 

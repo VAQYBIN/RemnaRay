@@ -124,14 +124,21 @@ export class RemnawaveClientImpl implements RemnawaveClient {
     },
   };
   readonly squads = {
-    list: () => this.call<InternalSquad[]>('squads.list', 'GET', '/api/internal-squads'),
+    // The panel answers with a page, not a list — `{response:{total,
+    // internalSquads:[…]}}` — and `unwrap` removes only the envelope.
+    list: async () =>
+      collection<InternalSquad>(
+        'squads.list',
+        'internalSquads',
+        await this.call('squads.list', 'GET', '/api/internal-squads'),
+      ),
   };
   readonly hwid = {
-    list: (userUuid: string) =>
-      this.call<HwidDevice[]>(
+    list: async (userUuid: string) =>
+      collection<HwidDevice>(
         'hwid.list',
-        'GET',
-        `/api/hwid/devices/${encodeURIComponent(userUuid)}`,
+        'devices',
+        await this.call('hwid.list', 'GET', `/api/hwid/devices/${encodeURIComponent(userUuid)}`),
       ),
     remove: async (userUuid: string, hwid: string) => {
       await this.call('hwid.remove', 'POST', '/api/hwid/devices/delete', { userUuid, hwid });
@@ -222,7 +229,18 @@ export class RemnawaveClientImpl implements RemnawaveClient {
           },
           ...(body === undefined ? {} : { body: JSON.stringify(body) }),
         });
-        const raw = await response.body.json();
+        // `users.delete` answers 204 with no body at all, and a proxy in front
+        // of the panel may answer an error with HTML. `body.json()` throws on
+        // both, which turns "done" into a failure and hides what went wrong.
+        const text = await response.body.text();
+        let raw: unknown = null;
+        if (text.length > 0) {
+          try {
+            raw = JSON.parse(text);
+          } catch {
+            raw = { message: text.slice(0, 200) };
+          }
+        }
         if (response.statusCode < 200 || response.statusCode >= 300)
           throw panelError(response.statusCode, raw);
         return unwrap(raw) as T;
@@ -238,6 +256,20 @@ export class RemnawaveClientImpl implements RemnawaveClient {
 
 export function createRemnawaveClient(config: PanelConfig): RemnawaveClientImpl {
   return new RemnawaveClientImpl(config);
+}
+
+/**
+ * The collections of section 10.1 arrive as a page — `{response:{total,
+ * <key>:[…]}}` — so `unwrap` leaves the page, not the list. A panel that
+ * answers with anything else has changed its contract, and saying so beats an
+ * empty array, which an owner reads as "the panel has no squads".
+ */
+function collection<T>(op: string, key: string, page: unknown): T[] {
+  const value =
+    typeof page === 'object' && page !== null ? (page as Record<string, unknown>)[key] : undefined;
+  if (!Array.isArray(value))
+    throw new PanelError('PANEL_CONTRACT', 502, `${op}: the panel returned no \`${key}\` array`);
+  return value as T[];
 }
 
 function unwrap(value: unknown): unknown {
