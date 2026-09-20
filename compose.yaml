@@ -1,5 +1,10 @@
 name: remnaray
 
+# Section 23.1: the monitoring profile is part of the deployment but starts
+# nothing unless `--profile monitoring` asks for it.
+include:
+  - path: deploy/monitoring/compose.monitoring.yaml
+
 x-app-common: &app-common
   image: ${RR_APP_IMAGE:-ghcr.io/remnaray/app:local}
   env_file: .env

@@ -1,5 +1,6 @@
 import { createServer } from 'node:http';
 import Redis from 'ioredis';
+import { metricsContentType, metricsText } from '@remnaray/metrics';
 import { ApiClient } from './api-client.js';
 import { createBot, registerCommands, type BotRuntime } from './bot.js';
 import { BotIngress } from './ingress.js';
@@ -13,7 +14,22 @@ let activeToken: string | undefined;
 let stopping = false;
 let configuring = Promise.resolve();
 let ready = false;
-const server = createServer((_request, response) => {
+// Section 20.2: `/metrics` on `:3002` beside the health check. The port is
+// `expose`, never published, so the compose network is the only client.
+const server = createServer((request, response) => {
+  if (request.url?.split('?')[0] === '/metrics') {
+    void metricsText().then(
+      (text) => {
+        response.writeHead(200, { 'content-type': metricsContentType });
+        response.end(text);
+      },
+      () => {
+        response.writeHead(500, { 'content-type': 'text/plain' });
+        response.end('metrics unavailable\n');
+      },
+    );
+    return;
+  }
   response.writeHead(200, { 'content-type': 'application/json' });
   response.end(JSON.stringify({ status: 'ok', service: 'bot', ready }));
 });

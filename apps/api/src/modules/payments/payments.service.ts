@@ -1,5 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { createHash } from 'node:crypto';
+import { paymentsEventsTotal } from '@remnaray/metrics';
 
 import { Infrastructure } from '../../infra/infra.module';
 import { decryptSetting } from '../settings/settings.crypto';
@@ -161,8 +162,10 @@ export class PaymentsService {
     // A payload a provider could not classify is refused here rather than
     // stored: `payment_events.type` is not nullable, and an event with no type
     // would turn anything posted at a webhook path into a 500.
-    if (!event?.type || !event.providerInvoiceId)
+    if (!event?.type || !event.providerInvoiceId) {
+      paymentsEventsTotal.inc({ provider: providerCode, type: 'unknown', result: 'unparsed' });
       throw new PaymentError('WEBHOOK_INVALID_SIGNATURE', 'Invalid event payload');
+    }
     const externalId =
       event.eventId ??
       createHash('sha256')

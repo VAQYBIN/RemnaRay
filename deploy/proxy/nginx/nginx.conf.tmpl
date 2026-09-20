@@ -47,4 +47,15 @@ http {
 
     include /etc/nginx/conf.d/tls-{{TLS_MODE}}.inc;
     include /etc/nginx/conf.d/site.conf;
+
+    # Section 20.2: nginx's own counters, on loopback inside the container.
+    # Nothing outside the container can reach the port, and the format is for
+    # an exporter the owner may add; the shipped dashboard reads the
+    # application metrics instead.
+    server {
+        listen 127.0.0.1:8081;
+        access_log off;
+        location = /nginx_status { stub_status; }
+        location / { return 404; }
+    }
 }

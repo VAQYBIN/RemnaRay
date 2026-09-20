@@ -1,3 +1,4 @@
+import { panelRequestDuration, panelRequestsTotal } from '@remnaray/metrics';
 import { Agent, request, type Dispatcher } from 'undici';
 
 export type PanelConfig = {
@@ -69,36 +70,71 @@ export interface RemnawaveClient {
 }
 
 export class RemnawaveClientImpl implements RemnawaveClient {
+  // Every call names its operation: section 10.1 labels the metrics with the
+  // client method, and a label taken from the path would carry a uuid per
+  // series.
   readonly system = {
-    stats: () => this.call<PanelStats>('GET', '/api/system/stats'),
+    stats: () => this.call<PanelStats>('system.stats', 'GET', '/api/system/stats'),
     health: () => this.health(),
   };
   readonly users = {
-    create: (input: CreateUserInput) => this.call<PanelUser>('POST', '/api/users', input),
-    update: (input: UpdateUserInput) => this.call<PanelUser>('PATCH', '/api/users', input),
-    getByUuid: (uuid: string) => this.optional<PanelUser>(`/api/users/${encodeURIComponent(uuid)}`),
+    create: (input: CreateUserInput) =>
+      this.call<PanelUser>('users.create', 'POST', '/api/users', input),
+    update: (input: UpdateUserInput) =>
+      this.call<PanelUser>('users.update', 'PATCH', '/api/users', input),
+    getByUuid: (uuid: string) =>
+      this.optional<PanelUser>('users.getByUuid', `/api/users/${encodeURIComponent(uuid)}`),
     getByTelegramId: (telegramId: number) =>
-      this.call<PanelUser[]>('GET', `/api/users/by-telegram-id/${String(telegramId)}`),
+      this.call<PanelUser[]>(
+        'users.getByTelegramId',
+        'GET',
+        `/api/users/by-telegram-id/${String(telegramId)}`,
+      ),
     getByUsername: (username: string) =>
-      this.optional<PanelUser>(`/api/users/by-username/${encodeURIComponent(username)}`),
+      this.optional<PanelUser>(
+        'users.getByUsername',
+        `/api/users/by-username/${encodeURIComponent(username)}`,
+      ),
     enable: (uuid: string) =>
-      this.call<PanelUser>('POST', `/api/users/${encodeURIComponent(uuid)}/actions/enable`),
+      this.call<PanelUser>(
+        'users.enable',
+        'POST',
+        `/api/users/${encodeURIComponent(uuid)}/actions/enable`,
+      ),
     disable: (uuid: string) =>
-      this.call<PanelUser>('POST', `/api/users/${encodeURIComponent(uuid)}/actions/disable`),
+      this.call<PanelUser>(
+        'users.disable',
+        'POST',
+        `/api/users/${encodeURIComponent(uuid)}/actions/disable`,
+      ),
     resetTraffic: (uuid: string) =>
-      this.call<PanelUser>('POST', `/api/users/${encodeURIComponent(uuid)}/actions/reset-traffic`),
+      this.call<PanelUser>(
+        'users.resetTraffic',
+        'POST',
+        `/api/users/${encodeURIComponent(uuid)}/actions/reset-traffic`,
+      ),
     revokeSubscription: (uuid: string) =>
-      this.call<PanelUser>('POST', `/api/users/${encodeURIComponent(uuid)}/actions/revoke`),
+      this.call<PanelUser>(
+        'users.revokeSubscription',
+        'POST',
+        `/api/users/${encodeURIComponent(uuid)}/actions/revoke`,
+      ),
     delete: async (uuid: string) => {
-      await this.call<unknown>('DELETE', `/api/users/${encodeURIComponent(uuid)}`);
+      await this.call<unknown>('users.delete', 'DELETE', `/api/users/${encodeURIComponent(uuid)}`);
     },
   };
-  readonly squads = { list: () => this.call<InternalSquad[]>('GET', '/api/internal-squads') };
+  readonly squads = {
+    list: () => this.call<InternalSquad[]>('squads.list', 'GET', '/api/internal-squads'),
+  };
   readonly hwid = {
     list: (userUuid: string) =>
-      this.call<HwidDevice[]>('GET', `/api/hwid/devices/${encodeURIComponent(userUuid)}`),
+      this.call<HwidDevice[]>(
+        'hwid.list',
+        'GET',
+        `/api/hwid/devices/${encodeURIComponent(userUuid)}`,
+      ),
     remove: async (userUuid: string, hwid: string) => {
-      await this.call('POST', '/api/hwid/devices/delete', { userUuid, hwid });
+      await this.call('hwid.remove', 'POST', '/api/hwid/devices/delete', { userUuid, hwid });
     },
   };
 
@@ -127,23 +163,50 @@ export class RemnawaveClientImpl implements RemnawaveClient {
 
   private async health() {
     try {
-      const stats = await this.call<{ version?: string }>('GET', '/api/system/stats');
+      const stats = await this.call<{ version?: string }>(
+        'system.health',
+        'GET',
+        '/api/system/stats',
+      );
       return { ok: true, ...(stats.version ? { version: stats.version } : {}) };
     } catch {
       return { ok: false };
     }
   }
 
-  private async optional<T>(path: string): Promise<T | null> {
+  private async optional<T>(op: string, path: string): Promise<T | null> {
     try {
-      return await this.call<T>('GET', path);
+      return await this.call<T>(op, 'GET', path);
     } catch (error) {
       if (error instanceof PanelError && error.status === 404) return null;
       throw error;
     }
   }
 
-  private async call<T>(method: string, path: string, body?: unknown): Promise<T> {
+  /**
+   * Section 10.1: `rr_panel_requests_total{op,status}` and
+   * `rr_panel_request_duration_seconds{op}`. One observation per call, not per
+   * attempt: the retries are an implementation detail of a single operation,
+   * and the status recorded is the one the caller was given — `error` when the
+   * panel never answered at all.
+   */
+  private async call<T>(op: string, method: string, path: string, body?: unknown): Promise<T> {
+    const startedAt = process.hrtime.bigint();
+    const done = (status: string) => {
+      panelRequestsTotal.inc({ op, status });
+      panelRequestDuration.observe({ op }, Number(process.hrtime.bigint() - startedAt) / 1e9);
+    };
+    try {
+      const value = await this.attempt<T>(method, path, body);
+      done('200');
+      return value;
+    } catch (error) {
+      done(error instanceof PanelError ? String(error.status) : 'error');
+      throw error;
+    }
+  }
+
+  private async attempt<T>(method: string, path: string, body?: unknown): Promise<T> {
     let lastError: unknown;
     for (let attempt = 0; attempt < (method === 'GET' ? 3 : 1); attempt += 1) {
       try {

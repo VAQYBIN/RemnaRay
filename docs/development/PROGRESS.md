@@ -4,14 +4,103 @@
 
 M5 — in progress; the milestone is **NOT VERIFIED**.
 
-**DO NOT PROCEED TO M6.** M5-001, M5-002, M5-003, M5-005, M5-006 and M5-007
-pass their gates. M5-004 still requires the real-domain certificate checklist,
-which needs a public server and DNS. M5-008 and M5-009 remain unstarted.
+**DO NOT PROCEED TO M6.** M5-001, M5-002, M5-003, M5-005, M5-006, M5-007 and
+M5-008 pass their gates. M5-004 still requires the real-domain certificate
+checklist, which needs a public server and DNS. M5-009 remains unstarted, and
+the queue defect recorded under "M5-008 finding" has to be repaired before the
+milestone can be called verified.
 
 ## Current task
 
-TASK-M5-008 — monitoring: the optional profile, the section 9.9 metrics in
-every process and the Grafana dashboard. TASK-M5-009 follows it.
+Repair the queue job identifiers (see "M5-008 finding"), then TASK-M5-009 —
+`docs/*`, README ru/en, CONTRIBUTING, SECURITY, issue templates, `release.yml`
+and `rebuild.yml`.
+
+## M5-008 verification — 2026-09-20
+
+Verified on 2026-09-20. All twelve section 9.9 metrics are present in
+`/metrics` on a running deployment, which is the acceptance of the task.
+
+- `packages/metrics` declares the twelve metrics in one registry, with the
+  Node.js defaults beside them. Every process registers all of them, not only
+  the ones it writes: a metric with no observations costs two lines of text,
+  and a dashboard should find its series whichever target answered.
+- `/metrics` is served by `api` (through the proxy, and only from the compose
+  network — the proxy denies the rest and `api` checks the address again, which
+  is the second check section 19.7 asks for), by `worker` on `:3003` and by
+  `bot` on `:3002`. Neither of those ports is published.
+- The setup gate lets `/metrics` through: a deployment being set up is exactly
+  when an operator wants to watch it, and the address check already applies.
+- Written where the thing happens: an interceptor for the HTTP counters,
+  labelled with the route template Fastify matched rather than the path;
+  `packages/remnawave-sdk` for the panel, once per operation rather than per
+  retry; the payments repository for events, invoices and the one entry that
+  moves money into `revenue`; `NotifyService` for every attempt, sent or
+  skipped; the bot ingress for each update taken off the stream; the worker for
+  queue depth, sampled every fifteen seconds; the TLS reading on both the
+  worker that made the handshake and the API that Prometheus scrapes; and the
+  ledger audit for a disagreement it found.
+- nginx serves `stub_status` on `127.0.0.1:8081` inside its container (section
+  20.2) for an exporter an owner may add. Caddy already answered Prometheus on
+  its admin port.
+- `deploy/monitoring/` is included by `compose.yaml` and starts nothing without
+  `--profile monitoring`. Neither Prometheus nor Grafana publishes a port.
+  Grafana is provisioned with the datasource and `remnaray.json`, and its
+  bundled plugin download is turned off — a deployment that can reach a panel
+  and nothing else has to come up anyway.
+
+### M5-008 verification evidence
+
+- On a running nginx stand: `GET /metrics` through the proxy from inside the
+  compose network returned 200 with **12** `# TYPE rr_*` lines — every name of
+  section 9.9 — and from outside 403, for both methods. `bot:3002/metrics` and
+  `worker:3003/metrics` each carried the same twelve.
+- Live series were observed, not only declarations:
+  `rr_http_requests_total{route="/api/v1/public/i18n/:lang/:namespace"}`,
+  `rr_http_requests_total{route="/webhooks/:provider",status="400"}` and, with
+  the worker enabled, `rr_queue_jobs` for all five queues in five states.
+- `docker compose --profile nginx --profile monitoring up -d`: Prometheus
+  reported `api`, `bot`, `worker` and itself `up`; Grafana answered
+  `/api/health` with `database: ok` and listed the provisioned dashboard
+  `remnaray` and the datasource `remnaray-prometheus`. The `caddy` target reads
+  `down` under the nginx profile, which is the intended reading.
+- `deploy/ci/proxy-smoke.sh nginx` and `deploy/ci/proxy-smoke.sh caddy` both
+  passed all ten checks with the new `inside GET /metrics 200` row.
+- `pnpm test` (21), `pnpm -r test` (api 155, metrics 5, and the rest),
+  `pnpm test:m1` (1), `pnpm test:m2` (1), `pnpm test:m4` (4), `pnpm test:m5`
+  (3), `pnpm test:e2e` (26), `pnpm lint`, `pnpm format`, `pnpm typecheck`,
+  `pnpm -r typecheck`, `pnpm typecheck:e2e` and full `pnpm build`.
+- `pnpm lighthouse` was not repeated: `apps/web` is untouched by this task, and
+  it passed after the last change to it (landing RU 100/96/100).
+
+### M5-008 finding — the queues never enqueue anything
+
+Running the worker against the stand surfaced a defect that predates this task
+and is **not** repaired in it:
+
+```
+Error: Custom Id cannot contain :
+  at Job.validateOptions (bullmq/dist/cjs/classes/job.js:912)
+  at .../@remnaray/queues/dist/index.js:42
+```
+
+BullMQ 6 refuses a `jobId` containing a colon, and every identifier the
+application builds uses one — `evt:<id>`, `panel:<userId>`,
+`alert:payment.late:<id>`, `notify:<dedupKey>`, `maintenance:tls-check:<stamp>`
+and the rest, 23 sites in all. Nothing reaches a queue: no panel sync, no
+notification, no broadcast chunk, no maintenance job. It is invisible to the
+current tests because `RR_WORKER_ENABLED` is not set in any of them, and the
+outbox relay logs the rejection and carries on.
+
+This is the next thing to repair, before TASK-M5-009.
+
+### M5-008 observation
+
+One run of `pnpm -r test` failed
+`setup.service.test.ts > accepts the environment token once` while the machine
+was running the whole workspace in parallel. It did not reproduce in four
+subsequent runs, including two full `pnpm -r test` sweeps and the file in
+isolation. Recorded rather than dismissed; no change was made for it.
 
 ## M5-007 verification — 2026-09-20
 
@@ -119,7 +208,7 @@ repeated before the milestone is called verified.
 | TASK-M5-005 | **VERIFIED locally**              | API trusted-proxy suite passed (142 tests); the 26-test browser gate also passed.                                                                                                                                                               |
 | TASK-M5-006 | **VERIFIED**                      | `pnpm test:m5`: real PostgreSQL 18 AC-202 dump, restore and 14/8 retention passed.                                                                                                                                                              |
 | TASK-M5-007 | **VERIFIED** (2026-09-20)         | `deploy/ci/proxy-smoke.sh` green on both profiles; see "M5-007 verification".                                                                                                                                                                   |
-| TASK-M5-008 | **NOT STARTED**                   | No implementation or verification was started, per scope.                                                                                                                                                                                       |
+| TASK-M5-008 | **VERIFIED** (2026-09-20)         | All twelve section 9.9 metrics present in `/metrics` on a running stand; see "M5-008 verification".                                                                                                                                             |
 | TASK-M5-009 | **NOT STARTED**                   | No implementation or verification was started, per scope.                                                                                                                                                                                       |
 
 ### Closure repairs and environment evidence

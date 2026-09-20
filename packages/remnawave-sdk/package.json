@@ -17,6 +17,7 @@
     "test": "vitest run"
   },
   "dependencies": {
+    "@remnaray/metrics": "workspace:*",
     "undici": "~8.10.2"
   },
   "devDependencies": {

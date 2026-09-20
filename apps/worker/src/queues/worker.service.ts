@@ -1,4 +1,5 @@
 import { Injectable, Logger, type OnModuleDestroy, type OnModuleInit } from '@nestjs/common';
+import { queueJobs, recordTlsExpiry } from '@remnaray/metrics';
 import { Queue, Worker, type Job } from 'bullmq';
 
 import { backupStatus } from './backup-check';
@@ -72,7 +73,32 @@ export class WorkerService implements OnModuleInit, OnModuleDestroy {
     const payments = new Queue('payments', { connection });
     const notify = new Queue('notify', { connection });
     const maintenance = new Queue('maintenance', { connection });
-    this.queues.push(payments, notify, maintenance);
+    // Counted, not consumed from here: section 9.9 wants every queue's depth,
+    // and a queue the worker only reads counts is cheap to hold open.
+    const counted = [
+      payments,
+      notify,
+      maintenance,
+      new Queue('broadcast', { connection }),
+      new Queue('panel', { connection }),
+    ];
+    this.queues.push(...counted);
+
+    // Section 9.9 `rr_queue_jobs{queue,state}`. A gauge, sampled: BullMQ keeps
+    // the counts in Valkey and asking on every scrape would make the scrape
+    // the load.
+    const sampleQueues = () => {
+      for (const queue of counted)
+        void queue
+          .getJobCounts('waiting', 'active', 'delayed', 'failed', 'completed')
+          .then((counts) => {
+            for (const [state, value] of Object.entries(counts))
+              queueJobs.set({ queue: queue.name, state }, value);
+          })
+          .catch(() => undefined);
+    };
+    sampleQueues();
+    this.timers.push(setInterval(sampleQueues, 15_000));
 
     let tick = 0;
     this.timers.push(
@@ -126,6 +152,7 @@ export class WorkerService implements OnModuleInit, OnModuleDestroy {
     if (!domain) return { skipped: 'RR_DOMAIN is not set' };
     const [host, port] = domain.split(':');
     const status = await certificateStatus(host ?? domain, port ? Number(port) : 443);
+    recordTlsExpiry(status.expiresAt);
     return this.call({ path: '/api/internal/v1/system/tls-result', body: status });
   }
 

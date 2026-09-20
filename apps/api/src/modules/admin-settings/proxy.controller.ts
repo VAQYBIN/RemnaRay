@@ -8,6 +8,7 @@ import {
   UseGuards,
 } from '@nestjs/common';
 import type { FastifyRequest } from 'fastify';
+import { recordTlsExpiry } from '@remnaray/metrics';
 import { z } from 'zod';
 
 import { Infrastructure } from '../../infra/infra.module';
@@ -78,6 +79,9 @@ export class InternalProxyController {
   @HttpCode(200)
   async tlsResult(@Body() body: unknown) {
     const input = tlsResultSchema.parse(body);
+    // Section 9.9 `rr_tls_cert_expiry_seconds`: the worker made the handshake,
+    // but the API is the target Prometheus scrapes for everything else.
+    recordTlsExpiry(input.expiresAt);
     // Kept in Valkey rather than a settings key: it is an observation, not
     // configuration, and `/admin/system` is its only reader.
     await this.infra.redis

@@ -2,6 +2,7 @@ import { Injectable, Logger } from '@nestjs/common';
 import { z } from 'zod';
 
 import { formatMessage, SUPPORTED_LOCALES, type Locale } from '@remnaray/i18n-core';
+import { notificationsTotal } from '@remnaray/metrics';
 
 import { Infrastructure } from '../../infra/infra.module';
 import { I18nService } from '../public/i18n.service';
@@ -73,6 +74,15 @@ export class NotifyService {
    */
   async send(body: unknown): Promise<NotifyResult> {
     const input = notifySendSchema.parse(body);
+    const result = await this.sendParsed(input);
+    // Section 9.9 `rr_notifications_total{event,status}`: counted once per
+    // attempt, whichever way it ended — a skipped notification is as worth
+    // seeing on a dashboard as a sent one.
+    notificationsTotal.inc({ event: input.event, status: result.status });
+    return result;
+  }
+
+  private async sendParsed(input: z.infer<typeof notifySendSchema>): Promise<NotifyResult> {
     const user = await this.infra.db.user.findUnique({ where: { id: input.userId } });
     if (!user) return { status: 'skipped' };
 

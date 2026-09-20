@@ -6,6 +6,7 @@ import type { Update } from 'grammy/types';
 import type Redis from 'ioredis';
 
 import { ALLOWED_UPDATES, type BotConfig, type RrContext } from './types.js';
+import { botUpdatesTotal } from '@remnaray/metrics';
 
 export const TELEGRAM_UPDATES_STREAM = 'tg:updates';
 const GROUP = 'bot';
@@ -144,6 +145,9 @@ export class BotIngress {
     if (!payload) throw new Error('Invalid stream envelope');
     const update = JSON.parse(payload) as Update;
     if (!Number.isSafeInteger(update.update_id)) throw new Error('Invalid update ID');
+    // Section 9.9 `rr_bot_updates_total{type}`. Telegram names the kind of
+    // update by the single field it carries beside `update_id`.
+    botUpdatesTotal.inc({ type: updateType(update) });
     try {
       await this.bot.handleUpdate(update);
       await this.redis.xack(TELEGRAM_UPDATES_STREAM, GROUP, id);
@@ -152,4 +156,10 @@ export class BotIngress {
       // to proceed. Domain mutations carry their own idempotency keys.
     }
   }
+}
+
+/** The one field beside `update_id` is what Telegram calls the update's kind. */
+function updateType(update: Update): string {
+  const kind = Object.keys(update).find((key) => key !== 'update_id');
+  return kind ?? 'unknown';
 }

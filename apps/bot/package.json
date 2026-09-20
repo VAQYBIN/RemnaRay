@@ -11,16 +11,17 @@
     "start": "node dist/main.js"
   },
   "dependencies": {
-    "@remnaray/i18n-core": "workspace:*",
     "@grammyjs/auto-retry": "~2.0.2",
     "@grammyjs/conversations": "~2.1.1",
     "@grammyjs/menu": "~1.5.0",
     "@grammyjs/ratelimiter": "~1.2.1",
     "@grammyjs/runner": "~2.0.3",
     "@grammyjs/storage-redis": "~2.6.0",
+    "@remnaray/i18n-core": "workspace:*",
+    "@remnaray/metrics": "workspace:*",
     "grammy": "~1.46.0",
-    "ioredis": "~5.11.1",
     "intl-messageformat": "~12.1.1",
+    "ioredis": "~5.11.1",
     "qrcode": "~1.5.4"
   },
   "devDependencies": {

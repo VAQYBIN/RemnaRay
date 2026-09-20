@@ -84,6 +84,15 @@ describe('proxy template rendering (section 21.2)', () => {
     expect(render('certbot', {}, true).get('site.conf')).toContain('listen 443 ssl;');
   });
 
+  it('exposes nginx`s own counters on loopback inside the container', () => {
+    const conf = render('acme').get('nginx.conf') ?? '';
+
+    // Section 20.2: `127.0.0.1:8081/nginx_status`, reachable from nowhere
+    // else — the port is not published and not in any `expose`.
+    expect(conf).toContain('listen 127.0.0.1:8081;');
+    expect(conf).toContain('location = /nginx_status { stub_status; }');
+  });
+
   it('answers a non-POST webhook with 405, like the Caddy profile (section 21.5)', () => {
     const site = render('acme').get('site.conf') ?? '';
     const methodGate = 'if ($request_method != POST) { return 405; }';

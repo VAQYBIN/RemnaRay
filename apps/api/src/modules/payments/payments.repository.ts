@@ -1,4 +1,5 @@
 import { Prisma, type PrismaClient } from '@remnaray/db';
+import { invoicesTotal, paymentsEventsTotal, revenueMinorTotal } from '@remnaray/metrics';
 
 import { PaymentError } from './payments.errors';
 import type { ProviderEvent } from './payments.types';
@@ -86,6 +87,7 @@ export class PaymentsRepository {
 
   async createInvoice(input: InvoiceInput) {
     try {
+      invoicesTotal.inc({ provider: input.provider, status: 'pending' });
       return await this.prisma.invoice.create({
         data: {
           userId: input.userId,
@@ -161,12 +163,22 @@ export class PaymentsRepository {
   }
 
   async expire(now = new Date()): Promise<number> {
-    return this.prisma.invoice
+    // Grouped first: the counter is per provider, and `updateMany` reports
+    // only how many rows it touched.
+    const expiring = await this.prisma.invoice.groupBy({
+      by: ['provider'],
+      where: { status: 'pending', expiresAt: { lt: now } },
+      _count: { _all: true },
+    });
+    const count = await this.prisma.invoice
       .updateMany({
         where: { status: 'pending', expiresAt: { lt: now } },
         data: { status: 'expired' },
       })
       .then((result) => result.count);
+    for (const row of expiring)
+      invoicesTotal.inc({ provider: row.provider, status: 'expired' }, row._count._all);
+    return count;
   }
 
   async settleBalance(invoiceId: string): Promise<void> {
@@ -324,147 +336,170 @@ export class PaymentsRepository {
   async applyEvent(eventId: string): Promise<void> {
     const event = await this.prisma.paymentEvent.findUnique({ where: { id: eventId } });
     if (!event || event.processedAt) return;
+    const counted = (result: string) => {
+      paymentsEventsTotal.inc({ provider: event.provider, type: event.type, result });
+    };
     if (!event.signatureOk) {
       await this.markEvent(event.id, new Date(), 'WEBHOOK_INVALID_SIGNATURE');
+      counted('invalid_signature');
       return;
     }
     if (!event.invoiceId) {
       await this.markEvent(event.id, new Date(), 'INVOICE_NOT_FOUND');
+      counted('no_invoice');
       return;
     }
     const parsed = event.raw as { providerInvoiceId?: string; paidAmountMinorRub?: string };
-    await this.prisma.$transaction(async (tx) => {
-      const invoiceRows = await tx.$queryRaw<
-        Array<{
-          id: string;
-          userId: string;
-          kind: string;
-          provider: string;
-          status: string;
-          amountMinor: bigint;
-          expiresAt: Date;
-          planId: string | null;
-        }>
-      >(Prisma.sql`
+    await this.prisma
+      .$transaction(async (tx) => {
+        const invoiceRows = await tx.$queryRaw<
+          Array<{
+            id: string;
+            userId: string;
+            kind: string;
+            provider: string;
+            status: string;
+            amountMinor: bigint;
+            expiresAt: Date;
+            planId: string | null;
+          }>
+        >(Prisma.sql`
         SELECT id, user_id AS "userId", kind, provider, status, amount_minor AS "amountMinor",
                expires_at AS "expiresAt", plan_id AS "planId"
         FROM invoices WHERE id = ${event.invoiceId}::uuid FOR UPDATE
       `);
-      const invoice = invoiceRows[0];
-      if (!invoice) throw new PaymentError('INVOICE_NOT_FOUND');
-      if (event.type === 'canceled' && invoice.status === 'pending') {
-        await tx.invoice.update({ where: { id: invoice.id }, data: { status: 'canceled' } });
-        await this.rewards?.onInvoiceReleased(tx, invoice.id);
-      }
-      if (event.type === 'paid' && invoice.status !== 'paid') {
-        const paid = parsed.paidAmountMinorRub
-          ? BigInt(parsed.paidAmountMinorRub)
-          : invoice.amountMinor;
-        const underpaid = paid * 100n < invoice.amountMinor * 98n;
-        const late = invoice.status === 'expired' || invoice.expiresAt < event.receivedAt;
-        const credit = paid > 0n ? paid : invoice.amountMinor;
-        await tx.invoice.update({
-          where: { id: invoice.id },
-          data: { status: underpaid ? 'underpaid' : 'paid', paidAt: new Date() },
-        });
-        const txRow = await tx.transaction.create({
-          data: {
-            userId: invoice.userId,
-            type: underpaid || late || invoice.kind === 'topup' ? 'topup' : 'purchase',
-            status: 'completed',
-            amountMinor: credit,
-            currency: 'RUB',
+        const invoice = invoiceRows[0];
+        if (!invoice) throw new PaymentError('INVOICE_NOT_FOUND');
+        if (event.type === 'canceled' && invoice.status === 'pending') {
+          await tx.invoice.update({ where: { id: invoice.id }, data: { status: 'canceled' } });
+          invoicesTotal.inc({ provider: invoice.provider, status: 'canceled' });
+          await this.rewards?.onInvoiceReleased(tx, invoice.id);
+        }
+        if (event.type === 'paid' && invoice.status !== 'paid') {
+          const paid = parsed.paidAmountMinorRub
+            ? BigInt(parsed.paidAmountMinorRub)
+            : invoice.amountMinor;
+          const underpaid = paid * 100n < invoice.amountMinor * 98n;
+          const late = invoice.status === 'expired' || invoice.expiresAt < event.receivedAt;
+          const credit = paid > 0n ? paid : invoice.amountMinor;
+          await tx.invoice.update({
+            where: { id: invoice.id },
+            data: { status: underpaid ? 'underpaid' : 'paid', paidAt: new Date() },
+          });
+          invoicesTotal.inc({
             provider: invoice.provider,
-            invoiceId: invoice.id,
-          },
-        });
-        if (underpaid || late || invoice.kind === 'topup') {
-          await this.postEntry(
-            tx,
-            txRow.id,
-            invoice.userId,
-            invoice.provider,
-            credit,
-            'provider_clearing',
-            'user',
-          );
-        } else {
-          await this.postEntry(
-            tx,
-            txRow.id,
-            invoice.userId,
-            invoice.provider,
-            invoice.amountMinor,
-            'provider_clearing',
-            'user',
-          );
-          await this.postEntry(
-            tx,
-            txRow.id,
-            invoice.userId,
-            invoice.provider,
-            invoice.amountMinor,
-            'user',
-            'revenue',
-          );
-          if (invoice.planId)
-            await this.activateSubscription(
+            status: underpaid ? 'underpaid' : 'paid',
+          });
+          const txRow = await tx.transaction.create({
+            data: {
+              userId: invoice.userId,
+              type: underpaid || late || invoice.kind === 'topup' ? 'topup' : 'purchase',
+              status: 'completed',
+              amountMinor: credit,
+              currency: 'RUB',
+              provider: invoice.provider,
+              invoiceId: invoice.id,
+            },
+          });
+          if (underpaid || late || invoice.kind === 'topup') {
+            await this.postEntry(
               tx,
+              txRow.id,
               invoice.userId,
-              invoice.planId,
-              invoice.kind === 'plan_change',
+              invoice.provider,
+              credit,
+              'provider_clearing',
+              'user',
             );
-          await tx.outboxJob.create({
-            data: {
-              queue: 'panel',
-              name: 'panel.sync-user',
-              payload: { userId: invoice.userId, reason: 'paid' },
-              jobId: `panel:${invoice.userId}`,
-            },
-          });
-        }
-        if (underpaid || late || invoice.kind === 'topup')
-          await queueNotification(
-            tx,
-            'payment.to_balance',
-            invoice.userId,
-            `payment.to_balance:${invoice.id}`,
-            { amount: formatMinorRub(credit) },
-          );
-        else
-          await queueNotification(
-            tx,
-            'payment.succeeded',
-            invoice.userId,
-            `payment.succeeded:${invoice.id}`,
-            { amount: formatMinorRub(invoice.amountMinor) },
-          );
-        if (underpaid || late) {
-          await tx.outboxJob.create({
-            data: {
-              queue: 'notify',
-              name: 'notify.alert',
-              payload: {
-                type: underpaid ? 'payment.underpaid' : 'payment.late',
-                details: invoice.id,
+          } else {
+            await this.postEntry(
+              tx,
+              txRow.id,
+              invoice.userId,
+              invoice.provider,
+              invoice.amountMinor,
+              'provider_clearing',
+              'user',
+            );
+            await this.postEntry(
+              tx,
+              txRow.id,
+              invoice.userId,
+              invoice.provider,
+              invoice.amountMinor,
+              'user',
+              'revenue',
+            );
+            // Recognised here and nowhere else: this is the one entry that moves
+            // money into `revenue` (section 12.2).
+            revenueMinorTotal.inc({ provider: invoice.provider }, Number(invoice.amountMinor));
+            if (invoice.planId)
+              await this.activateSubscription(
+                tx,
+                invoice.userId,
+                invoice.planId,
+                invoice.kind === 'plan_change',
+              );
+            await tx.outboxJob.create({
+              data: {
+                queue: 'panel',
+                name: 'panel.sync-user',
+                payload: { userId: invoice.userId, reason: 'paid' },
+                jobId: `panel:${invoice.userId}`,
               },
-              jobId: `alert:${underpaid ? 'payment.underpaid' : 'payment.late'}:${invoice.id}`,
-            },
+            });
+          }
+          if (underpaid || late || invoice.kind === 'topup')
+            await queueNotification(
+              tx,
+              'payment.to_balance',
+              invoice.userId,
+              `payment.to_balance:${invoice.id}`,
+              { amount: formatMinorRub(credit) },
+            );
+          else
+            await queueNotification(
+              tx,
+              'payment.succeeded',
+              invoice.userId,
+              `payment.succeeded:${invoice.id}`,
+              { amount: formatMinorRub(invoice.amountMinor) },
+            );
+          if (underpaid || late) {
+            await tx.outboxJob.create({
+              data: {
+                queue: 'notify',
+                name: 'notify.alert',
+                payload: {
+                  type: underpaid ? 'payment.underpaid' : 'payment.late',
+                  details: invoice.id,
+                },
+                jobId: `alert:${underpaid ? 'payment.underpaid' : 'payment.late'}:${invoice.id}`,
+              },
+            });
+          }
+          if (underpaid) await this.rewards?.onInvoiceReleased(tx, invoice.id);
+          else await this.rewards?.onInvoiceSettled(tx, invoice.id);
+          await this.rewards?.onPaid(tx, {
+            id: txRow.id,
+            userId: invoice.userId,
+            type: txRow.type,
+            amountMinor: txRow.amountMinor,
           });
         }
-        if (underpaid) await this.rewards?.onInvoiceReleased(tx, invoice.id);
-        else await this.rewards?.onInvoiceSettled(tx, invoice.id);
-        await this.rewards?.onPaid(tx, {
-          id: txRow.id,
-          userId: invoice.userId,
-          type: txRow.type,
-          amountMinor: txRow.amountMinor,
-        });
-      }
-      await tx.$executeRaw(Prisma.sql`
+        await tx.$executeRaw(Prisma.sql`
         UPDATE payment_events SET processed_at = now() WHERE id = ${event.id}::uuid
       `);
-    });
+      })
+      .then(
+        () => {
+          counted('applied');
+        },
+        (error: unknown) => {
+          counted('failed');
+          throw error;
+        },
+      );
   }
 
   private async postEntry(

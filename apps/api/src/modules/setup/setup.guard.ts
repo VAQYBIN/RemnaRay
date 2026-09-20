@@ -5,7 +5,9 @@ import { SettingsService } from '../settings/settings.service';
 
 /** Paths that answer normally while the wizard is still running (section 17.4). */
 function openDuringSetup(path: string): boolean {
-  return path.startsWith('/api/setup/') || path.startsWith('/api/v1/health');
+  // `/metrics` too: a deployment being set up is exactly when an operator
+  // wants to see it, and section 19.7 already limits who may ask.
+  return path.startsWith('/api/setup/') || path.startsWith('/api/v1/health') || path === '/metrics';
 }
 
 /**

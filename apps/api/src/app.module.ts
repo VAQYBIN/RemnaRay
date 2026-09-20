@@ -1,7 +1,10 @@
 import { Module } from '@nestjs/common';
+import { APP_INTERCEPTOR } from '@nestjs/core';
 import { LoggerModule } from 'nestjs-pino';
 
 import { HealthController } from './health/health.controller';
+import { MetricsController } from './health/metrics.controller';
+import { MetricsInterceptor } from './health/metrics.interceptor';
 import { InfraModule } from './infra/infra.module';
 import { AuthModule } from './modules/auth/auth.module';
 import { LedgerModule } from './modules/ledger/ledger.module';
@@ -51,7 +54,8 @@ import { SetupModule } from './modules/setup/setup.module';
       },
     }),
   ],
-  controllers: [HealthController],
+  controllers: [HealthController, MetricsController],
+  providers: [{ provide: APP_INTERCEPTOR, useClass: MetricsInterceptor }],
 })
 // Nest module metadata is intentionally the complete shell for this milestone.
 // eslint-disable-next-line @typescript-eslint/no-extraneous-class

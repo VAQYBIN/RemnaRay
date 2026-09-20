@@ -1,4 +1,5 @@
 import { Prisma, type PrismaClient } from '@remnaray/db';
+import { ledgerAuditMismatchTotal } from '@remnaray/metrics';
 
 import { LedgerError } from './ledger.errors';
 import {
@@ -158,6 +159,10 @@ export class LedgerRepository implements LedgerRepositoryPort {
       const expected = row.kind === 'user' ? credit - debit : debit - credit;
       return expected === actual ? [] : [{ accountId: row.accountId, expected, actual }];
     });
+    // Section 9.9 `rr_ledger_audit_mismatch_total`: a counter, not a gauge —
+    // an audit that found a disagreement once has to stay visible after the
+    // next audit finds none.
+    if (mismatches.length > 0) ledgerAuditMismatchTotal.inc(mismatches.length);
     return { checked: rows.length, mismatches };
   }
 
