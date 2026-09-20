@@ -59,6 +59,26 @@ minutes. Name images to build fewer of them: `./scripts/rr build web`.
 A published release needs none of this — `./scripts/rr up` pulls
 `ghcr.io/remnaray/<image>:${RR_VERSION:-1}` and starts.
 
+### Building somewhere other than the server
+
+The smallest servers cannot do it. On 1 vCPU and 2 GB the Next.js build alone
+takes a quarter of an hour and may run out of memory, so build the images in
+GitHub Actions and pull them instead: run the **images** workflow on your fork
+(Actions → images → Run workflow), give it a tag such as `dev`, and add two
+lines to `.env`:
+
+```
+RR_REGISTRY=ghcr.io/<your github account, lowercase>
+RR_VERSION=dev
+```
+
+Then `./scripts/rr up`. If the package is private, the server needs
+`docker login ghcr.io` once with a token carrying `read:packages`; making the
+package public at Packages → Package settings avoids that.
+
+`RR_REGISTRY` and `RR_VERSION` are what a release deployment uses too — they
+simply default to the published images.
+
 ## The seven variables
 
 Everything else is configured from the administration console and lives in the

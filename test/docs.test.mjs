@@ -169,7 +169,7 @@ test('compose follows the major line, as section 24.4 requires', async () => {
 
   for (const image of ['app', 'web', 'nginx', 'caddy', 'backup'])
     assert.ok(
-      compose.includes(`ghcr.io/remnaray/${image}:\${RR_VERSION:-1}`),
-      `the ${image} image does not follow RR_VERSION`,
+      compose.includes(`\${RR_REGISTRY:-ghcr.io/remnaray}/${image}:\${RR_VERSION:-1}`),
+      `the ${image} image does not follow RR_REGISTRY and RR_VERSION`,
     );
 });

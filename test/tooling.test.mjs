@@ -225,7 +225,8 @@ test('a source checkout can build the images compose resolves to', async () => {
   // build succeeds and the start still pulls.
   for (const image of ['app', 'web', 'nginx', 'caddy', 'backup']) {
     const variable = `RR_${image.toUpperCase()}_IMAGE`;
-    const reference = `\${${variable}:-ghcr.io/remnaray/${image}:\${RR_VERSION:-1}}`;
+    const reference =
+      `\${${variable}:-` + `\${RR_REGISTRY:-ghcr.io/remnaray}/${image}:\${RR_VERSION:-1}}`;
     assert.ok(compose.includes(reference), `compose.yaml does not resolve ${image} that way`);
     assert.ok(wrapper.includes(reference), `scripts/rr does not tag ${image} that way`);
     assert.match(wrapper, new RegExp(`${image}\\) printf '%s' deploy/`, 'u'));
@@ -311,11 +312,14 @@ test('the release and rebuild workflows publish the images compose pulls', async
       assert.match(workflow, new RegExp(`^ {10}- image: ${image}$`, 'mu'));
     }
     // A `remnaray-` prefix, or any other segment, is a name nothing pulls.
-    assert.match(workflow, /\/\$\{\{ github\.repository_owner \}\}\/\$\{\{ matrix\.image \}\}/u);
-    assert.doesNotMatch(workflow, /repository_owner \}\}\/[a-z-]+\$\{\{ matrix\.image/u);
+    assert.match(workflow, /\/\$\{\{ steps\.ns\.outputs\.owner \}\}\/\$\{\{ matrix\.image \}\}/u);
+    assert.doesNotMatch(workflow, /outputs\.owner \}\}\/[a-z-]+\$\{\{ matrix\.image/u);
+    // GHCR refuses an uppercase namespace, and an account's own spelling is
+    // whatever the account chose.
+    assert.match(workflow, /tr '\[:upper:\]' '\[:lower:\]'/u);
   }
   for (const image of ['app', 'web', 'nginx', 'caddy', 'backup']) {
-    assert.ok(compose.includes(`ghcr.io/remnaray/${image}:`), `compose.yaml never pulls ${image}`);
+    assert.ok(compose.includes(`ghcr.io/remnaray}/${image}:`), `compose.yaml never pulls ${image}`);
   }
 });
 

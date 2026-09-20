@@ -55,6 +55,19 @@ applications still compile their own tests into `dist` — they build from
 is recorded here with the M5-002 image-size item rather than changed in the
 same breath.
 
+A fifth: the owner's server is 1 vCPU / 2 GB, and `./scripts/rr build` spent
+more than twelve minutes inside the Next.js build before being abandoned.
+Building on the target is not a route the smallest supported server can take,
+and until a release exists there was no other. `.github/workflows/images.yml`
+publishes the five images from Actions under a chosen tag without making a
+release, and `RR_REGISTRY` — defaulting to `ghcr.io/remnaray`, which is what
+compose always resolved — points a deployment at any namespace. Found while
+writing it: GHCR refuses an uppercase namespace and `github.repository_owner`
+carries the account's own spelling, so `release.yml` and `rebuild.yml` would
+have pushed to a name they could not create for any owner whose login is not
+all lowercase. `docker/metadata-action` lowercases; a raw `tags:` string does
+not. Every workflow lowercases it now.
+
 **Still open, and now the largest item in the project.** ADR-010 recorded on
 2026-09-19 that the panel identifies users by a numeric `id` and carries no
 `uuid`, that `/api/users/by-telegram-id/{telegramId}` does not exist, and that

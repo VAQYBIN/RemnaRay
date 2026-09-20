@@ -64,6 +64,11 @@ jobs:
         with:
           ref: v${{ steps.release.outputs.result }}
 
+      - name: Name the registry namespace
+        id: ns
+        run: |
+          printf 'owner=%s\n' "$(printf '%s' '${{ github.repository_owner }}' | tr '[:upper:]' '[:lower:]')" >> "$GITHUB_OUTPUT"
+
       - name: Set up QEMU
         uses: docker/setup-qemu-action@v3
 
@@ -90,12 +95,12 @@ jobs:
           sbom: true
           provenance: mode=max
           tags: |
-            ${{ env.REGISTRY }}/${{ github.repository_owner }}/${{ matrix.image }}:${{ steps.release.outputs.result }}-${{ github.run_id }}
+            ${{ env.REGISTRY }}/${{ steps.ns.outputs.owner }}/${{ matrix.image }}:${{ steps.release.outputs.result }}-${{ github.run_id }}
 
       - name: Scan the rebuilt image
         uses: aquasecurity/trivy-action@0.28.0
         with:
-          image-ref: ${{ env.REGISTRY }}/${{ github.repository_owner }}/${{ matrix.image }}:${{ steps.release.outputs.result }}-${{ github.run_id }}
+          image-ref: ${{ env.REGISTRY }}/${{ steps.ns.outputs.owner }}/${{ matrix.image }}:${{ steps.release.outputs.result }}-${{ github.run_id }}
           severity: CRITICAL,HIGH
           exit-code: '1'
           ignore-unfixed: true
@@ -104,7 +109,7 @@ jobs:
       # become what `RR_VERSION=1` resolves to.
       - name: Publish the dated and floating tags
         env:
-          IMAGE: ${{ env.REGISTRY }}/${{ github.repository_owner }}/${{ matrix.image }}
+          IMAGE: ${{ env.REGISTRY }}/${{ steps.ns.outputs.owner }}/${{ matrix.image }}
           VERSION: ${{ steps.release.outputs.result }}
         run: |
           dated="${VERSION}-$(date -u '+%Y%m%d')"
@@ -118,6 +123,6 @@ jobs:
       - name: Attest the provenance
         uses: actions/attest-build-provenance@v2
         with:
-          subject-name: ${{ env.REGISTRY }}/${{ github.repository_owner }}/${{ matrix.image }}
+          subject-name: ${{ env.REGISTRY }}/${{ steps.ns.outputs.owner }}/${{ matrix.image }}
           subject-digest: ${{ steps.push.outputs.digest }}
           push-to-registry: true

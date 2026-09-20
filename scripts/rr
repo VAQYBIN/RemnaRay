@@ -8,7 +8,7 @@ compose_file=${COMPOSE_FILE:-compose.yaml}
 # owner never types it and never edits a proxy configuration by hand.
 if [ -f .env ]; then
   # shellcheck disable=SC2046
-  export $(grep -E '^(RR_PROXY_PROFILE|RR_TLS_MODE|RR_VERSION|RR_[A-Z]+_IMAGE)=' .env | xargs) 2>/dev/null || true
+  export $(grep -E '^(RR_PROXY_PROFILE|RR_TLS_MODE|RR_VERSION|RR_REGISTRY|RR_[A-Z]+_IMAGE)=' .env | xargs) 2>/dev/null || true
 fi
 profile=${RR_PROXY_PROFILE:-nginx}
 tls_mode=${RR_TLS_MODE:-acme}
@@ -39,11 +39,11 @@ USAGE
 # exactly the name the deployment will look for.
 image_ref() {
   case "$1" in
-    app) printf '%s' "${RR_APP_IMAGE:-ghcr.io/remnaray/app:${RR_VERSION:-1}}" ;;
-    web) printf '%s' "${RR_WEB_IMAGE:-ghcr.io/remnaray/web:${RR_VERSION:-1}}" ;;
-    nginx) printf '%s' "${RR_NGINX_IMAGE:-ghcr.io/remnaray/nginx:${RR_VERSION:-1}}" ;;
-    caddy) printf '%s' "${RR_CADDY_IMAGE:-ghcr.io/remnaray/caddy:${RR_VERSION:-1}}" ;;
-    backup) printf '%s' "${RR_BACKUP_IMAGE:-ghcr.io/remnaray/backup:${RR_VERSION:-1}}" ;;
+    app) printf '%s' "${RR_APP_IMAGE:-${RR_REGISTRY:-ghcr.io/remnaray}/app:${RR_VERSION:-1}}" ;;
+    web) printf '%s' "${RR_WEB_IMAGE:-${RR_REGISTRY:-ghcr.io/remnaray}/web:${RR_VERSION:-1}}" ;;
+    nginx) printf '%s' "${RR_NGINX_IMAGE:-${RR_REGISTRY:-ghcr.io/remnaray}/nginx:${RR_VERSION:-1}}" ;;
+    caddy) printf '%s' "${RR_CADDY_IMAGE:-${RR_REGISTRY:-ghcr.io/remnaray}/caddy:${RR_VERSION:-1}}" ;;
+    backup) printf '%s' "${RR_BACKUP_IMAGE:-${RR_REGISTRY:-ghcr.io/remnaray}/backup:${RR_VERSION:-1}}" ;;
   esac
 }
 
