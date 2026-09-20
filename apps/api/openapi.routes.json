@@ -2302,6 +2302,141 @@
         }
       }
     },
+    "/api/setup/v1/check/bot": {
+      "post": {
+        "operationId": "checkSetupBot",
+        "summary": "Bot getMe check",
+        "responses": {
+          "200": {
+            "description": "Check result"
+          },
+          "401": {
+            "description": "UNAUTHENTICATED"
+          },
+          "404": {
+            "description": "SETUP_ALREADY_COMPLETED"
+          }
+        }
+      }
+    },
+    "/api/setup/v1/check/panel": {
+      "post": {
+        "operationId": "checkSetupPanel",
+        "summary": "Panel connection check",
+        "responses": {
+          "200": {
+            "description": "Check result"
+          },
+          "401": {
+            "description": "UNAUTHENTICATED"
+          },
+          "404": {
+            "description": "SETUP_ALREADY_COMPLETED"
+          }
+        }
+      }
+    },
+    "/api/setup/v1/check/provider": {
+      "post": {
+        "operationId": "checkSetupProvider",
+        "summary": "Payment provider healthcheck",
+        "responses": {
+          "200": {
+            "description": "Check result"
+          },
+          "401": {
+            "description": "UNAUTHENTICATED"
+          },
+          "404": {
+            "description": "SETUP_ALREADY_COMPLETED"
+          }
+        }
+      }
+    },
+    "/api/setup/v1/finish": {
+      "post": {
+        "operationId": "finishSetup",
+        "summary": "Setup step 8 — launch the shop",
+        "responses": {
+          "200": {
+            "description": "Shop launched"
+          },
+          "400": {
+            "description": "VALIDATION_ERROR"
+          },
+          "401": {
+            "description": "UNAUTHENTICATED"
+          },
+          "404": {
+            "description": "SETUP_ALREADY_COMPLETED"
+          }
+        }
+      }
+    },
+    "/api/setup/v1/state": {
+      "get": {
+        "operationId": "getSetupState",
+        "summary": "Setup wizard state (FR-171)",
+        "responses": {
+          "200": {
+            "description": "Current step and the secret-free draft"
+          },
+          "404": {
+            "description": "SETUP_ALREADY_COMPLETED"
+          }
+        }
+      }
+    },
+    "/api/setup/v1/steps/{step}": {
+      "post": {
+        "operationId": "submitSetupStep",
+        "summary": "Setup steps 1-7 (section 17.4)",
+        "parameters": [
+          {
+            "name": "step",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Step saved"
+          },
+          "400": {
+            "description": "VALIDATION_ERROR"
+          },
+          "401": {
+            "description": "UNAUTHENTICATED"
+          },
+          "404": {
+            "description": "SETUP_ALREADY_COMPLETED"
+          }
+        }
+      }
+    },
+    "/api/setup/v1/token": {
+      "post": {
+        "operationId": "submitSetupToken",
+        "summary": "Setup step 0 — RR_SETUP_TOKEN",
+        "responses": {
+          "200": {
+            "description": "Wizard session established"
+          },
+          "401": {
+            "description": "UNAUTHENTICATED"
+          },
+          "429": {
+            "description": "RATE_LIMITED"
+          },
+          "404": {
+            "description": "SETUP_ALREADY_COMPLETED"
+          }
+        }
+      }
+    },
     "/api/v1/auth/logout": {
       "post": {
         "operationId": "logout",

@@ -6,9 +6,9 @@ M5. M4 acceptance is closed; see "M4-003 Lighthouse verification".
 
 ## Current task
 
-TASK-M5-001 (`setup` module and the eight-step wizard). The last M4 gate —
-the section 13.2 Lighthouse measurement — is now measured by `pnpm lighthouse`
-and enforced by a CI job, so the M4 Definition of Done holds and M5 is open.
+TASK-M5-002 (the `nginx` image with `nginx-module-acme`, the section 21.3
+templates, `render-proxy.ts` and `proxy-reloader.ts`). TASK-M5-001 is complete
+and committed; see "M5-001 verification".
 
 ## M5 entry audit — 2026-09-20
 
@@ -310,7 +310,8 @@ Turbo build.
 
 ## Known blockers
 
-None that stop development. Hosted GitHub Actions execution and maintainer
+None that stop development. One open specification item is recorded in
+"M5-001 open item — the step 5 logo upload". Hosted GitHub Actions execution and maintainer
 review remain external Definition of Done gates. Proxy smoke is scheduled in
 M5 (TASK-M5-007) and TASK-M5-004 needs a stand with a real domain for its
 manual certificate checklist.
@@ -377,7 +378,7 @@ loader-prefix alternative, which is what this machine uses.
 
 ## Next
 
-TASK-M5-001, then section 25.6 dependency order through TASK-M5-009.
+TASK-M5-002, then section 25.6 dependency order through TASK-M5-009.
 Do not begin M6.
 
 ## M3 acceptance reconciliation
@@ -899,3 +900,85 @@ Verified on 2026-09-20; this closes the last TASK-M4-003 acceptance gate.
   `--user-data-dir`, so the profile always lands in the system temp directory.
 - The browser is `CHROME_PATH` if set, otherwise Playwright's Chromium, so the
   rootless loader-prefix workaround in `docs/e2e.md` covers this command too.
+
+## M5-001 verification
+
+Verified on 2026-09-20.
+
+- `apps/api/src/modules/setup/` implements `/api/setup/v1/*`: `state`, `token`,
+  `steps/:step` for the seven writing steps, the three «Проверить» routes
+  (`check/panel`, `check/bot`, `check/provider`) and `finish`. Every step
+  validates on the server with its own Zod schema and writes straight into
+  `settings` and the target tables.
+- `SetupGuard` is registered as an `APP_GUARD` from a module imported before
+  `AuthModule`, so a request made before the wizard finishes answers
+  `SETUP_NOT_COMPLETED` 503 rather than `UNAUTHENTICATED`. `/api/setup/*` and
+  `/api/v1/health*` stay open, which keeps the Compose healthcheck green and
+  lets the bot wait instead of crash-looping (section 17.5). Once
+  `setup.completed` is true the wizard answers `SETUP_ALREADY_COMPLETED` 404.
+- Step 0 compares the submitted token with `argon2(RR_SETUP_TOKEN)`, stored in
+  `setup_state.token_hash` on the first success, and blocks an address for
+  fifteen minutes after five wrong attempts. It answers with `rr_setup`, a
+  one-hour session that slides with every step.
+- Step 1 is posted twice: without `code` the server generates the TOTP secret,
+  keeps it encrypted in the wizard session and answers with the QR; with `code`
+  it confirms and creates the administrator. An abandoned wizard therefore
+  leaves no half-made account.
+- `GET /state` serves the draft only to a wizard session. The draft names the
+  domain, the panel and the brand, so an anonymous caller only learns which
+  step to show. Secrets are never in the draft: they go into their encrypted
+  columns when their step is submitted and the draft records `tokenSet: true`.
+- `finish` requires every step but payments, flips `setup.completed`, marks
+  `setup_state`, queues `panel.reconcile-all` through the outbox and publishes
+  `rr:bot.reconfigure`, `rr:theme.changed` and `rr:i18n.changed`. The bot
+  process owns `setWebhook`/`setMyCommands`, and its two-second reconcile loop
+  picks the channel up; the administrators get the `setup.completed` alert.
+- `apps/web/app/setup/` serves the eight-step UI on the `_admin` theme and
+  answers 404 once the API says the wizard is closed. `apps/web/proxy.ts`
+  redirects every path to `/setup` while it is pending, caching the answer for
+  five seconds and permanently once the setup is done.
+- AC-171: `e2e/specs/setup.spec.ts` walks E2E-02 steps 4–11 against a second
+  stack whose database is empty and whose `RR_SETUP_TOKEN` is set, with the
+  Remnawave and Telegram mocks behind the panel and bot checks, and ends on the
+  404 for `/setup` and for the wizard API plus a 200 from the shop's public API.
+- Checks: `pnpm test:e2e` (26), `pnpm lint`, `pnpm typecheck`,
+  `pnpm -r typecheck`, `pnpm typecheck:e2e`, `pnpm test`, `pnpm -r test`
+  (api 121, web 22, bot 12, ui 8 and the remaining packages), `pnpm format`,
+  full `pnpm build`, `pnpm i18n-check` (1472 messages), `pnpm theme-validate`.
+
+### M5-001 decisions
+
+- The section 17.4 table gives step 1 two server interactions but one route.
+  Both go to `POST /steps/1`; the presence of `code` selects enrolment or
+  confirmation, so the documented route shape is kept.
+- The «Проверить» buttons are separate `check/*` routes rather than steps, so a
+  check never writes. Step 3 re-runs the panel check before it saves, and step 7
+  healthchecks every provider it stores, which is what AC-061 needs.
+- `PlansService.create` parses its own input and `planInputSchema` transforms
+  the money fields into `bigint`, so the wizard hands it the untouched body and
+  keeps the parsed copy only for the slug and the draft. A regression test
+  covers it.
+- The wizard's own e2e stack is a second `startStack({ seed: false })` rather
+  than a mutation of the shared one: the section 22.1 specs need a shop whose
+  setup is finished, and AC-171 needs one whose setup has not run. The main
+  stack now seeds `setup.completed = true` for the same reason.
+- `@remnaray/telegram-mock` gained the `tsconfig.build.json` and `build` script
+  `@remnaray/remnawave-mock` already had, so the e2e harness can load it from
+  `dist` the way it loads the panel mock.
+
+### M5-001 open item — the step 5 logo upload
+
+Section 17.4 lists «логотип (загрузка PNG/SVG → `themes/<slug>/overrides/`)»
+among the step 5 fields. It is not implemented, and this is a specification
+conflict rather than a shortcut: section 18.2 mounts `themes/` into `api` and
+`web` as `./themes:/themes:ro`, so no process can write into it, and the
+`RR_THEME_UPLOAD` flag of section 17.2 that would gate such an upload is
+unimplemented across the whole repository — the M4 administration console does
+not offer theme or asset upload either.
+
+Closing it needs three things that belong together and not to this task: a
+writable overrides mount in Compose, `ThemeService` resolving
+`themes/<slug>/overrides/<asset>` ahead of the shipped asset, and the upload
+endpoint behind `RR_THEME_UPLOAD`. Until then the wizard offers the theme
+picker and section 18.3's documented `cp -r themes/manta themes/mybrand` flow
+replaces assets on the host. Carry this into the M5 Definition of Done review.

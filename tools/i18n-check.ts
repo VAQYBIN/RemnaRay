@@ -30,6 +30,7 @@ const nonCyrillicRussianKeys = new Set([
   'admin.admins.email',
   'admin.admins.totp',
   'admin.providers.health',
+  'setup.admin.email',
 ]);
 const cyrillic = /[\u0400-\u04FF]/u;
 const failures: string[] = [];

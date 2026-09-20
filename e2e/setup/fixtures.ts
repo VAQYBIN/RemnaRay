@@ -11,6 +11,13 @@ export type StackState = {
   admin: { email: string; password: string; totpSecret: string };
   plan: { id: string; slug: string };
   user: { id: string; telegramId: string };
+  wizard: {
+    baseURL: string;
+    apiUrl: string;
+    setupToken: string;
+    panelUrl: string;
+    botToken: string;
+  };
 };
 
 export const ADMIN_STORAGE_STATE = resolve(process.cwd(), 'e2e/.auth/admin.json');

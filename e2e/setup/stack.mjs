@@ -14,6 +14,8 @@ const HOP_BY_HOP = ['connection', 'keep-alive', 'transfer-encoding', 'upgrade'];
 const APP_KEY = Buffer.alloc(32, 11).toString('base64');
 const INTERNAL_TOKEN = 'e2e-internal-token';
 const BRAND_NAME = 'Manta E2E';
+const SETUP_TOKEN = 'e2e-setup-token';
+const BOT_TOKEN = '4242:e2e-setup-bot-token';
 
 async function freePort() {
   return new Promise((resolve, reject) => {
@@ -54,6 +56,7 @@ function startProxy(port, apiPort, webPort) {
       request.url?.startsWith('/api/v1') ||
       request.url?.startsWith('/api/admin') ||
       request.url?.startsWith('/api/internal') ||
+      request.url?.startsWith('/api/setup') ||
       request.url?.startsWith('/webhooks');
     const target = toApi ? apiPort : webPort;
     const upstream = httpRequest(
@@ -91,7 +94,12 @@ function startProxy(port, apiPort, webPort) {
   });
 }
 
-export async function startStack() {
+/**
+ * `seed: false` boots the same stack with an empty database and
+ * `RR_SETUP_TOKEN` set, which is what AC-171 needs: the wizard is only
+ * reachable while `setup.completed` is false (section 17.4).
+ */
+export async function startStack({ seed = true } = {}) {
   const postgres = await new PostgreSqlContainer('postgres:18-alpine')
     .withDatabase('remnaray')
     .withUsername('remnaray')
@@ -110,7 +118,8 @@ export async function startStack() {
     stdio: 'pipe',
   });
 
-  const seed = await seedFixtures(databaseUrl);
+  const fixtures = seed ? await seedFixtures(databaseUrl) : { setupToken: SETUP_TOKEN };
+  const mocks = seed ? null : await startMocks();
 
   const apiPort = await freePort();
   const webPort = await freePort();
@@ -127,6 +136,7 @@ export async function startStack() {
     RR_TRUSTED_INTERNAL_CIDR: '127.0.0.0/8',
     RR_DOMAIN: `127.0.0.1:${String(proxyPort)}`,
     RR_LOG_LEVEL: 'warn',
+    ...(seed ? {} : { RR_SETUP_TOKEN: SETUP_TOKEN, RR_TELEGRAM_API_URL: mocks.telegramUrl }),
   };
   const api = spawn('node', ['apps/api/dist/main.js'], { env: apiEnv, stdio: 'pipe' });
   const apiLog = [];
@@ -178,20 +188,46 @@ export async function startStack() {
   const proxy = await startProxy(proxyPort, apiPort, webPort);
   await waitFor(`http://127.0.0.1:${String(proxyPort)}/api/v1/health`);
   const base = `http://127.0.0.1:${String(proxyPort)}`;
-  for (const locale of ['ru', 'en']) await waitForFreshPage(`${base}/${locale}`);
+  if (seed) for (const locale of ['ru', 'en']) await waitForFreshPage(`${base}/${locale}`);
 
   return {
-    baseURL: `http://127.0.0.1:${String(proxyPort)}`,
+    baseURL: base,
     internalToken: INTERNAL_TOKEN,
     apiUrl: `http://127.0.0.1:${String(apiPort)}`,
-    ...seed,
+    ...(mocks
+      ? { panelUrl: mocks.panelUrl, telegramUrl: mocks.telegramUrl, botToken: mocks.botToken }
+      : {}),
+    ...fixtures,
     async stop() {
       proxy.close();
       api.kill('SIGTERM');
       web.kill('SIGTERM');
       await sleep(500);
+      if (mocks) await mocks.stop();
       await valkey.stop();
       await postgres.stop();
+    },
+  };
+}
+
+/** Section 25.6 asks AC-171 to run against mocks, not a real panel or Telegram. */
+async function startMocks() {
+  const { createRemnawaveMock } = await import('../../packages/remnawave-mock/dist/index.js');
+  const { TelegramMock } = await import('../../packages/telegram-mock/dist/index.js');
+  const panel = createRemnawaveMock();
+  const panelUrl = await panel.listen({ port: 0, host: '127.0.0.1' });
+  const telegram = new TelegramMock({
+    token: BOT_TOKEN,
+    user: { id: 4242, first_name: 'Manta Setup', username: 'manta_setup_bot' },
+  });
+  const telegramUrl = await telegram.start();
+  return {
+    panelUrl,
+    telegramUrl,
+    botToken: BOT_TOKEN,
+    async stop() {
+      await panel.close();
+      await telegram.stop();
     },
   };
 }
@@ -262,6 +298,8 @@ async function seedFixtures(databaseUrl) {
   const botToken = `${String(randomBytes(4).readUInt32BE(0))}:${createHash('sha256').update('e2e').digest('hex').slice(0, 20)}`;
   await prisma.setting.createMany({
     data: [
+      // Section 17.4: without this every route answers SETUP_NOT_COMPLETED.
+      { key: 'setup.completed', value: true, isSecret: false },
       { key: 'brand.name', value: BRAND_NAME, isSecret: false },
       { key: 'bot.username', value: 'manta_e2e_bot', isSecret: false },
       { key: 'bot.token', value: encryptSetting(botToken, APP_KEY), isSecret: true },

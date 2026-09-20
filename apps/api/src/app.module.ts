@@ -20,11 +20,15 @@ import { RewardsModule } from './modules/rewards/rewards.module';
 import { NotifyModule } from './modules/notify/notify.module';
 import { BroadcastsModule } from './modules/broadcasts/broadcasts.module';
 import { AdminSettingsModule } from './modules/admin-settings/admin-settings.module';
+import { SetupModule } from './modules/setup/setup.module';
 
 @Module({
   imports: [
     InfraModule,
     SettingsModule,
+    // Before `AuthModule`: its guard runs first, so a request made before the
+    // wizard finishes answers `SETUP_NOT_COMPLETED` rather than `UNAUTHENTICATED`.
+    SetupModule,
     UsersModule,
     AuthModule,
     LedgerModule,

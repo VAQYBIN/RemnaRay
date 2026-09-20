@@ -27,7 +27,7 @@ export default defineConfig({
     },
     {
       name: 'public',
-      testMatch: /(site|account|admin-login)\.spec\.ts/,
+      testMatch: /(site|account|admin-login|setup)\.spec\.ts/,
       use: { ...devices['Desktop Chrome'] },
     },
     {
