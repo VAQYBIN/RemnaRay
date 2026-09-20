@@ -11,6 +11,7 @@ import { Audited } from '../admin/audit.interceptor';
 import { RemnawaveService } from '../remnawave/remnawave.service';
 import { SettingsService } from '../settings/settings.service';
 import { caddyHasRateLimit } from '../../tools/proxy-render';
+import { ForwardedObserver } from './forwarded.interceptor';
 import { TLS_STATUS_KEY } from './proxy.controller';
 
 function appVersion(): string {
@@ -32,6 +33,7 @@ export class SystemService {
     private readonly infra: Infrastructure,
     private readonly settings: SettingsService,
     private readonly panel: RemnawaveService,
+    private readonly forwarded: ForwardedObserver,
   ) {}
 
   /** The last `maintenance.tls-check` reading (section 19.2). */
@@ -85,6 +87,9 @@ export class SystemService {
       proxy: {
         profile: process.env.RR_PROXY_PROFILE ?? 'nginx',
         tlsMode: process.env.RR_TLS_MODE ?? 'acme',
+        // Section 21.7: what the last request actually carried.
+        trustedProxies: process.env.RR_TRUSTED_PROXIES ?? '',
+        external: this.forwarded.last(),
         // Section 21.4: the official Caddy image has no rate-limit module, and
         // that degradation is surfaced here rather than left silent.
         rateLimited:

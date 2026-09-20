@@ -163,6 +163,29 @@ services:
     logging: { driver: json-file, options: { max-size: '50m', max-file: '5' } }
     profiles: [nginx]
 
+  # Section 21.7: the single upstream an owner's own proxy talks to.
+  edge:
+    image: nginx:1.30-alpine
+    command: [nginx, -c, /etc/nginx/conf.d/edge.conf, -g, 'daemon off;']
+    ports: ['127.0.0.1:${RR_EXTERNAL_HTTP_PORT:-8080}:8080']
+    volumes:
+      - ./deploy/proxy/external:/etc/nginx/conf.d:ro
+    networks: [rr_net]
+    depends_on:
+      web: { condition: service_healthy }
+      api: { condition: service_healthy }
+    healthcheck:
+      test: [CMD, wget, -qO-, 'http://127.0.0.1:8080/healthz']
+      interval: 10s
+      timeout: 3s
+      retries: 5
+    restart: unless-stopped
+    read_only: true
+    tmpfs: [/tmp, /var/cache/nginx]
+    security_opt: [no-new-privileges:true]
+    logging: { driver: json-file, options: { max-size: '50m', max-file: '5' } }
+    profiles: [external]
+
   # Only with RR_TLS_MODE=certbot; `./rr up` adds the profile automatically.
   certbot:
     image: certbot/certbot:latest

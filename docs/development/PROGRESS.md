@@ -6,11 +6,10 @@ M5. M4 acceptance is closed; see "M4-003 Lighthouse verification".
 
 ## Current task
 
-TASK-M5-005 (the `external` profile with the `edge` container,
-`RR_TRUSTED_PROXIES`, the `/admin/system` indicator and
-`docs/external-proxy.md`). TASK-M5-001 … TASK-M5-004 are complete and
-committed; see their verification sections. TASK-M5-004 carries one external
-acceptance gate, recorded below.
+TASK-M5-006 (the `backup` service, the restore script, the pre-migrate dump and
+S3). TASK-M5-001 … TASK-M5-005 are complete and committed; see their
+verification sections. TASK-M5-004 carries one external acceptance gate,
+recorded below.
 
 ## M5 entry audit — 2026-09-20
 
@@ -385,7 +384,7 @@ image on a runner with room. See "Defects found while verifying M5-002".
 
 ## Next
 
-TASK-M5-005, then section 25.6 dependency order through TASK-M5-009.
+TASK-M5-006, then section 25.6 dependency order through TASK-M5-009.
 Do not begin M6.
 
 ## M3 acceptance reconciliation
@@ -1181,3 +1180,48 @@ by the unit tests and the environment validation above.
   observation, not configuration, and `/admin/system` is its only reader.
 - The earlier `RR_TLS_EXPIRES_AT` environment reading on `/admin/system` was a
   placeholder with nothing writing it; it is replaced by the real measurement.
+
+## M5-005 verification
+
+Verified on 2026-09-20.
+
+- Acceptance: a forged `X-Forwarded-For` from outside the trusted network must
+  leave the source address alone. `apps/api/src/common/trusted-proxies.test.ts`
+  drives a real Fastify instance: from `203.0.113.7` with
+  `x-forwarded-for: 9.9.9.9` and `RR_TRUSTED_PROXIES=172.28.0.0/16`,
+  `request.ip` is **203.0.113.7**; from `172.28.0.10` it is `9.9.9.9`, which is
+  the proxy legitimately naming its client; and with nothing configured no
+  header is believed at all.
+- `apps/api` now builds its Fastify adapter with
+  `trustProxy: trustedProxies()`. Context7 confirmed the current contract: a
+  comma-separated IP/CIDR string, and Fastify deliberately refuses hop-count
+  trust because it cannot validate the immediate peer.
+- `deploy/proxy/external/edge.conf` is the section 21.7 container: routing
+  only, no TLS, no limits, no security headers, because those belong to the
+  owner's proxy and a second source of the same header is a second thing to
+  keep in step. `nginx -t` passes. Compose starts it under the `external`
+  profile, publishing `127.0.0.1:${RR_EXTERNAL_HTTP_PORT}`, and that profile
+  starts none of the `proxy-*` services.
+- `GET /api/admin/v1/system` reports `proxy.trustedProxies` and
+  `proxy.external` — what the last request carried: the resolved client
+  address, the protocol and whether each forwarded header was present. An
+  owner can see the answer before something breaks rather than after.
+- `.env.example` and `scripts/init-env.sh` now write `RR_TRUSTED_PROXIES` and
+  `RR_EXTERNAL_HTTP_PORT`, so the documented default reaches the process
+  instead of living only in the Zod schema.
+- `docs/external-proxy.md` covers the contract and the nginx, Traefik and
+  Cloudflare configurations, including the Cloudflare ranges and the
+  no-cache rule for `/api`, `/webhooks` and `/tg`.
+- Checks: `pnpm lint`, `pnpm typecheck`, `pnpm -r typecheck`, `pnpm test` (11),
+  `pnpm -r test` (api 138 and the rest), `pnpm test:e2e` (26), `pnpm format`,
+  full `pnpm build`, `docker compose --profile external config`, and `nginx -t`
+  on `edge.conf`.
+
+### M5-005 decisions
+
+- The indicator is kept in process memory, not Valkey: it describes the last
+  request this process served, `/admin/system` runs in the same process, and
+  writing to Valkey on every request would cost a round trip for a diagnostic.
+- With `RR_TRUSTED_PROXIES` unset the API trusts nobody rather than falling
+  back to the compose network. A deployment that has not said what sits in
+  front of it should not believe a header anyone can send.

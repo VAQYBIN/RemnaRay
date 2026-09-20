@@ -1,4 +1,5 @@
 import { Module } from '@nestjs/common';
+import { APP_INTERCEPTOR } from '@nestjs/core';
 
 import { NotifyModule } from '../notify/notify.module';
 import { PaymentsModule } from '../payments/payments.module';
@@ -14,6 +15,7 @@ import {
   AdminSystemController,
   AdminThemeSettingsController,
 } from './admin-settings.controller';
+import { ForwardedInterceptor, ForwardedObserver } from './forwarded.interceptor';
 import { InternalProxyController } from './proxy.controller';
 import { I18nAdminService } from './i18n-admin.service';
 import { ProvidersService } from './providers.service';
@@ -31,7 +33,13 @@ import { SystemService } from './system.service';
     AdminSystemController,
     InternalProxyController,
   ],
-  providers: [ProvidersService, I18nAdminService, SystemService],
+  providers: [
+    ProvidersService,
+    I18nAdminService,
+    SystemService,
+    ForwardedObserver,
+    { provide: APP_INTERCEPTOR, useClass: ForwardedInterceptor },
+  ],
   exports: [ProvidersService, I18nAdminService, SystemService],
 })
 // Nest module metadata is the complete implementation of this module.
