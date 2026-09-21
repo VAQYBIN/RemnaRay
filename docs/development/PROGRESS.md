@@ -42,7 +42,10 @@ defects. No other TASK or milestone may start in this session.
   config and nginx/Caddy image-build attempts fail with the same host error.
   Those gates are blocked, not skipped. The exact VPS procedure is in
   `docs/tls.md`; it remains an external acceptance gate and has not been
-  executed here.
+  executed here. `pnpm typecheck:e2e`, `pnpm i18n-check` (1482 messages), both
+  theme validations and the final clean-tree/diff audit also pass. Overall
+  TASK-M5-004 remains **NOT VERIFIED** until Docker-backed local acceptance is
+  rerun and the real-domain procedure is executed.
 
 ## Reconciliation — 2026-09-21
 
