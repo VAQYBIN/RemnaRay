@@ -92,6 +92,25 @@ wait_for_ready() {
     return 1
   fi
   echo "RemnaRay services are ready."
+  if [ "${1:-false}" = true ]; then
+    wait_for_https
+  fi
+}
+
+wait_for_https() {
+  domain=$(grep -E '^RR_DOMAIN=' .env | cut -d= -f2-)
+  deadline=$(($(date +%s) + ready_timeout))
+  echo "Waiting up to ${ready_timeout}s for https://${domain}/healthz..."
+  while [ "$(date +%s)" -lt "$deadline" ]; do
+    if curl -kfsS --max-time 5 "https://${domain}/healthz" >/dev/null 2>&1; then
+      echo "HTTPS is ready at https://${domain}/healthz."
+      return 0
+    fi
+    sleep 1
+  done
+  echo "HTTPS did not become ready within ${ready_timeout}s." >&2
+  diagnose_startup
+  return 1
 }
 
 start_deployment() {
@@ -105,6 +124,8 @@ start_deployment() {
     docker compose -f "$compose_file" exec -T valkey \
       valkey-cli publish rr:proxy.reload '{"reason":"certbot.state-sync"}'
     wait_for_ready
+  elif [ "$profile" != external ]; then
+    wait_for_ready true
   fi
 }
 
@@ -186,7 +207,7 @@ case "$command" in
     docker compose -f "$compose_file" restart proxy-config
     docker compose -f "$compose_file" exec -T valkey \
       valkey-cli publish rr:proxy.reload '{"reason":"certbot.initial-issuance"}'
-    wait_for_ready
+    wait_for_ready true
     ;;
   proxy:reload)
     # Ask `proxy-reloader` to validate and apply what is currently rendered.

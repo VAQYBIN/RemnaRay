@@ -33,6 +33,7 @@ if (args[0] === 'ps' && process.env.RR_TEST_STALE_ID) console.log(process.env.RR
 `,
       { mode: 0o755 },
     );
+    writeFileSync(join(root, 'curl'), '#!/bin/sh\nexit 0\n', { mode: 0o755 });
     const result = spawnSync('sh', [rr, ...command], {
       cwd: root,
       encoding: 'utf8',

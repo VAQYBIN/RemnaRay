@@ -25,7 +25,7 @@ defects. No other TASK or milestone may start in this session.
   opposite-profile containers selected by the RemnaRay Compose project/service
   labels; `down` enables nginx, caddy, external and certbot together without
   removing named volumes. Lifecycle regression coverage passes.
-- Defect 5 repaired in the current deployment repair: `up` uses Compose
+- Defect 5 repaired in `17d2ac9` plus the current readiness follow-up: `up` uses Compose
   `--wait --wait-timeout 300`, a profile generation marker healthcheck and
   timeout diagnostics; Certbot state sync is followed by another bounded wait.
   No arbitrary sleep was added. Readiness regression coverage passes with the
@@ -37,8 +37,9 @@ defects. No other TASK or milestone may start in this session.
   worker 5/5, worker/API typechecks, lint and shell syntax pass. Docker Compose
   validation, image builds and container smoke tests remain blocked by the
   host Docker Desktop `Bus error`/unresponsive Engine. Exact next work: run
-  every non-Docker repository gate, update the repeatable `docs/tls.md` VPS
-  procedure, then rerun Docker checks when the engine is repaired.
+  every non-Docker repository gate, then rerun Docker checks when the engine is
+  repaired. The exact VPS procedure is now in `docs/tls.md`; it remains an
+  external acceptance gate and has not been executed here.
 
 ## Reconciliation — 2026-09-21
 
