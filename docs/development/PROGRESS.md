@@ -12,20 +12,20 @@ defects. No other TASK or milestone may start in this session.
   Regression: `node --test test/rr.test.mjs` — 2/2 pass, including failure
   propagation and missing-email rejection. Repair commit: this commit
   (`fix(deploy): route initial TLS issuance directly to Certbot`).
-- Defect 2 repaired in the current deployment repair: `proxy-config` and
+- Defect 2 repaired in `17d2ac9`: `proxy-config` and
   `proxy-reloader` no longer mount Certbot's private-key volume. Certbot and
   nginx retain the only certificate mounts; a separate `.issued` marker volume
   drives bootstrap/full rendering. Marker and permission-boundary regression
   coverage passes.
-- Defect 3 repaired in the current deployment repair: the worker no longer
+- Defect 3 repaired in `17d2ac9`: the worker no longer
   checks `RR_WORKER_ENABLED` or reads `RR_VALKEY_HOST`/`RR_VALKEY_PORT`; it
   pings and reuses the documented `VALKEY_URL`, and the outbox relay is always
   scheduled. Worker tests: 3 files, 5 tests passed.
-- Defect 4 repaired in the current deployment repair: `up` removes only stale
+- Defect 4 repaired in `17d2ac9`: `up` removes only stale
   opposite-profile containers selected by the RemnaRay Compose project/service
   labels; `down` enables nginx, caddy, external and certbot together without
   removing named volumes. Lifecycle regression coverage passes.
-- Defect 5 repaired in `17d2ac9` plus the current readiness follow-up: `up` uses Compose
+- Defect 5 repaired in `17d2ac9` and `b41e20b`: `up` uses Compose
   `--wait --wait-timeout 300`, a profile generation marker healthcheck and
   timeout diagnostics; Certbot state sync is followed by another bounded wait.
   No arbitrary sleep was added. Readiness regression coverage passes with the
@@ -34,12 +34,15 @@ defects. No other TASK or milestone may start in this session.
   with Bus error; Engine `_ping` over `/var/run/docker.sock` times out at 5 s.
   Container checks and real-domain acceptance are NOT VERIFIED.
 - Current repair verification: wrapper regression 4/4, proxy renderer 22/22,
-  worker 5/5, worker/API typechecks, lint and shell syntax pass. Docker Compose
-  validation, image builds and container smoke tests remain blocked by the
-  host Docker Desktop `Bus error`/unresponsive Engine. Exact next work: run
-  every non-Docker repository gate, then rerun Docker checks when the engine is
-  repaired. The exact VPS procedure is now in `docs/tls.md`; it remains an
-  external acceptance gate and has not been executed here.
+  worker tests 5/5, root tests 38/38, workspace tests passed, workspace
+  typechecks passed, `pnpm build`, `pnpm lint`, `pnpm format`, shell syntax and
+  `git diff --check` passed. `pnpm test:m5` reached all three M5 integration
+  tests but all Docker-backed tests failed before container startup because the
+  WSL Docker integration reports `docker could not be found`; direct Compose
+  config and nginx/Caddy image-build attempts fail with the same host error.
+  Those gates are blocked, not skipped. The exact VPS procedure is in
+  `docs/tls.md`; it remains an external acceptance gate and has not been
+  executed here.
 
 ## Reconciliation — 2026-09-21
 
