@@ -120,8 +120,14 @@ case "$command" in
     fi
     domain=$(grep -E '^RR_DOMAIN=' .env | cut -d= -f2-)
     email=$(grep -E '^RR_ACME_EMAIL=' .env | cut -d= -f2-)
-    docker compose -f "$compose_file" --profile certbot run --rm certbot \
-      certonly --webroot -w /var/www/certbot -d "$domain" -m "$email" --agree-tos -n
+    if [ -z "$domain" ] || [ -z "$email" ]; then
+      echo "tls:issue requires RR_DOMAIN and RR_ACME_EMAIL in .env" >&2
+      exit 2
+    fi
+    echo "Issuing with certbot certonly for $domain (keeping an existing valid certificate)."
+    docker compose -f "$compose_file" --profile certbot run --rm --entrypoint certbot certbot \
+      certonly --webroot -w /var/www/certbot -d "$domain" -m "$email" --agree-tos -n \
+      --cert-name "$domain" --keep-until-expiring
     # The certificate exists now, so the full configuration renders.
     docker compose -f "$compose_file" restart proxy-config
     ;;

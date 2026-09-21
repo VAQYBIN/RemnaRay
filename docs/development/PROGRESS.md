@@ -1,5 +1,25 @@
 # RemnaRay Development Progress
 
+## TASK-M5-004 remediation — 2026-09-22 (current authority)
+
+Current milestone: M5, NOT VERIFIED. Current and sole task: TASK-M5-004.
+The previous local-verification claim is withdrawn following five confirmed VPS
+defects. No other TASK or milestone may start in this session.
+
+- Defect 1 repaired: the Compose renewal-loop entrypoint swallowed certonly.
+  `tls:issue` now overrides it with Certbot and supplies webroot, domain, email,
+  named lineage and keep-until-expiring. Renewal remains a separate loop.
+  Regression: `node --test test/rr.test.mjs` — 2/2 pass, including failure
+  propagation and missing-email rejection. Repair commit: this commit
+  (`fix(deploy): route initial TLS issuance directly to Certbot`).
+- Defects 2–5: implementation and verification pending.
+- Environment blocker reproduced: `/usr/bin/docker compose version` crashes
+  with Bus error; Engine `_ping` over `/var/run/docker.sock` times out at 5 s.
+  Container checks and real-domain acceptance are NOT VERIFIED.
+- Exact next work: remove proxy-config certificate access, fix standard worker
+  configuration, profile lifecycle and bounded readiness; complete local
+  regression checks and publish the repeatable `docs/tls.md` VPS procedure.
+
 ## Reconciliation — 2026-09-21
 
 This is the current handoff state. Older entries below preserve the evidence
