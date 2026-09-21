@@ -1,10 +1,11 @@
 import { Injectable, Logger, type OnModuleDestroy, type OnModuleInit } from '@nestjs/common';
 import { queueJobs, recordTlsExpiry } from '@remnaray/metrics';
-import { QUEUE_PREFIX, toJobId } from '@remnaray/queues';
+import { createRedisConnection, QUEUE_PREFIX, toJobId } from '@remnaray/queues';
 import { Queue, Worker, type Job } from 'bullmq';
 
 import { backupStatus } from './backup-check';
 import { certificateStatus } from './tls-check';
+import { workerValkeyUrl } from './worker-config';
 
 type InternalCall = { path: string; body?: unknown };
 
@@ -18,15 +19,12 @@ export class WorkerService implements OnModuleInit, OnModuleDestroy {
   private workers: { close(): Promise<void> }[] = [];
   private queues: Queue[] = [];
   private timers: ReturnType<typeof setInterval>[] = [];
+  private redis?: ReturnType<typeof createRedisConnection>;
 
-  onModuleInit() {
-    if (process.env.RR_WORKER_ENABLED !== 'true') return;
-
-    const connection = {
-      host: process.env.RR_VALKEY_HOST ?? '127.0.0.1',
-      port: Number(process.env.RR_VALKEY_PORT ?? 6379),
-      maxRetriesPerRequest: null,
-    };
+  async onModuleInit(): Promise<void> {
+    this.redis = createRedisConnection(workerValkeyUrl());
+    await this.redis.ping();
+    const connection = this.redis;
     // The prefix the outbox relay publishes under. Without it the workers wait
     // on `bull:*` while every relayed job sits in `rr:q:*` for ever.
     const options = { connection, prefix: QUEUE_PREFIX };
@@ -179,6 +177,7 @@ export class WorkerService implements OnModuleInit, OnModuleDestroy {
     for (const timer of this.timers) clearInterval(timer);
     await Promise.all(this.workers.map((worker) => worker.close()));
     await Promise.all(this.queues.map((queue) => queue.close()));
+    if (this.redis) await this.redis.quit();
   }
 
   private async call({ path, body }: InternalCall): Promise<unknown> {

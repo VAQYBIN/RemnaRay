@@ -13,7 +13,7 @@ import Redis from 'ioredis';
 import { dockerAgent, dockerExec, type ExecResult } from './docker-exec';
 
 const RELOAD_CHANNEL = 'rr:proxy.reload';
-const CERTBOT_FLAG_DIRECTORY = '/etc/letsencrypt';
+const CERTBOT_FLAG_DIRECTORY = '/run/remnaray/certbot';
 const CERTBOT_FLAG = '.renewed';
 
 function flag(name: string, fallback: string): string {

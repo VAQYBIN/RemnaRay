@@ -160,7 +160,7 @@ services:
     volumes:
       - proxy-conf:/proxy-conf
       - ./deploy/proxy:/templates:ro
-      - certbot-certs:/etc/letsencrypt:ro
+      - certbot-state:/run/remnaray/certbot:ro
     depends_on:
       # The renderer's first act is to read `settings`, so it waits for the
       # migrations like every other reader does. Without this it crash-loops
@@ -169,6 +169,12 @@ services:
       migrate: { condition: service_completed_successfully }
       postgres: { condition: service_healthy }
       valkey: { condition: service_healthy }
+    healthcheck:
+      test:
+        [CMD-SHELL, 'test "$(cat /proxy-conf/.profile-ready 2>/dev/null)" = "$$RR_PROXY_PROFILE"']
+      interval: 5s
+      timeout: 3s
+      retries: 12
     profiles: [nginx, caddy]
 
   proxy-nginx:
@@ -183,7 +189,7 @@ services:
       - ./deploy/proxy/certs:/etc/nginx/certs:ro
     networks: { rr_net: { ipv4_address: 172.28.0.10 } }
     depends_on:
-      proxy-config: { condition: service_started }
+      proxy-config: { condition: service_healthy }
       web: { condition: service_healthy }
       api: { condition: service_healthy }
     healthcheck:
@@ -221,19 +227,25 @@ services:
   # Only with RR_TLS_MODE=certbot; `./rr up` adds the profile automatically.
   certbot:
     image: certbot/certbot:latest
+    environment:
+      RR_DOMAIN: ${RR_DOMAIN}
     entrypoint:
       - /bin/sh
       - -c
       - >
         trap exit TERM;
+        if [ -n "$$RR_DOMAIN" ] && [ -f "/etc/letsencrypt/live/$$RR_DOMAIN/fullchain.pem" ]; then
+        touch /run/remnaray/certbot/.issued;
+        fi;
         while :; do
         certbot renew --webroot -w /var/www/certbot
-        --deploy-hook 'touch /etc/letsencrypt/.renewed';
+        --deploy-hook 'touch /run/remnaray/certbot/.renewed';
         sleep 12h & wait $${!};
         done
     volumes:
       - certbot-webroot:/var/www/certbot
       - certbot-certs:/etc/letsencrypt
+      - certbot-state:/run/remnaray/certbot
     networks: [rr_net]
     restart: unless-stopped
     logging: { driver: json-file, options: { max-size: '50m', max-file: '5' } }
@@ -250,7 +262,7 @@ services:
       - ./deploy/proxy/certs:/certs:ro
     networks: { rr_net: { ipv4_address: 172.28.0.10 } }
     depends_on:
-      proxy-config: { condition: service_started }
+      proxy-config: { condition: service_healthy }
       web: { condition: service_healthy }
       api: { condition: service_healthy }
     healthcheck:
@@ -275,7 +287,7 @@ services:
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock:ro
       - proxy-conf:/proxy-conf:ro
-      - certbot-certs:/etc/letsencrypt:ro
+      - certbot-state:/run/remnaray/certbot:ro
     depends_on:
       valkey: { condition: service_healthy }
     profiles: [nginx, caddy]
@@ -317,5 +329,6 @@ volumes:
   proxy-cache: {}
   certbot-webroot: {}
   certbot-certs: {}
+  certbot-state: {}
   caddy-data: {}
   caddy-config: {}

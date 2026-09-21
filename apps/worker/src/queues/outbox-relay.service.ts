@@ -11,7 +11,6 @@ export class OutboxRelayService implements OnModuleDestroy {
 
   @Cron('*/2 * * * * *')
   async relayOutbox(): Promise<void> {
-    if (process.env.RR_WORKER_ENABLED !== 'true') return;
     this.redis ??= createRedisConnection();
     this.prisma ??= createPrismaClient();
     this.relay ??= new OutboxRelay(this.prisma, this.redis);

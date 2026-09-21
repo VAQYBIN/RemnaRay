@@ -6,19 +6,39 @@ Current milestone: M5, NOT VERIFIED. Current and sole task: TASK-M5-004.
 The previous local-verification claim is withdrawn following five confirmed VPS
 defects. No other TASK or milestone may start in this session.
 
-- Defect 1 repaired: the Compose renewal-loop entrypoint swallowed certonly.
+- Defect 1 repaired in `3da1ff6`: the Compose renewal-loop entrypoint swallowed certonly.
   `tls:issue` now overrides it with Certbot and supplies webroot, domain, email,
   named lineage and keep-until-expiring. Renewal remains a separate loop.
   Regression: `node --test test/rr.test.mjs` — 2/2 pass, including failure
   propagation and missing-email rejection. Repair commit: this commit
   (`fix(deploy): route initial TLS issuance directly to Certbot`).
-- Defects 2–5: implementation and verification pending.
+- Defect 2 repaired in the current deployment repair: `proxy-config` and
+  `proxy-reloader` no longer mount Certbot's private-key volume. Certbot and
+  nginx retain the only certificate mounts; a separate `.issued` marker volume
+  drives bootstrap/full rendering. Marker and permission-boundary regression
+  coverage passes.
+- Defect 3 repaired in the current deployment repair: the worker no longer
+  checks `RR_WORKER_ENABLED` or reads `RR_VALKEY_HOST`/`RR_VALKEY_PORT`; it
+  pings and reuses the documented `VALKEY_URL`, and the outbox relay is always
+  scheduled. Worker tests: 3 files, 5 tests passed.
+- Defect 4 repaired in the current deployment repair: `up` removes only stale
+  opposite-profile containers selected by the RemnaRay Compose project/service
+  labels; `down` enables nginx, caddy, external and certbot together without
+  removing named volumes. Lifecycle regression coverage passes.
+- Defect 5 repaired in the current deployment repair: `up` uses Compose
+  `--wait --wait-timeout 300`, a profile generation marker healthcheck and
+  timeout diagnostics; Certbot state sync is followed by another bounded wait.
+  No arbitrary sleep was added. Readiness regression coverage passes with the
+  wrapper simulation.
 - Environment blocker reproduced: `/usr/bin/docker compose version` crashes
   with Bus error; Engine `_ping` over `/var/run/docker.sock` times out at 5 s.
   Container checks and real-domain acceptance are NOT VERIFIED.
-- Exact next work: remove proxy-config certificate access, fix standard worker
-  configuration, profile lifecycle and bounded readiness; complete local
-  regression checks and publish the repeatable `docs/tls.md` VPS procedure.
+- Current repair verification: wrapper regression 4/4, proxy renderer 22/22,
+  worker 5/5, worker/API typechecks, lint and shell syntax pass. Docker Compose
+  validation, image builds and container smoke tests remain blocked by the
+  host Docker Desktop `Bus error`/unresponsive Engine. Exact next work: run
+  every non-Docker repository gate, update the repeatable `docs/tls.md` VPS
+  procedure, then rerun Docker checks when the engine is repaired.
 
 ## Reconciliation — 2026-09-21
 

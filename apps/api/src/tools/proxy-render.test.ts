@@ -1,10 +1,11 @@
-import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
 
 import {
   caddyHasRateLimit,
+  certbotCertificatePresent,
   customFiles,
   fill,
   renderProfile,
@@ -39,6 +40,17 @@ function render(tlsMode: TlsMode, overrides: Partial<ProxySources> = {}, certifi
 }
 
 describe('proxy template rendering (section 21.2)', () => {
+  it('uses a readable issuance marker instead of Certbot private-key permissions', () => {
+    const root = mkdtempSync(join(tmpdir(), 'rr-certbot-state-'));
+    try {
+      expect(certbotCertificatePresent(root)).toBe(false);
+      writeFileSync(join(root, '.issued'), 'issued\n', { mode: 0o644 });
+      expect(certbotCertificatePresent(root)).toBe(true);
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+
   it('substitutes only `{{NAME}}` placeholders and leaves unknown ones alone', () => {
     expect(fill('a {{ONE}} b {{TWO}} c', { ONE: '1' })).toBe('a 1 b {{TWO}} c');
   });

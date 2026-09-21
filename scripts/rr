@@ -18,6 +18,8 @@ profiles="--profile $profile"
 if [ "$tls_mode" = "certbot" ]; then
   profiles="$profiles --profile certbot"
 fi
+all_deployment_profiles="--profile nginx --profile caddy --profile external --profile certbot"
+ready_timeout=300
 
 usage() {
   cat <<'USAGE'
@@ -57,6 +59,55 @@ image_file() {
   esac
 }
 
+cleanup_stale_proxy() {
+  project=${COMPOSE_PROJECT_NAME:-remnaray}
+  case "$profile" in
+    nginx) stale="proxy-caddy" ;;
+    caddy) stale="proxy-nginx" ;;
+    external) stale="proxy-nginx proxy-caddy" ;;
+    *) stale="" ;;
+  esac
+  for service in $stale; do
+    ids=$(docker ps -aq \
+      --filter "label=com.docker.compose.project=$project" \
+      --filter "label=com.docker.compose.service=$service")
+    for id in $ids; do
+      echo "Removing stale RemnaRay $service container $id"
+      docker rm -f "$id"
+    done
+  done
+}
+
+diagnose_startup() {
+  echo "RemnaRay did not become ready within ${ready_timeout}s." >&2
+  docker compose -f "$compose_file" $profiles ps --all >&2 || true
+  docker compose -f "$compose_file" $profiles logs --tail=80 \
+    api worker web proxy-config proxy-nginx proxy-caddy >&2 || true
+}
+
+wait_for_ready() {
+  echo "Waiting up to ${ready_timeout}s for healthy RemnaRay services..."
+  if ! docker compose -f "$compose_file" $profiles up -d --wait --wait-timeout "$ready_timeout"; then
+    diagnose_startup
+    return 1
+  fi
+  echo "RemnaRay services are ready."
+}
+
+start_deployment() {
+  cleanup_stale_proxy
+  wait_for_ready
+  # A pre-existing Certbot lineage is detected by the Certbot service at start.
+  # Restarting the renderer after that marker is created lets it switch from
+  # bootstrap to the full TLS configuration without reading the key itself.
+  if [ "$tls_mode" = "certbot" ]; then
+    docker compose -f "$compose_file" restart proxy-config
+    docker compose -f "$compose_file" exec -T valkey \
+      valkey-cli publish rr:proxy.reload '{"reason":"certbot.state-sync"}'
+    wait_for_ready
+  fi
+}
+
 case "$command" in
   build)
     # Section 24.4 publishes the images to GHCR, and `compose.yaml` names them
@@ -86,12 +137,14 @@ case "$command" in
     done
     ;;
   up)
-    # shellcheck disable=SC2086
-    docker compose -f "$compose_file" $profiles up -d
+    start_deployment
     ;;
   down)
+    # Enable every RemnaRay deployment profile so a profile changed in .env
+    # cannot hide a proxy container created by the previous profile. Volumes
+    # are deliberately preserved; `down -v` remains the destructive command.
     # shellcheck disable=SC2086
-    docker compose -f "$compose_file" $profiles down
+    docker compose -f "$compose_file" $all_deployment_profiles down
     ;;
   logs)
     shift
@@ -127,9 +180,13 @@ case "$command" in
     echo "Issuing with certbot certonly for $domain (keeping an existing valid certificate)."
     docker compose -f "$compose_file" --profile certbot run --rm --entrypoint certbot certbot \
       certonly --webroot -w /var/www/certbot -d "$domain" -m "$email" --agree-tos -n \
-      --cert-name "$domain" --keep-until-expiring
+      --cert-name "$domain" --keep-until-expiring \
+      --deploy-hook 'touch /run/remnaray/certbot/.issued'
     # The certificate exists now, so the full configuration renders.
     docker compose -f "$compose_file" restart proxy-config
+    docker compose -f "$compose_file" exec -T valkey \
+      valkey-cli publish rr:proxy.reload '{"reason":"certbot.initial-issuance"}'
+    wait_for_ready
     ;;
   proxy:reload)
     # Ask `proxy-reloader` to validate and apply what is currently rendered.

@@ -7,7 +7,7 @@ import process from 'node:process';
 import test from 'node:test';
 
 const rr = resolve('scripts/rr');
-function run(command, values = {}, failure = '') {
+function run(command, values = {}, failure = '', options = {}) {
   const root = mkdtempSync(join(tmpdir(), 'rr-cli-'));
   try {
     writeFileSync(
@@ -29,6 +29,7 @@ const fs = require('node:fs');
 const args = process.argv.slice(2);
 fs.appendFileSync(process.env.RR_TEST_LOG, JSON.stringify(args) + '\\n');
 if (process.env.RR_TEST_FAILURE && args.includes(process.env.RR_TEST_FAILURE)) process.exit(1);
+if (args[0] === 'ps' && process.env.RR_TEST_STALE_ID) console.log(process.env.RR_TEST_STALE_ID);
 `,
       { mode: 0o755 },
     );
@@ -40,6 +41,7 @@ if (process.env.RR_TEST_FAILURE && args.includes(process.env.RR_TEST_FAILURE)) p
         PATH: `${root}:${process.env.PATH}`,
         RR_TEST_LOG: join(root, 'calls'),
         RR_TEST_FAILURE: failure,
+        ...options,
       },
     });
     let calls = [];
@@ -77,6 +79,8 @@ test('tls:issue overrides the renewal entrypoint with initial certonly issuance'
     '--cert-name',
     'shop.example.test',
     '--keep-until-expiring',
+    '--deploy-hook',
+    'touch /run/remnaray/certbot/.issued',
   ]);
   assert.ok(!issue.includes('renew'));
   const compose = readFileSync('compose.yaml', 'utf8');
@@ -89,4 +93,42 @@ test('tls:issue refuses missing issuance settings and propagates Certbot failure
   const failed = run(['tls:issue'], {}, 'certonly');
   assert.equal(failed.status, 1);
   assert.ok(!failed.calls.some((args) => args.includes('restart')));
+});
+
+test('profile lifecycle removes only stale proxy containers and down enables every deployment profile', () => {
+  const switched = run(['up'], {}, '', { RR_TEST_STALE_ID: 'old-nginx' });
+  assert.ok(switched.calls.some((args) => args[0] === 'rm' && args.includes('old-nginx')));
+  assert.ok(
+    switched.calls.some((args) => args.includes('--wait') && args.includes('--wait-timeout')),
+  );
+
+  const down = run(['down']);
+  const downCall = down.calls.find((args) => args[0] === 'compose' && args.at(-1) === 'down');
+  assert.deepEqual(downCall.slice(downCall.indexOf('--profile')), [
+    '--profile',
+    'nginx',
+    '--profile',
+    'caddy',
+    '--profile',
+    'external',
+    '--profile',
+    'certbot',
+    'down',
+  ]);
+});
+
+test('proxy-config and proxy-reloader do not mount Certbot private-key material', () => {
+  const compose = readFileSync('compose.yaml', 'utf8');
+  const proxyConfig = compose.slice(
+    compose.indexOf('  proxy-config:'),
+    compose.indexOf('  proxy-nginx:'),
+  );
+  const reloader = compose.slice(
+    compose.indexOf('  proxy-reloader:'),
+    compose.indexOf('  backup:'),
+  );
+  assert.doesNotMatch(proxyConfig, /certbot-certs/u);
+  assert.doesNotMatch(reloader, /certbot-certs/u);
+  assert.match(proxyConfig, /certbot-state:\/run\/remnaray\/certbot:ro/u);
+  assert.match(compose, /certbot-state:\/run\/remnaray\/certbot/u);
 });

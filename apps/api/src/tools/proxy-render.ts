@@ -38,6 +38,15 @@ export type RenderOptions = {
 
 export type RenderedFile = { name: string; content: string };
 
+/**
+ * Certbot creates its live/archive directories with root-only permissions.
+ * nginx reads the certificate as its root master; this unprivileged renderer
+ * only needs the deployment marker shared with the Certbot service.
+ */
+export function certbotCertificatePresent(stateDirectory = '/run/remnaray/certbot'): boolean {
+  return existsSync(resolve(stateDirectory, '.issued'));
+}
+
 /** Section 21.2 replaces `{{NAME}}` placeholders; nothing else is interpreted. */
 export function fill(template: string, values: Record<string, string>): string {
   return template.replaceAll(/\{\{([A-Z0-9_]+)\}\}/gu, (match, name: string) =>

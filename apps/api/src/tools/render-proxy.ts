@@ -4,7 +4,6 @@
  * it. With `--watch` it re-renders on `rr:settings.changed` and publishes
  * `rr:proxy.reload` only when the output actually changed.
  */
-import { existsSync } from 'node:fs';
 import { resolve } from 'node:path';
 import process from 'node:process';
 import { createPrismaClient } from '@remnaray/db';
@@ -14,6 +13,7 @@ import {
   PROXY_PROFILES,
   PROXY_SETTING_KEYS,
   TLS_MODES,
+  certbotCertificatePresent,
   customFiles,
   renderProfile,
   sourcesFrom,
@@ -60,9 +60,10 @@ async function main(): Promise<void> {
       ...renderProfile(directory, sources, {
         profile: profile as ProxyProfile,
         tlsMode: tlsMode as TlsMode,
-        certificatePresent: existsSync(`/etc/letsencrypt/live/${sources.domain}/fullchain.pem`),
+        certificatePresent: certbotCertificatePresent(process.env.RR_CERTBOT_STATE_DIR),
       }),
       ...customFiles(directory),
+      { name: '.profile-ready', content: `${profile}\n` },
     ];
     const changed = writeAtomically(output, files);
     process.stdout.write(
