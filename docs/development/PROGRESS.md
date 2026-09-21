@@ -31,6 +31,19 @@ Remnawave v3.4.4 compatibility boundary.
 
 ### CI, images and release
 
+- Subsequent VPS evidence: all five `ghcr.io/vaqybin/<image>:dev` manifests
+  resolve with `linux/amd64` images. GitHub images run
+  [35562770867](https://github.com/VAQYBIN/RemnaRay/actions/runs/35562770867)
+  succeeded for `6cfbc770c8badb33478d16ba503a39f4397b5c1e`, including all five
+  images and the summary job. This supersedes the zero-runs observation below;
+  arm64 and tagged-release acceptance remain unverified.
+- New VPS deployment blocker: `docker compose --profile nginx up -d` resolves
+  `ghcr.io/remnaray/*:dev` despite the reported `.env` containing
+  `RR_REGISTRY=ghcr.io/vaqybin`. Classified as deployment/configuration;
+  precise cause is pending effective-environment and Compose-file diagnostics.
+  Current repository expressions support `RR_REGISTRY`; per-image overrides
+  take precedence. Do not infer an authentication failure for the published
+  `vaqybin` images from a denial for the different `remnaray` namespace.
 - `pnpm install --frozen-lockfile` passed in this checkout.
 - GitHub run `35535283089` for commit `c28ec08` passed quality, E2E,
   Lighthouse, proxy, all five Docker matrix builds and both proxy-smoke jobs.
@@ -79,11 +92,16 @@ Desktop itself returned the bus error above.
 
 ### Exact next action
 
-Run the narrow SDK/API checks, regenerate and apply migration `0005_panel_user_id`
-on the VPS, then exercise one purchase and the panel user actions against
-v3.4.4. Separately run the `images` workflow with a chosen tag and verify all
-five GHCR manifests before setting `RR_REGISTRY`/`RR_VERSION` on the VPS. Then
-run the real-domain checklist in `docs/tls.md` and record its output.
+First obtain the VPS's filtered `docker compose config --environment`,
+`config --images`, and image expressions in its Compose files, following
+the registry troubleshooting instructions. Correct the selected image
+namespace and verify it before retrying startup.
+
+After image selection is corrected, verify migration `0005_panel_user_id`
+and service health on the VPS, then exercise a purchase and panel user actions
+against v3.4.4. Run the real-domain checklist in `docs/tls.md` and record its
+output. The successful development-image publication does not close the
+tagged-release acceptance gate.
 
 ## Historical progress
 

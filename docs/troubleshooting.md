@@ -3,6 +3,34 @@
 Organised by what you see. Every command assumes you are in the repository
 directory on the server.
 
+## Compose pulls from the wrong registry
+
+If `imagetools inspect` finds your published images but `compose up` names a
+different registry, inspect image selection before changing credentials:
+
+```sh
+git rev-parse --short HEAD
+docker compose version
+grep -nE 'image:|RR_REGISTRY' compose.yaml
+env | grep -E '^(RR_(REGISTRY|VERSION|[A-Z]+_IMAGE)|COMPOSE_(FILE|ENV_FILES|DISABLE_ENV_FILE))='
+grep -nE '^(RR_(REGISTRY|VERSION|[A-Z]+_IMAGE)|COMPOSE_(FILE|ENV_FILES|DISABLE_ENV_FILE))=' .env
+docker compose --profile nginx config --environment |
+  grep -E '^(RR_(REGISTRY|VERSION|[A-Z]+_IMAGE)|COMPOSE_(FILE|ENV_FILES|DISABLE_ENV_FILE))='
+docker compose --profile nginx config --images
+docker compose --env-file .env -f compose.yaml --profile nginx config --images
+```
+
+`RR_APP_IMAGE`, `RR_WEB_IMAGE`, `RR_NGINX_IMAGE`, `RR_CADDY_IMAGE` and
+`RR_BACKUP_IMAGE` replace complete references and take precedence over
+`RR_REGISTRY`/`RR_VERSION` in this repository. Remove stale overrides from
+`.env` and unset exported copies if using the common registry setting.
+[Exported shell variables override `.env`](https://docs.docker.com/compose/how-tos/environment-variables/variable-interpolation/),
+even with `--env-file`. Duplicate assignments and an older Compose file that
+does not reference `RR_REGISTRY` also need checking. A difference between the
+last two commands points to automatic overrides or another selected file.
+Confirm the application image names with `config --images` before running
+`up`; PostgreSQL and Valkey retain their upstream image names.
+
 ## The certificate never arrives
 
 `https://<domain>/` warns, or the connection is refused, more than two minutes
@@ -99,10 +127,11 @@ docker compose ps
 docker compose logs <service> --tail 100
 ```
 
-- **Nothing starts and every image says `error from registry: denied`.** The
-  images are not published for this checkout. Build them once with
-  `./scripts/rr build` — [`install.md`](install.md#running-from-a-source-checkout)
-  explains when that is needed.
+- **Nothing starts and every image says `error from registry: denied`.** Check
+  the selected registry using the commands above. If it is correct, confirm
+  the tag exists and that the server can read the package. For a checkout
+  without published images, [`install.md`](install.md#running-from-a-source-checkout)
+  explains local builds and publishing through Actions.
 - **`postgres` refuses to start** after an upgrade of the image across a major
   version. PostgreSQL 18 keeps its data in a version-specific directory; the
   volume belongs at `/var/lib/postgresql`, which is what `compose.yaml` mounts.
