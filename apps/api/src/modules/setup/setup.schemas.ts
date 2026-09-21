@@ -43,6 +43,7 @@ export const setupDomainSchema = z.object({
 export const setupPanelSchema = z.object({
   baseUrl: z.url().max(300),
   apiToken: z.string().min(1).max(4096),
+  webhookSecret: z.string().min(1).max(4096).optional(),
   extraHeaders: z.record(z.string().min(1).max(100), z.string().max(1000)).default({}),
 });
 

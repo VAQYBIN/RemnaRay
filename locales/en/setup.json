@@ -39,6 +39,8 @@
   "setup.panel.description": "The Remnawave address and API token. Run the check before you continue.",
   "setup.panel.baseUrl": "Panel address",
   "setup.panel.apiToken": "API token",
+  "setup.panel.webhookSecret": "Panel webhook secret (optional)",
+  "setup.panel.webhookSecretHint": "Enter the secret already configured in the panel. Leave blank to generate one.",
   "setup.panel.extraHeaders": "Extra headers",
   "setup.panel.extraHeadersHint": "A JSON object such as \"CF-Access-Client-Id\": \"…\", one field per header.",
   "setup.panel.version": "Panel version: {version}",

@@ -25,17 +25,17 @@ writes straight into `settings` and the target tables. `GET /api/setup/v1/state`
 returns the current step and the draft; the draft names the domain, the panel
 and the brand, so it is only served to a wizard session.
 
-| #   | Step                | Server check                                                                |
-| --- | ------------------- | --------------------------------------------------------------------------- |
-| 0   | Token               | `argon2` against the stored hash; five wrong tries block the IP 15 minutes  |
-| 1   | Administrator       | password ≥ 12 characters, TOTP code confirms the enrolment                  |
-| 2   | Domain              | `settings.domain.*`, prefilled from `RR_DOMAIN` and `RR_ACME_EMAIL`         |
-| 3   | Panel               | `system.stats` plus `squads.list`; answers the panel's webhook `.env` lines |
-| 4   | Bot                 | `getMe`; the webhook itself is set on the last step                         |
-| 5   | Brand               | the theme must load from the mounted `themes/` directory                    |
-| 6   | Plan and trial      | creates the first `plans` row and writes `settings.trial.*`                 |
-| 7   | Payments and fiscal | healthchecks each provider, or the step is skipped                          |
-| 8   | Ready               | flips `setup.completed` and launches the shop                               |
+| #   | Step                | Server check                                                                                                                |
+| --- | ------------------- | --------------------------------------------------------------------------------------------------------------------------- |
+| 0   | Token               | `argon2` against the stored hash; five wrong tries block the IP 15 minutes                                                  |
+| 1   | Administrator       | password ≥ 12 characters, TOTP code confirms the enrolment                                                                  |
+| 2   | Domain              | `settings.domain.*`, prefilled from `RR_DOMAIN` and `RR_ACME_EMAIL`                                                         |
+| 3   | Panel               | `system.stats` plus `squads.list`; accepts an existing webhook secret or generates one and answers the panel's `.env` lines |
+| 4   | Bot                 | `getMe`; the webhook itself is set on the last step                                                                         |
+| 5   | Brand               | the theme must load from the mounted `themes/` directory                                                                    |
+| 6   | Plan and trial      | creates the first `plans` row and writes `settings.trial.*`                                                                 |
+| 7   | Payments and fiscal | healthchecks each provider, or the step is skipped                                                                          |
+| 8   | Ready               | flips `setup.completed` and launches the shop                                                                               |
 
 Step 1 is posted twice: without `code` the server generates the TOTP secret and
 answers with the QR image, with `code` it confirms and creates the
@@ -44,6 +44,11 @@ an abandoned wizard leaves no half-made account.
 
 The «Проверить» buttons are separate routes — `POST /api/setup/v1/check/panel`,
 `/check/bot` and `/check/provider` — so a check never writes anything.
+
+Step 3 accepts the secret already configured in the Remnawave panel. Enter it
+in **Panel webhook secret** before checking and saving the step; the generated
+`.env` hint then uses that exact value. Leave the field empty to generate a new
+secret as before.
 
 ## Finishing
 

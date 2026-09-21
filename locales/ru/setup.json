@@ -39,6 +39,8 @@
   "setup.panel.description": "Адрес Remnawave и токен API. Нажмите «Проверить» перед переходом дальше.",
   "setup.panel.baseUrl": "Адрес панели",
   "setup.panel.apiToken": "Токен API",
+  "setup.panel.webhookSecret": "Секрет вебхука панели (необязательно)",
+  "setup.panel.webhookSecretHint": "Введите секрет, который уже настроен в панели. Если оставить поле пустым, секрет будет сгенерирован.",
   "setup.panel.extraHeaders": "Дополнительные заголовки",
   "setup.panel.extraHeadersHint": "JSON-объект вида \"CF-Access-Client-Id\": \"…\", по одному полю на заголовок.",
   "setup.panel.version": "Версия панели: {version}",

@@ -453,6 +453,7 @@ function PanelStep({ pending, state, run, refresh, setStep }: StepProps) {
   const t = useTranslations('setup');
   const [baseUrl, setBaseUrl] = useState(field(state.draft, 'panel', 'baseUrl'));
   const [apiToken, setApiToken] = useState('');
+  const [webhookSecret, setWebhookSecret] = useState('');
   const [headers, setHeaders] = useState('{}');
   const [check, setCheck] = useState<z.infer<typeof panelCheckSchema> | null>(null);
 
@@ -482,6 +483,14 @@ function PanelStep({ pending, state, run, refresh, setStep }: StepProps) {
         value={apiToken}
         onChange={setApiToken}
       />
+      <TextField
+        id="setup-panel-webhook-secret"
+        label={t('panel.webhookSecret')}
+        type="password"
+        value={webhookSecret}
+        onChange={setWebhookSecret}
+      />
+      <p className="text-xs text-muted-foreground">{t('panel.webhookSecretHint')}</p>
       <div className="flex flex-col gap-2">
         <Label htmlFor="setup-panel-headers">{t('panel.extraHeaders')}</Label>
         <textarea
@@ -531,7 +540,12 @@ function PanelStep({ pending, state, run, refresh, setStep }: StepProps) {
                 'POST',
                 'api/setup/v1/check/panel',
                 panelCheckSchema,
-                { baseUrl, apiToken, extraHeaders: extraHeaders ?? {} },
+                {
+                  baseUrl,
+                  apiToken,
+                  webhookSecret: webhookSecret || undefined,
+                  extraHeaders: extraHeaders ?? {},
+                },
               );
               setCheck(result);
               return result;
@@ -547,6 +561,7 @@ function PanelStep({ pending, state, run, refresh, setStep }: StepProps) {
               await browserApi().send('POST', 'api/setup/v1/steps/3', savedSchema, {
                 baseUrl,
                 apiToken,
+                webhookSecret: webhookSecret || undefined,
                 extraHeaders: extraHeaders ?? {},
               });
               return refresh();

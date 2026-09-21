@@ -28,6 +28,10 @@ Remnawave v3.4.4 compatibility boundary.
   required revoke body, nested `userTraffic`, and UUID-string squad payloads.
   Migration `0005_panel_user_id` stores the mapping; `vlessUuid` remains the
   subscription snapshot. The live panel is v3.4.4.
+- Setup step 3 now accepts an optional owner-provided panel webhook secret.
+  The check preview and saved `panel.webhook_secret` use that exact value;
+  leaving it blank keeps the existing generated-secret behavior. Both locale
+  strings, schema tests and setup documentation are updated.
 
 ### CI, images and release
 
@@ -84,6 +88,10 @@ Desktop itself returned the bus error above.
   SDK sent UUIDs to a v3.4.4 panel that requires numeric IDs. The repair is now
   ready for VPS acceptance, but the purchase, HWID, revoke and webhook paths
   still need to be exercised against that panel.
+- The updated setup wizard itself still needs a browser check at
+  `https://<domain>/setup`: enter the existing panel secret, confirm the
+  generated `WEBHOOK_SECRET_HEADER` line matches it, finish setup, and verify
+  a signed panel webhook is accepted.
 - Remaining blockers are classified as: **implementation** — run live panel
   compatibility acceptance; **release** — run and inspect the manual images
   workflow or a tagged release; **environment/VPS** — public-domain TLS

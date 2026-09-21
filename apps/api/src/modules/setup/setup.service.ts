@@ -164,7 +164,7 @@ export class SetupService {
         ok: true as const,
         version: health.version ?? null,
         squads: squads.map((squad) => ({ uuid: squad.uuid, name: squad.name })),
-        webhook: await this.panelWebhookHints(),
+        webhook: await this.panelWebhookHints(input.webhookSecret),
       };
     } catch (error) {
       return { ok: false as const, error: this.reason(error) };
@@ -325,7 +325,9 @@ export class SetupService {
     const check = await this.checkPanelDirect(input);
     if (!check.ok) throw new SetupFailure('PANEL_UNAVAILABLE', 503);
     const webhookSecret =
-      String(await this.settings.get('panel.webhook_secret')) || randomBytes(24).toString('hex');
+      input.webhookSecret ||
+      String(await this.settings.get('panel.webhook_secret')) ||
+      randomBytes(24).toString('hex');
     await this.settings.set({
       panel: {
         base_url: input.baseUrl,
@@ -472,7 +474,7 @@ export class SetupService {
         ok: true as const,
         version: health.version ?? null,
         squads: squads.map((squad) => ({ uuid: squad.uuid, name: squad.name })),
-        webhook: await this.panelWebhookHints(),
+        webhook: await this.panelWebhookHints(input.webhookSecret),
       };
     } catch {
       return { ok: false as const };
@@ -482,10 +484,12 @@ export class SetupService {
   }
 
   /** The three `.env` lines section 10.5 asks the owner to paste into the panel. */
-  private async panelWebhookHints() {
+  private async panelWebhookHints(webhookSecret?: string) {
     const domain = String(await this.settings.get('domain.main'));
     const secret =
-      String(await this.settings.get('panel.webhook_secret')) || randomBytes(24).toString('hex');
+      webhookSecret ||
+      String(await this.settings.get('panel.webhook_secret')) ||
+      randomBytes(24).toString('hex');
     return {
       WEBHOOK_ENABLED: 'true',
       WEBHOOK_URL: `https://${domain}/webhooks/remnawave`,
