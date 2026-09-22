@@ -35,9 +35,10 @@ For builds without the module, or by preference. `RR_TLS_MODE=certbot` adds the
 `certbot` profile, which `./rr up` does for you.
 
 1. `./rr up` starts nginx with the HTTP-only bootstrap configuration. The
-   renderer chooses it automatically while `/etc/letsencrypt/live/<domain>/fullchain.pem`
-   does not exist, so nginx starts even though there is no certificate yet and
-   `/setup` is already reachable over HTTP.
+   renderer chooses it automatically while the root-only Certbot volume has no
+   entry for `<domain>` in its readable certificate list, so nginx starts even
+   though there is no certificate yet and `/setup` is already reachable over
+   HTTP.
 2. `./rr tls:issue` explicitly overrides the renewal service entrypoint and runs
    `certbot certonly --webroot`, answering the challenge from the shared
    `certbot-webroot` volume. It uses the named domain lineage and keeps a valid
@@ -46,9 +47,12 @@ For builds without the module, or by preference. `RR_TLS_MODE=certbot` adds the
 3. The certificate now exists, so the full configuration renders and
    `proxy-reloader` applies it.
 
-Renewal: the `certbot` container runs `certbot renew` every twelve hours. Its
-`--deploy-hook` touches `/etc/letsencrypt/.renewed`; `proxy-reloader` watches
-that file and issues a graceful `nginx -s reload`, so no connection is dropped.
+Renewal: the `certbot` container runs `certbot renew` every twelve hours. The
+Certbot hook updates a root-owned certificate list in the separate
+`certbot-state` volume and touches `/run/remnaray/certbot/.renewed`.
+`proxy-reloader` watches that marker and issues a graceful `nginx -s reload`,
+so no connection is dropped. `proxy-config` sees only the certificate list,
+never the private key volume.
 
 Caddy rejects this mode — it manages its own certificates — and the rejection
 happens in the environment validation, not at the first request.
@@ -111,8 +115,8 @@ curl -fsS --max-time 10 "http://$DOMAIN/setup" -o /dev/null
 docker compose --profile nginx --profile certbot run --rm --entrypoint certbot certbot certificates
 ```
 
-Expected: `./scripts/rr up` prints `RemnaRay services are ready`; before
-issuance, HTTP `/setup` returns 2xx; `tls:issue` prints `certbot certonly`,
+Expected: `./scripts/rr up` prints the HTTP bootstrap message; before issuance,
+HTTP `/setup` returns 2xx; `tls:issue` prints `certbot certonly`,
 finishes successfully, prints `HTTPS is ready`, and `certificates` lists the
 `$DOMAIN` lineage. Failure: `up` times out or prints service logs; HTTP `/setup`
 returns 5xx; output contains `certbot renew` as the issuance command; Certbot
@@ -198,9 +202,10 @@ docker compose --profile nginx --profile certbot logs --tail=100 certbot proxy-r
 
 Expected: the renewal command reports a successful dry run or that renewal is
 not yet due, and its command is `renew`; logs show no renewal error. A real
-renewal deploy hook touches the shared marker and `proxy-reloader` performs a
-graceful reload. Failure: the command invokes `certonly`, the dry run fails,
-the hook cannot write its marker, or the reloader reports a failed nginx test.
+renewal deploy hook updates `certbot-state` and touches `.renewed`, then
+`proxy-reloader` performs a graceful reload. Failure: the command invokes
+`certonly`, the dry run fails, the hook cannot write its marker, or the
+reloader reports a failed nginx test.
 
 Record the command output and the five service-list/certificate observations in
 the release evidence. This repository must not mark TASK-M5-004 VERIFIED until

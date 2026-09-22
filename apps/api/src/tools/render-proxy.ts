@@ -4,6 +4,7 @@
  * it. With `--watch` it re-renders on `rr:settings.changed` and publishes
  * `rr:proxy.reload` only when the output actually changed.
  */
+import { rmSync, writeFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import process from 'node:process';
 import { createPrismaClient } from '@remnaray/db';
@@ -36,6 +37,7 @@ async function main(): Promise<void> {
   const templates = flag('templates', '/templates');
   const output = flag('out', '/proxy-conf');
   const watch = process.argv.includes('--watch');
+  if (watch) rmSync('/tmp/proxy-config-ready', { force: true });
 
   if (!PROXY_PROFILES.includes(profile as ProxyProfile)) {
     process.stderr.write(`Unsupported proxy profile: ${profile}\n`);
@@ -60,10 +62,9 @@ async function main(): Promise<void> {
       ...renderProfile(directory, sources, {
         profile: profile as ProxyProfile,
         tlsMode: tlsMode as TlsMode,
-        certificatePresent: certbotCertificatePresent(process.env.RR_CERTBOT_STATE_DIR),
+        certificatePresent: certbotCertificatePresent(sources.domain),
       }),
-      ...customFiles(directory),
-      { name: '.profile-ready', content: `${profile}\n` },
+      ...customFiles(directory, profile as ProxyProfile),
     ];
     const changed = writeAtomically(output, files);
     process.stdout.write(
@@ -89,6 +90,7 @@ async function main(): Promise<void> {
       process.stderr.write(`Proxy render failed: ${String(error)}\n`);
     });
   });
+  writeFileSync('/tmp/proxy-config-ready', 'ready\n');
   process.stdout.write(`watching ${SETTINGS_CHANNEL}\n`);
 }
 

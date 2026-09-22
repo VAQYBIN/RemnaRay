@@ -6,7 +6,7 @@
  * nginx is validated first: a configuration that fails `nginx -t` is never
  * applied, the previous one keeps serving and an alert is raised.
  */
-import { watch } from 'node:fs';
+import { watch, rmSync, writeFileSync } from 'node:fs';
 import process from 'node:process';
 import Redis from 'ioredis';
 
@@ -48,6 +48,7 @@ async function report(ok: boolean, error: string | undefined): Promise<void> {
 }
 
 async function main(): Promise<void> {
+  if (!process.argv.includes('--reload')) rmSync('/tmp/proxy-reloader-ready', { force: true });
   const profile = flag('profile', process.env.RR_PROXY_PROFILE ?? 'nginx');
   const container =
     process.env.RR_PROXY_CONTAINER ??
@@ -67,13 +68,21 @@ async function main(): Promise<void> {
       const ok = last.exitCode === 0;
       process.stdout.write(`${reason}: ${ok ? 'reloaded' : 'refused'} ${last.output}\n`);
       await report(ok, ok ? undefined : last.output);
+      if (!ok && process.argv.includes('--reload')) process.exitCode = 1;
     } catch (error) {
       process.stderr.write(`Proxy reload failed: ${String(error)}\n`);
       await report(false, String(error));
+      if (process.argv.includes('--reload')) process.exitCode = 1;
     } finally {
       running = false;
     }
   };
+
+  if (process.argv.includes('--reload')) {
+    await reload('manual');
+    await agent.destroy();
+    return;
+  }
 
   const subscriber = new Redis(process.env.VALKEY_URL ?? 'redis://valkey:6379/0', {
     maxRetriesPerRequest: null,
@@ -93,6 +102,7 @@ async function main(): Promise<void> {
     process.stdout.write('certbot flag directory is not mounted; watching Pub/Sub only\n');
   }
 
+  writeFileSync('/tmp/proxy-reloader-ready', 'ready\n');
   process.stdout.write(`watching ${RELOAD_CHANNEL} for ${container}\n`);
 }
 

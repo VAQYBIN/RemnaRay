@@ -43,8 +43,14 @@ export type RenderedFile = { name: string; content: string };
  * nginx reads the certificate as its root master; this unprivileged renderer
  * only needs the deployment marker shared with the Certbot service.
  */
-export function certbotCertificatePresent(stateDirectory = '/run/remnaray/certbot'): boolean {
-  return existsSync(resolve(stateDirectory, '.issued'));
+export function certbotCertificatePresent(
+  domain: string,
+  stateDirectory = '/run/remnaray/certbot',
+): boolean {
+  const file = resolve(stateDirectory, 'certificates.json');
+  if (!existsSync(file)) return false;
+  const domains: unknown = JSON.parse(readFileSync(file, 'utf8'));
+  return Array.isArray(domains) && domains.includes(domain);
 }
 
 /** Section 21.2 replaces `{{NAME}}` placeholders; nothing else is interpreted. */

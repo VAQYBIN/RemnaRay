@@ -24,8 +24,9 @@ settings.admin.ip_allowlist ─┼─► proxy-config ──► proxy-conf volum
   Every outcome is reported to `POST /api/internal/v1/system/proxy-reload-result`,
   which writes `audit_log(action=proxy.reload)` and raises the
   `proxy.config_invalid` alert on a refusal.
-- certbot's `--deploy-hook` touches `/etc/letsencrypt/.renewed`; the reloader
-  watches that file and reloads gracefully after a renewal.
+- certbot's `--deploy-hook` updates the root-owned certificate list in the
+  separate `certbot-state` volume and touches `/run/remnaray/certbot/.renewed`;
+  the reloader watches that marker and reloads gracefully after a renewal.
 
 ## Templates
 

@@ -43,9 +43,10 @@ describe('proxy template rendering (section 21.2)', () => {
   it('uses a readable issuance marker instead of Certbot private-key permissions', () => {
     const root = mkdtempSync(join(tmpdir(), 'rr-certbot-state-'));
     try {
-      expect(certbotCertificatePresent(root)).toBe(false);
-      writeFileSync(join(root, '.issued'), 'issued\n', { mode: 0o644 });
-      expect(certbotCertificatePresent(root)).toBe(true);
+      expect(certbotCertificatePresent('shop.example.com', root)).toBe(false);
+      writeFileSync(join(root, 'certificates.json'), '["shop.example.com"]\n', { mode: 0o644 });
+      expect(certbotCertificatePresent('shop.example.com', root)).toBe(true);
+      expect(certbotCertificatePresent('other.example.com', root)).toBe(false);
     } finally {
       rmSync(root, { recursive: true, force: true });
     }

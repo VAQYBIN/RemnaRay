@@ -391,3 +391,78 @@ test(
     }
   },
 );
+
+test(
+  'TASK-M5-004: Certbot permissions remain root-only while renderer reads only domain metadata',
+  { timeout: 120_000 },
+  async () => {
+    const prefix = `rr-certbot-permissions-${process.pid}`;
+    const certVolume = `${prefix}-certs`;
+    const stateVolume = `${prefix}-state`;
+    const certs = mkdtempSync(join(tmpdir(), 'rr-certbot-permissions-'));
+    selfSigned(certs);
+    try {
+      docker(['volume', 'create', certVolume]);
+      docker(['volume', 'create', stateVolume]);
+      docker([
+        'run',
+        '--rm',
+        '--entrypoint',
+        'sh',
+        '-v',
+        `${certVolume}:/etc/letsencrypt`,
+        '-v',
+        `${certs}:/fixture:ro`,
+        'certbot/certbot:latest',
+        '-c',
+        'mkdir -p /etc/letsencrypt/archive/shop.example.test /etc/letsencrypt/live/shop.example.test; cp /fixture/fullchain.pem /etc/letsencrypt/archive/shop.example.test/fullchain1.pem; cp /fixture/privkey.pem /etc/letsencrypt/archive/shop.example.test/privkey1.pem; chmod 700 /etc/letsencrypt/archive /etc/letsencrypt/live; chmod 600 /etc/letsencrypt/archive/shop.example.test/privkey1.pem; ln -s ../../archive/shop.example.test/fullchain1.pem /etc/letsencrypt/live/shop.example.test/fullchain.pem; ln -s ../../archive/shop.example.test/privkey1.pem /etc/letsencrypt/live/shop.example.test/privkey.pem',
+      ]);
+      docker([
+        'run',
+        '--rm',
+        '--entrypoint',
+        'sh',
+        '-v',
+        `${certVolume}:/etc/letsencrypt:ro`,
+        '-v',
+        `${stateVolume}:/run/remnaray/certbot`,
+        '-v',
+        `${resolve('deploy/proxy/certbot.sh')}:/scripts/certbot.sh:ro`,
+        'certbot/certbot:latest',
+        '/scripts/certbot.sh',
+        'sync',
+      ]);
+      // The production renderer runs as uid 1000 with NO certificate mount.
+      const output = docker([
+        'run',
+        '--rm',
+        '--user',
+        '1000:1000',
+        '-v',
+        `${stateVolume}:/run/remnaray/certbot:ro`,
+        '-v',
+        `${resolve('apps/api/dist/tools/proxy-render.js')}:/tool.cjs:ro`,
+        'node:24-alpine',
+        'node',
+        '-e',
+        "const assert = require('node:assert/strict'); const fs = require('node:fs'); const {certbotCertificatePresent} = require('/tool.cjs'); assert.equal(certbotCertificatePresent('shop.example.test'), true); assert.equal(certbotCertificatePresent('other.example.test'), false); assert.equal(fs.existsSync('/etc/letsencrypt'), false); console.log('renderer reads names only');",
+      ]);
+      assert.match(output, /renderer reads names only/);
+      const permissions = docker([
+        'run',
+        '--rm',
+        '--entrypoint',
+        'sh',
+        '-v',
+        `${certVolume}:/etc/letsencrypt:ro`,
+        'certbot/certbot:latest',
+        '-c',
+        'stat -c "%u:%g %a" /etc/letsencrypt/archive /etc/letsencrypt/live /etc/letsencrypt/archive/shop.example.test/privkey1.pem',
+      ]);
+      assert.equal(permissions.trim(), '0:0 700\n0:0 700\n0:0 600');
+    } finally {
+      docker(['volume', 'rm', certVolume, stateVolume], { expectSuccess: false });
+      rmSync(certs, { recursive: true, force: true });
+    }
+  },
+);

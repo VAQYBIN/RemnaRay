@@ -14,9 +14,9 @@ defects. No other TASK or milestone may start in this session.
   (`fix(deploy): route initial TLS issuance directly to Certbot`).
 - Defect 2 repaired in `17d2ac9`: `proxy-config` and
   `proxy-reloader` no longer mount Certbot's private-key volume. Certbot and
-  nginx retain the only certificate mounts; a separate `.issued` marker volume
-  drives bootstrap/full rendering. Marker and permission-boundary regression
-  coverage passes.
+  nginx retain the only certificate mounts; a separate certificate-list marker
+  volume drives bootstrap/full rendering. Marker and permission-boundary
+  regression coverage passes.
 - Defect 3 repaired in `17d2ac9`: the worker no longer
   checks `RR_WORKER_ENABLED` or reads `RR_VALKEY_HOST`/`RR_VALKEY_PORT`; it
   pings and reuses the documented `VALKEY_URL`, and the outbox relay is always
@@ -30,22 +30,27 @@ defects. No other TASK or milestone may start in this session.
   timeout diagnostics; Certbot state sync is followed by another bounded wait.
   No arbitrary sleep was added. Readiness regression coverage passes with the
   wrapper simulation.
-- Environment blocker reproduced: `/usr/bin/docker compose version` crashes
-  with Bus error; Engine `_ping` over `/var/run/docker.sock` times out at 5 s.
-  Container checks and real-domain acceptance are NOT VERIFIED.
-- Current repair verification: wrapper regression 4/4, proxy renderer 22/22,
-  worker tests 5/5, root tests 38/38, workspace tests passed, workspace
+- Docker was restored and `pnpm test:m5` passed all three tests (M5-002, M5-003,
+  M5-006), including nginx/Caddy validation and backup rotation. A later
+  Docker Desktop/BuildKit bus error interrupted the follow-up smoke after the
+  app image was rebuilt; proxy smoke must be rerun after the engine stabilizes.
+  Real-domain acceptance remains NOT VERIFIED.
+- Current repair verification: wrapper regression 8/8, proxy renderer 22/22,
+  worker tests 5/5, root tests 42/42, workspace tests passed, workspace
   typechecks passed, `pnpm build`, `pnpm lint`, `pnpm format`, shell syntax and
-  `git diff --check` passed. `pnpm test:m5` reached all three M5 integration
-  tests but all Docker-backed tests failed before container startup because the
-  WSL Docker integration reports `docker could not be found`; direct Compose
-  config and nginx/Caddy image-build attempts fail with the same host error.
-  Those gates are blocked, not skipped. The exact VPS procedure is in
-  `docs/tls.md`; it remains an external acceptance gate and has not been
-  executed here. `pnpm typecheck:e2e`, `pnpm i18n-check` (1482 messages), both
-  theme validations and the final clean-tree/diff audit also pass. Overall
-  TASK-M5-004 remains **NOT VERIFIED** until Docker-backed local acceptance is
-  rerun and the real-domain procedure is executed.
+  `git diff --check` passed. `pnpm test:m5` passed all three M5 integration
+  tests before the final readiness/permission additions: nginx/Caddy validation
+  and backup rotation. The final Docker rerun is currently blocked because
+  Docker Desktop's CLI is intermittently returning SIGBUS and then
+  `unknown flag: --profile`; the latest proxy smoke therefore cannot be claimed.
+  A new Docker integration test covers root-only Certbot permissions and renderer
+  metadata access. Those final container gates are blocked, not skipped. The
+  exact VPS procedure is in `docs/tls.md`; it remains an external acceptance
+  gate and has not been executed here. `pnpm typecheck:e2e`, `pnpm i18n-check`
+  (1482 messages), both theme validations and the final clean-tree/diff audit
+  also pass. Overall TASK-M5-004 remains **NOT VERIFIED** until the final
+  Docker-backed local acceptance is rerun and the real-domain procedure is
+  executed.
 
 ## Reconciliation — 2026-09-21
 

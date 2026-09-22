@@ -7,8 +7,15 @@ compose_file=${COMPOSE_FILE:-compose.yaml}
 # NFR-013: one start command per profile. The profile comes from `.env`, so the
 # owner never types it and never edits a proxy configuration by hand.
 if [ -f .env ]; then
-  # shellcheck disable=SC2046
-  export $(grep -E '^(RR_PROXY_PROFILE|RR_TLS_MODE|RR_VERSION|RR_REGISTRY|RR_[A-Z]+_IMAGE)=' .env | xargs) 2>/dev/null || true
+  while IFS='=' read -r key value || [ -n "$key" ]; do
+    case "$key" in
+      RR_PROXY_PROFILE|RR_TLS_MODE|RR_VERSION|RR_REGISTRY|RR_*_IMAGE|RR_DOMAIN|RR_ACME_EMAIL|RR_EXTERNAL_HTTP_PORT)
+        value=${value#\"}; value=${value%\"}
+        value=${value#\'}; value=${value%\'}
+        export "$key=$value"
+        ;;
+    esac
+  done < .env
 fi
 profile=${RR_PROXY_PROFILE:-nginx}
 tls_mode=${RR_TLS_MODE:-acme}
@@ -18,8 +25,12 @@ profiles="--profile $profile"
 if [ "$tls_mode" = "certbot" ]; then
   profiles="$profiles --profile certbot"
 fi
-all_deployment_profiles="--profile nginx --profile caddy --profile external --profile certbot"
 ready_timeout=300
+if [ "${2:-}" = --wait-timeout ]; then ready_timeout=${3:-}; fi
+case "$ready_timeout" in ''|*[!0-9]*|0) echo 'wait-timeout must be positive seconds' >&2; exit 2 ;; esac
+case "$profile/$tls_mode" in nginx/acme|nginx/certbot|nginx/custom|caddy/acme|caddy/custom|external/none) ;;
+  *) if [ "$command" != down ]; then echo 'Invalid RR_PROXY_PROFILE/RR_TLS_MODE combination' >&2; exit 2; fi ;;
+esac
 
 usage() {
   cat <<'USAGE'
@@ -27,6 +38,8 @@ Usage: ./scripts/rr {build|up|down|logs|ps|config|proxy:render|proxy:reload|tls:
 
 The proxy profile comes from RR_PROXY_PROFILE in .env (default: nginx), and
 RR_TLS_MODE=certbot adds the certbot profile.
+up and tls:issue accept --wait-timeout SECONDS (default 300 per readiness phase).
+down preserves volumes; down -v explicitly removes this project's volumes.
 
 `build` is only for running from a source checkout: a released deployment
 pulls the published images instead. With no arguments it builds what the
@@ -59,74 +72,91 @@ image_file() {
   esac
 }
 
+compose() {
+  # shellcheck disable=SC2086
+  docker compose -f "$compose_file" $profiles "$@"
+}
+compose_all() { docker compose -f "$compose_file" --profile '*' "$@"; }
+
 cleanup_stale_proxy() {
-  project=${COMPOSE_PROJECT_NAME:-remnaray}
   case "$profile" in
-    nginx) stale="proxy-caddy" ;;
-    caddy) stale="proxy-nginx" ;;
-    external) stale="proxy-nginx proxy-caddy" ;;
-    *) stale="" ;;
+    nginx) stale="proxy-caddy edge" ;;
+    caddy) stale="proxy-nginx edge certbot" ;;
+    external) stale="proxy-nginx proxy-caddy proxy-config proxy-reloader certbot" ;;
   esac
+  if [ "$tls_mode" != certbot ]; then stale="$stale certbot"; fi
+  services=$(compose_all config --services)
   for service in $stale; do
-    ids=$(docker ps -aq \
-      --filter "label=com.docker.compose.project=$project" \
-      --filter "label=com.docker.compose.service=$service")
-    for id in $ids; do
-      echo "Removing stale RemnaRay $service container $id"
-      docker rm -f "$id"
-    done
+    if printf '%s\n' "$services" | grep -qx "$service"; then
+      # Compose resolves the project itself, including COMPOSE_PROJECT_NAME
+      # from .env. Never target global container names or remove volumes.
+      compose_all rm --stop --force "$service"
+    fi
   done
 }
 
 diagnose_startup() {
-  echo "RemnaRay did not become ready within ${ready_timeout}s." >&2
-  docker compose -f "$compose_file" $profiles ps --all >&2 || true
-  docker compose -f "$compose_file" $profiles logs --tail=80 \
-    api worker web proxy-config proxy-nginx proxy-caddy >&2 || true
+  echo "RemnaRay readiness failed (timeout ${ready_timeout}s)." >&2
+  compose_all ps --all >&2 || true
+  compose logs --tail=80 >&2 || true
 }
 
 wait_for_ready() {
-  echo "Waiting up to ${ready_timeout}s for healthy RemnaRay services..."
-  if ! docker compose -f "$compose_file" $profiles up -d --wait --wait-timeout "$ready_timeout"; then
+  echo "Waiting up to ${ready_timeout}s for service health: postgres, valkey, api, bot, worker, web and selected proxy; migrate must exit 0."
+  if ! compose up -d --wait --wait-timeout "$ready_timeout"; then
     diagnose_startup
     return 1
-  fi
-  echo "RemnaRay services are ready."
-  if [ "${1:-false}" = true ]; then
-    wait_for_https
   fi
 }
 
 wait_for_https() {
-  domain=$(grep -E '^RR_DOMAIN=' .env | cut -d= -f2-)
+  domain=${RR_DOMAIN:?RR_DOMAIN is required}
+  command -v curl >/dev/null || { echo 'Install curl to check HTTPS readiness' >&2; return 1; }
   deadline=$(($(date +%s) + ready_timeout))
+  result="No HTTPS response before deadline"
   echo "Waiting up to ${ready_timeout}s for https://${domain}/healthz..."
+  # Reach this deployment directly, preserving Host/SNI; do not accidentally
+  # accept another server at an old DNS address. ACME requires a trusted chain.
+  set -- --noproxy '*' --resolve "$domain:443:127.0.0.1"
+  if [ "$tls_mode" = custom ]; then set -- "$@" --cacert deploy/proxy/certs/fullchain.pem; fi
   while [ "$(date +%s)" -lt "$deadline" ]; do
-    if curl -kfsS --max-time 5 "https://${domain}/healthz" >/dev/null 2>&1; then
+    remaining=$((deadline - $(date +%s)))
+    if [ "$remaining" -le 0 ]; then break; fi
+    if [ "$remaining" -gt 5 ]; then remaining=5; fi
+    if result=$(curl "$@" -fsS --max-time "$remaining" "https://${domain}/healthz" 2>&1) && [ "$result" = ok ]; then
       echo "HTTPS is ready at https://${domain}/healthz."
       return 0
     fi
     sleep 1
   done
-  echo "HTTPS did not become ready within ${ready_timeout}s." >&2
+  echo "HTTPS did not become ready: $result" >&2
   diagnose_startup
   return 1
 }
 
+render_proxy() {
+  compose exec -T proxy-config node dist/tools/render-proxy.js --profile "$profile" --tls "$tls_mode"
+  compose exec -T proxy-reloader node dist/tools/proxy-reloader.js --profile "$profile" --reload
+}
+
+sync_certbot() {
+  compose run --rm --no-deps --entrypoint sh certbot /scripts/certbot.sh sync
+}
+
 start_deployment() {
   cleanup_stale_proxy
+  if [ "$tls_mode" = certbot ]; then sync_certbot; fi
   wait_for_ready
-  # A pre-existing Certbot lineage is detected by the Certbot service at start.
-  # Restarting the renderer after that marker is created lets it switch from
-  # bootstrap to the full TLS configuration without reading the key itself.
-  if [ "$tls_mode" = "certbot" ]; then
-    docker compose -f "$compose_file" restart proxy-config
-    docker compose -f "$compose_file" exec -T valkey \
-      valkey-cli publish rr:proxy.reload '{"reason":"certbot.state-sync"}'
-    wait_for_ready
-  elif [ "$profile" != external ]; then
-    wait_for_ready true
+  if [ "$tls_mode" = certbot ]; then
+    sync_certbot
+    render_proxy
+    if ! compose exec -T proxy-nginx test -f "/etc/letsencrypt/live/$RR_DOMAIN/fullchain.pem"; then
+      echo 'HTTP bootstrap ready; run ./scripts/rr tls:issue for the initial certificate.'
+      return
+    fi
   fi
+  if [ "$profile" != external ]; then wait_for_https; fi
+  echo 'RemnaRay services are ready.'
 }
 
 case "$command" in
@@ -165,7 +195,8 @@ case "$command" in
     # cannot hide a proxy container created by the previous profile. Volumes
     # are deliberately preserved; `down -v` remains the destructive command.
     # shellcheck disable=SC2086
-    docker compose -f "$compose_file" $all_deployment_profiles down
+    shift
+    compose_all down "$@"
     ;;
   logs)
     shift
@@ -182,7 +213,7 @@ case "$command" in
     ;;
   proxy:render)
     # Re-render the proxy configuration without waiting for a settings change.
-    docker compose -f "$compose_file" restart proxy-config
+    render_proxy
     ;;
   tls:issue)
     # Section 21.3: the first certificate of the `certbot` mode. nginx is
@@ -192,22 +223,27 @@ case "$command" in
       echo "tls:issue applies to RR_TLS_MODE=certbot; this deployment uses $tls_mode" >&2
       exit 1
     fi
-    domain=$(grep -E '^RR_DOMAIN=' .env | cut -d= -f2-)
-    email=$(grep -E '^RR_ACME_EMAIL=' .env | cut -d= -f2-)
+    domain=${RR_DOMAIN:-}
+    email=${RR_ACME_EMAIL:-}
     if [ -z "$domain" ] || [ -z "$email" ]; then
       echo "tls:issue requires RR_DOMAIN and RR_ACME_EMAIL in .env" >&2
       exit 2
     fi
     echo "Issuing with certbot certonly for $domain (keeping an existing valid certificate)."
-    docker compose -f "$compose_file" --profile certbot run --rm --entrypoint certbot certbot \
+    wait_for_ready
+    compose stop certbot
+    trap 'compose start certbot' EXIT
+    compose run --rm --no-deps --entrypoint certbot certbot \
       certonly --webroot -w /var/www/certbot -d "$domain" -m "$email" --agree-tos -n \
       --cert-name "$domain" --keep-until-expiring \
-      --deploy-hook 'touch /run/remnaray/certbot/.issued'
-    # The certificate exists now, so the full configuration renders.
-    docker compose -f "$compose_file" restart proxy-config
-    docker compose -f "$compose_file" exec -T valkey \
-      valkey-cli publish rr:proxy.reload '{"reason":"certbot.initial-issuance"}'
-    wait_for_ready true
+      --deploy-hook 'sh /scripts/certbot.sh deploy'
+    # Also sync for keep-until-expiring: Certbot does not run the deploy hook
+    # when it keeps a valid certificate. Render completion precedes reload.
+    sync_certbot
+    render_proxy
+    compose start certbot
+    trap - EXIT
+    wait_for_https
     ;;
   proxy:reload)
     # Ask `proxy-reloader` to validate and apply what is currently rendered.
