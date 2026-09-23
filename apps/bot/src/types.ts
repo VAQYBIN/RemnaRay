@@ -31,6 +31,7 @@ export type BotConfig = {
   token: string;
   defaultLocale: Locale;
   mode: 'webhook' | 'polling';
+  webUrl: string;
   webhookUrl: string;
   secretPath: string;
   secretToken: string;

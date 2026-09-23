@@ -1,8 +1,9 @@
 import type { Metadata } from 'next';
 import Image from 'next/image';
+import { cookies } from 'next/headers';
 import { getTranslations } from 'next-intl/server';
 
-import { planListSchema, type PlanPublicView } from '@remnaray/domain';
+import { planListSchema, type PlanPublicView, userMeSchema } from '@remnaray/domain';
 import { formatMoneyLocale } from '@remnaray/money';
 import { Button, Card, CardContent, CardHeader, CardTitle } from '@remnaray/ui';
 
@@ -10,6 +11,7 @@ import { serverApi } from '../../lib/api';
 import { getPublicConfig } from '../../lib/public-config';
 import { getTheme } from '../../lib/theme';
 import { routing, type Locale } from '../../i18n/routing';
+import { Link } from '../../i18n/navigation';
 import LoginWidget from './login-widget';
 import SiteFooter from './site-footer';
 
@@ -53,11 +55,12 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
 export default async function LandingPage({ params }: PageProps) {
   const { locale: value } = await params;
   const locale = normalizeLocale(value);
-  const [t, config, theme, plans] = await Promise.all([
+  const [t, config, theme, plans, signedIn] = await Promise.all([
     getTranslations('landing'),
     getPublicConfig(),
     getTheme(),
     getPlans(),
+    hasValidSession(),
   ]);
   const features = t.raw('features') as Feature[];
   const steps = t.raw('steps') as string[];
@@ -87,9 +90,15 @@ export default async function LandingPage({ params }: PageProps) {
                     </a>
                   </Button>
                 ) : null}
-                <Button asChild size="lg" variant="secondary">
-                  <a href="#login">{t('hero.secondary')}</a>
-                </Button>
+                {signedIn ? (
+                  <Button asChild size="lg" variant="secondary">
+                    <Link href="/account">{t('account')}</Link>
+                  </Button>
+                ) : (
+                  <Button asChild size="lg" variant="secondary">
+                    <a href="#login">{t('hero.secondary')}</a>
+                  </Button>
+                )}
               </div>
             </div>
             <div className="relative mx-auto w-full max-w-md overflow-hidden rounded-3xl border border-border bg-surface p-3 shadow-xl">
@@ -222,11 +231,19 @@ export default async function LandingPage({ params }: PageProps) {
                   </a>
                 </Button>
               ) : null}
-              <LoginWidget
-                botUsername={config.brand.botUsername}
-                label={t('hero.secondary')}
-                unavailableLabel={t('ctaText')}
-              />
+              {signedIn ? (
+                <Button asChild>
+                  <Link href="/account">{t('account')}</Link>
+                </Button>
+              ) : (
+                <LoginWidget
+                  botUsername={config.brand.botUsername}
+                  errorLabel={t('loginError')}
+                  label={t('hero.secondary')}
+                  locale={locale}
+                  unavailableLabel={t('ctaText')}
+                />
+              )}
             </div>
           </div>
         </section>
@@ -234,6 +251,18 @@ export default async function LandingPage({ params }: PageProps) {
       <SiteFooter locale={locale} />
     </>
   );
+}
+
+/** The landing CTA reflects a server-validated session, never cookie presence alone. */
+async function hasValidSession(): Promise<boolean> {
+  const cookieHeader = (await cookies()).toString();
+  if (!cookieHeader.split(';').some((value) => value.trim().startsWith('rr_sid='))) return false;
+  try {
+    await serverApi(cookieHeader).get('api/v1/me', userMeSchema, { cache: 'no-store' });
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 function formatBytes(bytes: number): string {

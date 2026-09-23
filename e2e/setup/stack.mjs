@@ -325,6 +325,7 @@ async function seedFixtures(databaseUrl) {
 
   await prisma.$disconnect();
   return {
+    botToken,
     admin: { email: admin.email, password, totpSecret: totp.secret.base32 },
     plan: { id: plan.id, slug: plan.slug, name: plan.name.ru },
     user: {

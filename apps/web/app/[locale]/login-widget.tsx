@@ -1,8 +1,10 @@
 'use client';
 
 import Script from 'next/script';
-import { useRouter } from 'next/navigation';
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
+
+import { useRouter } from '../../i18n/navigation';
+import type { Locale } from '../../i18n/routing';
 
 type TelegramAuth = {
   id: number;
@@ -29,12 +31,17 @@ export default function LoginWidget({
   botUsername,
   unavailableLabel,
   label,
+  errorLabel,
+  locale,
 }: {
   botUsername: string;
   unavailableLabel: string;
   label: string;
+  errorLabel: string;
+  locale: Locale;
 }) {
   const router = useRouter();
+  const [error, setError] = useState(false);
 
   /**
    * The widget script injects its own `<iframe>` next to the `<script>` tag
@@ -56,19 +63,25 @@ export default function LoginWidget({
 
   useEffect(() => {
     window.onRemnaRayTelegramAuth = (payload) => {
+      setError(false);
       void fetch('/api/v1/auth/telegram', {
         method: 'POST',
         headers: { 'content-type': 'application/json', 'X-Requested-With': 'RemnaRay' },
         credentials: 'include',
         body: JSON.stringify(payload),
-      }).then((response) => {
-        if (response.ok) router.refresh();
-      });
+      })
+        .then((response) => {
+          if (!response.ok) throw new Error('telegram-auth-failed');
+          router.replace('/account', { locale });
+        })
+        .catch(() => {
+          setError(true);
+        });
     };
     return () => {
       delete window.onRemnaRayTelegramAuth;
     };
-  }, [router]);
+  }, [errorLabel, locale, router]);
 
   if (!botUsername) return <p className="text-sm text-muted-foreground">{unavailableLabel}</p>;
 
@@ -83,6 +96,11 @@ export default function LoginWidget({
         src="https://telegram.org/js/telegram-widget.js?22"
         strategy="afterInteractive"
       />
+      {error ? (
+        <p className="mt-2 text-sm text-destructive" role="alert">
+          {errorLabel}
+        </p>
+      ) : null}
     </div>
   );
 }

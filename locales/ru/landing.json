@@ -4,6 +4,8 @@
   "landing.hero.description": "Продавайте доступ, принимайте платежи и давайте клиентам понятную подписку — в Telegram и на сайте.",
   "landing.hero.cta": "Открыть в Telegram",
   "landing.hero.secondary": "Войти",
+  "landing.account": "Личный кабинет",
+  "landing.loginError": "Не удалось войти через Telegram. Попробуйте ещё раз.",
   "landing.hero.imageAlt": "Скат, скользящий в синей воде",
   "landing.featuresTitle": "Всё, что нужно клиенту",
   "landing.features": [

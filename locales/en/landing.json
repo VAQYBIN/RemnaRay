@@ -4,6 +4,8 @@
   "landing.hero.description": "Sell access, accept payments, and give customers a clear subscription experience through Telegram and the web.",
   "landing.hero.cta": "Open in Telegram",
   "landing.hero.secondary": "Sign in",
+  "landing.account": "Account",
+  "landing.loginError": "Telegram sign-in failed. Please try again.",
   "landing.hero.imageAlt": "Manta gliding through blue water",
   "landing.featuresTitle": "Everything customers need",
   "landing.features": [

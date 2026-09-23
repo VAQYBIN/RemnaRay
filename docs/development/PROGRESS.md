@@ -1,5 +1,44 @@
 # RemnaRay Development Progress
 
+## Customer account entry-flow regression repair — 2026-09-23
+
+Current milestone remains M5 and the sole milestone task remains TASK-M5-004;
+this is a regression/acceptance repair for the already completed TASK-M4-004
+and TASK-M4-010. The earlier M4 verification had a gap: the internal account
+exchange was implemented and tested through a direct `issue-token` helper, but
+the real landing and bot user entry points were not fully covered.
+
+- Root cause: the Telegram web callback created `rr_sid` and only called
+  `router.refresh()`, the landing had no server-validated signed-in CTA, and
+  the bot's existing `ApiClient.issueToken()` was unused by its screens. The
+  `/auth/tg` route already forwarded the session cookie and selected locale
+  from `rr_lang`, so the defect was at the entry points rather than in the
+  account pages or token exchange.
+- Web repair: successful widget authentication now navigates through the
+  locale-aware router to `/<locale>/account`; failed responses stay on the
+  landing and show a localized error. The landing validates `rr_sid` by
+  forwarding the request cookie to `GET /api/v1/me`, then renders a localized
+  account CTA only for a valid session.
+- Bot repair: the main menu's localized «Открыть кабинет» callback gets the
+  current configured web origin, calls the existing `issueToken(telegramId)`,
+  and renders a Telegram URL button for `/auth/tg?token=<jwt>`. The API bot
+  config exposes that origin through the existing domain settings contract.
+- Regression coverage: the bot screen test proves the production account
+  handler calls `issueToken` and produces the URL button; Playwright now covers
+  the real landing callback to `/ru/account`, the signed-in landing CTA,
+  locale preservation through `/auth/tg`, and retains the existing anonymous,
+  account-page, purchase and logout tests.
+- Passed locally: `pnpm --filter @remnaray/web test` (29), bot tests (13), API
+  tests (160), `pnpm -r test`, `pnpm lint`, `pnpm typecheck`,
+  `pnpm typecheck:e2e`, `pnpm format`, `pnpm i18n-check` (1492 messages),
+  `pnpm build`, and the production build phase of `pnpm test:e2e`.
+- Playwright browser execution is not verified on this host: `pnpm test:e2e`
+  could not launch Chromium because `libnspr4.so` is missing; 18 browser
+  tests failed at startup and 9 did not run, while 2 non-browser HTTP tests
+  passed. No E2E pass claim is made from that run.
+- Exact next task remains TASK-M5-004, after its existing Docker/VPS proxy and
+  deployment gates are available. No new milestone was started.
+
 ## VPS administrator recovery — 2026-09-23
 
 The owner confirmed the VPS login issue was a setup email typo; the password was

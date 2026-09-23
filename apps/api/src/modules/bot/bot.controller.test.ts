@@ -57,6 +57,7 @@ describe('bot ingress boundary', () => {
     const config = await controller.config();
     expect(config).toMatchObject({
       mode: 'webhook',
+      webUrl: 'https://shop.example.test',
       webhookUrl: 'https://shop.example.test/tg/webhook/path-secret',
       admins: ['123'],
     });

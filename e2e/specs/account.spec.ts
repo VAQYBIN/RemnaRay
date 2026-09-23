@@ -1,11 +1,11 @@
-import { createHmac } from 'node:crypto';
+import { createHash, createHmac } from 'node:crypto';
 
 import { expect, test, type BrowserContext } from '@playwright/test';
 
 import { stackState } from '../setup/fixtures';
 
 /** Signs in the way the bot's «Открыть кабинет» button does (section 13.3). */
-async function signIn(context: BrowserContext, baseURL: string): Promise<void> {
+async function signIn(context: BrowserContext, baseURL: string): Promise<string> {
   const state = stackState();
   const issued = await context.request.post(`${state.apiUrl}/api/internal/v1/auth/issue-token`, {
     headers: { 'x-internal-token': state.internalToken, 'content-type': 'application/json' },
@@ -16,13 +16,79 @@ async function signIn(context: BrowserContext, baseURL: string): Promise<void> {
   const page = await context.newPage();
   await page.goto(`${baseURL}/auth/tg?token=${encodeURIComponent(token)}`);
   await page.waitForURL(/\/(ru|en)\/account/u);
+  const location = page.url();
   await page.close();
+  return location;
+}
+
+function telegramWidgetPayload(state: ReturnType<typeof stackState>) {
+  const payload = {
+    id: Number(state.user.telegramId),
+    first_name: state.user.firstName,
+    username: state.user.username,
+    auth_date: Math.floor(Date.now() / 1000),
+  };
+  const checkString = Object.entries(payload)
+    .sort(([left], [right]) => left.localeCompare(right))
+    .map(([key, value]) => `${key}=${String(value)}`)
+    .join('\n');
+  const secret = createHash('sha256').update(state.botToken).digest();
+  return {
+    ...payload,
+    hash: createHmac('sha256', secret).update(checkString).digest('hex'),
+  };
 }
 
 test.describe('customer account', () => {
   test('redirects an anonymous visitor to the landing with the login modal', async ({ page }) => {
     await page.goto('/ru/account');
     await expect(page).toHaveURL(/\/ru\?login=1$/u);
+  });
+
+  test('redirects the successful landing Telegram callback into the localized account', async ({
+    page,
+  }) => {
+    const state = stackState();
+    test.skip(!state.botToken, 'the external stand does not expose a test Telegram bot token');
+    await page.goto('/ru');
+    await page.waitForFunction(
+      () =>
+        typeof (globalThis as unknown as { onRemnaRayTelegramAuth?: unknown })
+          .onRemnaRayTelegramAuth === 'function',
+    );
+    await page.evaluate((payload) => {
+      const callback = (
+        globalThis as unknown as {
+          onRemnaRayTelegramAuth?: (value: typeof payload) => void;
+        }
+      ).onRemnaRayTelegramAuth;
+      if (!callback) throw new Error('Telegram auth callback was not installed');
+      callback(payload);
+    }, telegramWidgetPayload(state));
+    await page.waitForURL(/\/ru\/account$/u);
+  });
+
+  test('shows an account CTA for a signed-in user on the landing', async ({
+    context,
+    page,
+    baseURL,
+  }) => {
+    await signIn(context, baseURL ?? '');
+    await page.goto('/ru');
+    const account = page.getByRole('link', { name: 'Личный кабинет' }).first();
+    await expect(account).toBeVisible();
+    await account.click();
+    await expect(page).toHaveURL(/\/ru\/account$/u);
+  });
+
+  test('preserves the selected locale when the bot opens the account', async ({
+    context,
+    page,
+    baseURL,
+  }) => {
+    await page.goto('/en');
+    const location = await signIn(context, baseURL ?? '');
+    expect(location).toMatch(/\/en\/account$/u);
   });
 
   test('shows the empty subscription state after signing in from the bot', async ({

@@ -149,6 +149,7 @@ export class BotInternalController {
       mode,
       token: String(await this.settings.get('bot.token')),
       defaultLocale: await this.settings.get('locale.default'),
+      webUrl: `https://${domain}`,
       webhookUrl: `https://${domain}/tg/webhook/${secretPath}`,
       secretPath,
       secretToken: String(await this.settings.get('bot.webhook_secret_token')),

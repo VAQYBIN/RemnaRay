@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { homeKeyboard } from './home.js';
+import { homeKeyboard, showAccount } from './home.js';
 import { formatMinor } from './common.js';
 import type { RrContext } from '../types.js';
 
@@ -16,6 +16,34 @@ describe('bot home screen', () => {
     );
     expect(callbacks).toContain('trial:confirm');
     expect(callbacks).toContain('plans');
+    expect(callbacks).toContain('account');
+  });
+
+  it('issues a web token and sends the localized account URL button', async () => {
+    const calls: string[] = [];
+    let keyboard: { inline_keyboard: Array<Array<Record<string, string>>> } | undefined;
+    const ctx = {
+      from: { id: 123 },
+      session: {},
+      t: (key: string) => key,
+      reply: (_text: string, options: { reply_markup: typeof keyboard }) => {
+        keyboard = options.reply_markup;
+        return { message_id: 1 };
+      },
+    } as unknown as RrContext;
+    const api = {
+      getConfig: () => ({ webUrl: 'https://shop.example.test' }),
+      issueToken: (telegramId: number) => {
+        calls.push(String(telegramId));
+        return { token: 'short-lived-jwt', user: {} };
+      },
+    } as never;
+
+    await showAccount(ctx, api);
+
+    expect(calls).toEqual(['123']);
+    const url = keyboard?.inline_keyboard.flat().find((item) => typeof item.url === 'string')?.url;
+    expect(url).toBe('https://shop.example.test/auth/tg?token=short-lived-jwt');
   });
 
   it('formats minor-unit prices without floating-point business arithmetic', () => {

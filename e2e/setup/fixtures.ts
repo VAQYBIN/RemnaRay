@@ -8,6 +8,7 @@ export type StackState = {
   baseURL: string;
   apiUrl: string;
   internalToken: string;
+  botToken: string;
   brand: { name: string };
   admin: { email: string; password: string; totpSecret: string };
   plan: { id: string; slug: string; name: string };
@@ -29,6 +30,7 @@ type StandFixture = {
   admin: StackState['admin'];
   plans: StackState['plan'][];
   user: StackState['user'];
+  botToken?: string;
 };
 
 /**
@@ -46,6 +48,7 @@ function standState(path: string): StackState {
     baseURL,
     apiUrl: baseURL,
     internalToken: process.env.RR_E2E_INTERNAL_TOKEN ?? '',
+    botToken: stand.botToken ?? process.env.RR_E2E_BOT_TOKEN ?? '',
     brand: stand.brand,
     admin: stand.admin,
     plan,

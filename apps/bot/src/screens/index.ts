@@ -3,7 +3,7 @@ import { InlineKeyboard, type Bot } from 'grammy';
 
 import { ApiClientError, type ApiClient } from '../api-client.js';
 import type { RrContext } from '../types.js';
-import { showHome, showTrialConfirm } from './home.js';
+import { showAccount, showHome, showTrialConfirm } from './home.js';
 import { createPayment, checkPayment } from './payments.js';
 import { showPlan, showPlans } from './plans.js';
 import { showSubscription, showClients, showQr, confirmRevoke } from './subscription.js';
@@ -28,6 +28,7 @@ export function registerScreens(bot: Bot<RrContext>, api: ApiClient): void {
   bot.command('admin_extend', (ctx) => adminExtend(ctx, api));
   bot.command('admin_broadcast_status', (ctx) => adminBroadcastStatus(ctx, api));
   bot.callbackQuery('home', (ctx) => showHome(ctx, api));
+  bot.callbackQuery('account', (ctx) => showAccount(ctx, api));
   bot.callbackQuery('profile', (ctx) => showHome(ctx, api));
   bot.callbackQuery('plans', (ctx) => showPlans(ctx, api));
   bot.callbackQuery('sub', (ctx) => showSubscription(ctx, api));

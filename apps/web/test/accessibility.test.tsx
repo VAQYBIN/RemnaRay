@@ -4,6 +4,8 @@ import { describe, expect, it, vi } from 'vitest';
 
 import type { MockRoute } from '../test-utils/render-page';
 
+const navigationRouter = vi.hoisted(() => ({ push: vi.fn(), replace: vi.fn() }));
+
 /**
  * A real anchor, unlike the pass-through mock the page tests use: these
  * assertions are about the markup a link renders (NFR-010).
@@ -15,7 +17,7 @@ vi.mock('../i18n/navigation', () => ({
     </a>
   ),
   usePathname: () => '/account',
-  useRouter: () => ({ push: () => undefined, replace: () => undefined }),
+  useRouter: () => navigationRouter,
   redirect: () => undefined,
   getPathname: () => '/account',
 }));
@@ -69,7 +71,15 @@ describe('accessibility invariants', () => {
     document.body.append(container);
     const root = createRoot(container);
     await act(async () => {
-      root.render(<LoginWidget botUsername="manta_bot" label="Войти" unavailableLabel="—" />);
+      root.render(
+        <LoginWidget
+          botUsername="manta_bot"
+          errorLabel="Ошибка входа"
+          label="Войти"
+          locale="ru"
+          unavailableLabel="—"
+        />,
+      );
       await Promise.resolve();
     });
 
@@ -93,5 +103,49 @@ describe('accessibility invariants', () => {
       await Promise.resolve();
     });
     container.remove();
+  });
+
+  it('only navigates after the Telegram auth endpoint accepts the callback', async () => {
+    const previousFetch = globalThis.fetch;
+    const container = document.createElement('div');
+    document.body.append(container);
+    const root = createRoot(container);
+    const payload = {
+      id: 123,
+      first_name: 'Manta',
+      auth_date: 1,
+      hash: 'a'.repeat(64),
+    };
+
+    try {
+      navigationRouter.replace.mockClear();
+      globalThis.fetch = vi.fn().mockResolvedValue(new Response(null, { status: 401 }));
+      await act(async () => {
+        root.render(
+          <LoginWidget
+            botUsername="manta_bot"
+            errorLabel="Ошибка входа"
+            label="Войти"
+            locale="ru"
+            unavailableLabel="—"
+          />,
+        );
+        await Promise.resolve();
+      });
+      await act(async () => {
+        window.onRemnaRayTelegramAuth?.(payload);
+        await new Promise((resolve) => setTimeout(resolve, 0));
+      });
+
+      expect(navigationRouter.replace).not.toHaveBeenCalled();
+      expect(container.querySelector('[role="alert"]')?.textContent).toBe('Ошибка входа');
+    } finally {
+      await act(async () => {
+        root.unmount();
+        await Promise.resolve();
+      });
+      container.remove();
+      globalThis.fetch = previousFetch;
+    }
   });
 });
