@@ -8,6 +8,7 @@
   "admin.logout": "Sign out",
   "admin.errorTitle": "Could not load the data",
   "admin.retry": "Try again",
+  "admin.loading": "Loading…",
   "admin.cancel": "Cancel",
   "admin.confirm": "Confirm",
   "admin.reason": "Reason",

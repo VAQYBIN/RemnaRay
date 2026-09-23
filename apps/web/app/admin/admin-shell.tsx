@@ -6,7 +6,7 @@ import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { z } from 'zod';
 
-import { permissions as allPermissions, type Permission } from '@remnaray/domain';
+import { ApiError, permissions as allPermissions, type Permission } from '@remnaray/domain';
 import { Button, cn } from '@remnaray/ui';
 
 import { adminApi, setAdminCsrfToken } from '../../lib/admin-client';
@@ -48,10 +48,13 @@ export function AdminShell({ children }: { children: (me: AdminMe) => ReactNode 
   const router = useRouter();
   const pathname = usePathname();
   const [me, setMe] = useState<AdminMe | null>(null);
-  const [failed, setFailed] = useState(false);
+  const [unauthorized, setUnauthorized] = useState(false);
+  const [loadFailed, setLoadFailed] = useState(false);
+  const [attempt, setAttempt] = useState(0);
 
   useEffect(() => {
     let active = true;
+    setLoadFailed(false);
     adminApi()
       .get('api/admin/v1/auth/me', adminMeSchema)
       .then(
@@ -60,20 +63,36 @@ export function AdminShell({ children }: { children: (me: AdminMe) => ReactNode 
           setAdminCsrfToken(result.csrfToken);
           setMe(result.admin);
         },
-        () => {
-          if (active) setFailed(true);
+        (error: unknown) => {
+          if (!active) return;
+          if (error instanceof ApiError && error.status === 401) setUnauthorized(true);
+          else setLoadFailed(true);
         },
       );
     return () => {
       active = false;
     };
-  }, []);
+  }, [attempt]);
 
   useEffect(() => {
-    if (failed) router.replace('/admin/login');
-  }, [failed, router]);
+    if (unauthorized) router.replace('/admin/login');
+  }, [unauthorized, router]);
 
-  if (!me) return <div className="p-10 text-sm text-muted-foreground">{t('retry')}</div>;
+  if (!me)
+    return (
+      <div className="flex flex-col items-start gap-3 p-10 text-sm text-muted-foreground">
+        <span>{loadFailed ? t('errorTitle') : t('loading')}</span>
+        {loadFailed && (
+          <Button
+            onClick={() => {
+              setAttempt((current) => current + 1);
+            }}
+          >
+            {t('retry')}
+          </Button>
+        )}
+      </div>
+    );
 
   const granted = new Set(
     me.permissions.filter((item) => allPermissions.includes(item as Permission)),

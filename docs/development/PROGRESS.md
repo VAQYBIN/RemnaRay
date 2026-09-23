@@ -59,6 +59,14 @@ They supersede the absence of real-domain evidence in older entries.
   `remnaray/app:m5-004-final` image passed the final `pnpm test:m5` 4/4 run,
   nginx proxy-smoke and Caddy proxy-smoke. Publish this app image before the
   final VPS worker-log recheck.
+- Additional VPS report: ordinary admin tab navigation still produced 429 and
+  the shell redirected to login. Root cause was the documented 60/min public
+  throttler applied to admin sessions, plus the web shell treating every
+  `/api/admin/v1/auth/me` error as logout. Commit `5e0e621` initially exempted
+  internal worker calls; the follow-up in the current working tree now grants
+  authenticated admin/user sessions 300/min with account trackers and sends
+  the shell to login only for 401. API 160, worker 5, web 27 and the new
+  admin 429 behavior test pass. Publish the rebuilt app image and recheck VPS.
 - Repair commits: 3da1ff6 (initial issuance), 17d2ac9 (worker and initial
   lifecycle repair), b41e20b (initial HTTPS wait), 5bb007a (domain-specific
   certificate metadata, synchronous render/reload, project-aware cleanup and

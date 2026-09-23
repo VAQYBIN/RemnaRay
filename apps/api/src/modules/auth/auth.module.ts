@@ -8,7 +8,7 @@ import { SettingsService } from '../settings/settings.service';
 import { UsersModule } from '../users/users.module';
 import { UsersService } from '../users/users.service';
 import { AuthController, InternalAuthController } from './auth.controller';
-import { AuthGuard, CsrfGuard, InternalTokenGuard } from './auth.guards';
+import { AuthGuard, CsrfGuard, InternalTokenGuard, type AuthenticatedRequest } from './auth.guards';
 import { AuthService } from './auth.service';
 import { RedisSessionStore, type SessionStorePort } from './auth.session';
 import { ValkeyThrottlerStorage } from './auth.throttler';
@@ -23,14 +23,28 @@ export function skipThrottleForInternal(context: ExecutionContext): boolean {
   return path.startsWith('/api/internal/');
 }
 
+/** Section 9.1 grants authenticated sessions 300 requests per minute. */
+export function sessionRequestLimit(context: ExecutionContext): number {
+  const request = context.switchToHttp().getRequest<AuthenticatedRequest>();
+  return request.admin || request.user ? 300 : 60;
+}
+
+export function sessionTracker(request: Record<string, unknown>): string {
+  const typed = request as unknown as AuthenticatedRequest;
+  if (typed.admin) return `admin:${typed.admin.id}`;
+  if (typed.user) return `user:${typed.user.id}`;
+  return `ip:${typed.ip}`;
+}
+
 @Module({
   imports: [
     SettingsModule,
     UsersModule,
     ThrottlerModule.forRoot({
       storage: throttlerStorage,
-      throttlers: [{ name: 'default', ttl: 60_000, limit: 60 }],
+      throttlers: [{ name: 'default', ttl: 60_000, limit: sessionRequestLimit }],
       skipIf: skipThrottleForInternal,
+      getTracker: sessionTracker,
     }),
   ],
   controllers: [AuthController, InternalAuthController],

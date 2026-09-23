@@ -13,6 +13,7 @@ const { renderPage } = await import('../test-utils/render-page');
 const DashboardClient = (await import('../app/admin/dashboard-client')).default;
 const UsersClient = (await import('../app/admin/users/users-client')).default;
 const PlansClient = (await import('../app/admin/plans/plans-client')).default;
+const AdminShell = (await import('../app/admin/admin-shell')).AdminShell;
 
 function session(role: 'admin' | 'operator'): MockRoute {
   const admin = {
@@ -84,6 +85,18 @@ const render = (component: ComponentType<{ locale: 'ru' }>, routes: Record<strin
   renderPage(component, routes);
 
 describe('admin pages', () => {
+  it('does not redirect to login when the existing admin session is rate limited', async () => {
+    const markup = await renderPage(AdminShell, {
+      '/api/admin/v1/auth/me': {
+        status: 429,
+        body: { error: { code: 'RATE_LIMITED', requestId: 'req-429' } },
+      },
+    });
+
+    expect(markup).toContain('Не удалось загрузить данные');
+    expect(replace).not.toHaveBeenCalledWith('/admin/login');
+  });
+
   it('renders the FR-142 dashboard widgets and both charts', async () => {
     const markup = await render(DashboardClient, dashboardRoutes());
 

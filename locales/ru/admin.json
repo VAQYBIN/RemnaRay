@@ -8,6 +8,7 @@
   "admin.logout": "Выйти",
   "admin.errorTitle": "Не удалось загрузить данные",
   "admin.retry": "Повторить",
+  "admin.loading": "Загрузка…",
   "admin.cancel": "Отмена",
   "admin.confirm": "Подтвердить",
   "admin.reason": "Причина",
