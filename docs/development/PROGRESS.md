@@ -48,6 +48,17 @@ They supersede the absence of real-domain evidence in older entries.
   lifecycle isolation/direct-switch tests and both proxy smokes once Docker
   is stable; then verify TLS-status reporting after setup and resolve the
   recorded internal API 503 observations. No new TASK is authorized.
+- Follow-up VPS logs showed repeated worker `429` responses from internal
+  payment polling. Root cause is now identified locally: the global Nest
+  ThrottlerGuard counted `/api/internal/*` against the browser limit of 60/min.
+  The repair uses Throttler's `skipIf` for authenticated internal routes and
+  adds a regression test. Recheck the worker logs after the new app image is
+  deployed; these `429`s are a related standard-worker acceptance defect.
+- Local repair verification for this follow-up passed: API tests 159, worker
+  tests 5, root tests 42, and the internal throttling regression. The rebuilt
+  `remnaray/app:m5-004-final` image passed the final `pnpm test:m5` 4/4 run,
+  nginx proxy-smoke and Caddy proxy-smoke. Publish this app image before the
+  final VPS worker-log recheck.
 - Repair commits: 3da1ff6 (initial issuance), 17d2ac9 (worker and initial
   lifecycle repair), b41e20b (initial HTTPS wait), 5bb007a (domain-specific
   certificate metadata, synchronous render/reload, project-aware cleanup and

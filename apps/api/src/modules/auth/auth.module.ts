@@ -1,6 +1,7 @@
-import { Module } from '@nestjs/common';
+import { Module, type ExecutionContext } from '@nestjs/common';
 import { APP_GUARD } from '@nestjs/core';
 import { ThrottlerGuard, ThrottlerModule } from '@nestjs/throttler';
+import type { FastifyRequest } from 'fastify';
 
 import { SettingsModule } from '../settings/settings.module';
 import { SettingsService } from '../settings/settings.service';
@@ -15,6 +16,13 @@ import { ValkeyThrottlerStorage } from './auth.throttler';
 const sessionStore = new RedisSessionStore();
 const throttlerStorage = new ValkeyThrottlerStorage();
 
+/** Internal workers authenticate with a token and have their own job cadence. */
+export function skipThrottleForInternal(context: ExecutionContext): boolean {
+  const request = context.switchToHttp().getRequest<FastifyRequest>();
+  const path = request.routeOptions.url ?? request.url.split('?')[0] ?? '';
+  return path.startsWith('/api/internal/');
+}
+
 @Module({
   imports: [
     SettingsModule,
@@ -22,6 +30,7 @@ const throttlerStorage = new ValkeyThrottlerStorage();
     ThrottlerModule.forRoot({
       storage: throttlerStorage,
       throttlers: [{ name: 'default', ttl: 60_000, limit: 60 }],
+      skipIf: skipThrottleForInternal,
     }),
   ],
   controllers: [AuthController, InternalAuthController],
