@@ -14,6 +14,9 @@ const DashboardClient = (await import('../app/admin/dashboard-client')).default;
 const UsersClient = (await import('../app/admin/users/users-client')).default;
 const PlansClient = (await import('../app/admin/plans/plans-client')).default;
 const AdminShell = (await import('../app/admin/admin-shell')).AdminShell;
+const AdminShellForTest = ({ locale }: { locale: 'ru' }) => (
+  <AdminShell>{() => <span data-locale={locale}>admin shell</span>}</AdminShell>
+);
 
 function session(role: 'admin' | 'operator'): MockRoute {
   const admin = {
@@ -86,7 +89,7 @@ const render = (component: ComponentType<{ locale: 'ru' }>, routes: Record<strin
 
 describe('admin pages', () => {
   it('does not redirect to login when the existing admin session is rate limited', async () => {
-    const markup = await renderPage(AdminShell, {
+    const markup = await renderPage(AdminShellForTest, {
       '/api/admin/v1/auth/me': {
         status: 429,
         body: { error: { code: 'RATE_LIMITED', requestId: 'req-429' } },
