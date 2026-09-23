@@ -42,7 +42,7 @@ For builds without the module, or by preference. `RR_TLS_MODE=certbot` adds the
 2. `./rr tls:issue` explicitly overrides the renewal service entrypoint and runs
    `certbot certonly --webroot`, answering the challenge from the shared
    `certbot-webroot` volume. It uses the named domain lineage and keeps a valid
-   existing certificate until expiry. The renderer is restarted, the proxy is
+   existing certificate until expiry. Rendering completes before the proxy is
    reloaded, and the command waits for HTTPS readiness.
 3. The certificate now exists, so the full configuration renders and
    `proxy-reloader` applies it.
@@ -200,12 +200,33 @@ docker compose --profile nginx --profile certbot exec certbot \
 docker compose --profile nginx --profile certbot logs --tail=100 certbot proxy-reloader
 ```
 
-Expected: the renewal command reports a successful dry run or that renewal is
-not yet due, and its command is `renew`; logs show no renewal error. A real
-renewal deploy hook updates `certbot-state` and touches `.renewed`, then
-`proxy-reloader` performs a graceful reload. Failure: the command invokes
-`certonly`, the dry run fails, the hook cannot write its marker, or the
-reloader reports a failed nginx test.
+Expected: `All simulated renewals succeeded` with the domain's certificate
+listed as success and command exit status 0. A message saying only that no
+certificate is due is NOT proof of a successful dry-run. Background service
+logs can independently report not-yet-due; this is normal.
+
+The plain dry-run does not execute deploy hooks. Also verify the production
+hook and file-triggered graceful reload:
+
+```sh
+CHECK_FROM="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+MASTER_BEFORE="$(docker compose exec -T proxy-nginx cat /var/run/nginx.pid)"
+docker compose --profile nginx --profile certbot exec -T certbot \
+  certbot renew --dry-run --run-deploy-hooks --webroot -w /var/www/certbot \
+  --deploy-hook 'sh /scripts/certbot.sh deploy'
+docker compose --profile nginx --profile certbot logs --since "$CHECK_FROM" proxy-reloader
+MASTER_AFTER="$(docker compose exec -T proxy-nginx cat /var/run/nginx.pid)"
+test "$MASTER_BEFORE" = "$MASTER_AFTER"
+curl -fsS --max-time 20 "https://$DOMAIN/healthz"
+```
+
+Expected: simulated renewal success, a fresh `certbot renewal: reloaded` log,
+unchanged nginx master PID, and HTTPS `ok`. If the log has not arrived yet,
+follow `docker compose logs --since "$CHECK_FROM" -f proxy-reloader` until it
+appears, then Ctrl-C. `refused`, hook failure, no reload, changed PID or a
+failed HTTPS request leaves this check open. The test uses the active
+certificate for deploy hooks; it does not install the staging certificate.
+See [Certbot's documented dry-run and deploy-hook behavior](https://eff-certbot.readthedocs.io/en/stable/using.html#certbot-command-line-options).
 
 Record the command output and the five service-list/certificate observations in
 the release evidence. This repository must not mark TASK-M5-004 VERIFIED until

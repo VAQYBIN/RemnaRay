@@ -1,5 +1,44 @@
 # RemnaRay Development Progress
 
+## TASK-M5-004 VPS evidence — 2026-09-23 (current authority)
+
+Current milestone: M5. Sole task: TASK-M5-004, NOT VERIFIED overall.
+These are owner-supplied VPS transcripts, not commands executed by this agent.
+They supersede the absence of real-domain evidence in older entries.
+
+- After updating VPS scripts with git pull, initial Certbot issuance succeeded
+  for test.raccoonito.org, expires 2026-12-21; render and manual graceful reload
+  succeeded, renewal service restarted and HTTPS readiness passed.
+- HTTPS `/healthz` returned `ok` both on the VPS and another machine. The key
+  target (stat -L) is root:root 600; no permission workaround was reported.
+- All three legacy worker variables were removed from `.env`; up completed
+  and worker health requests returned 200. Worker logs also show internal API
+  503 responses for TLS/backup maintenance and payment polling. These responses
+  are not a Valkey connection failure, but successful TLS-status reporting to
+  `/admin/system` has NOT been demonstrated; the earlier setup explanation
+  was an inference and requires verification after setup.
+- nginx → caddy/acme → nginx/acme via down/up succeeded after changing `.env`;
+  down removed the old proxy, up reached healthy and HTTPS ready, and each
+  project-filtered running-container list contained only the selected proxy.
+  No -v was used. Direct switching with up alone, stopped-container inventory
+  and unrelated-project isolation still need dedicated regression evidence.
+- Return to nginx/certbot reused the certificate and passed readiness.
+  `certbot renew --dry-run --webroot -w /var/www/certbot` explicitly reported
+  all simulated renewals succeeded; HTTPS remained `ok` afterwards.
+  Background logs reporting not-yet-due/no-hooks belong to a separate normal
+  renewal check. They do not invalidate the successful dry-run transcript.
+- Pending VPS check: deploy-hook → .renewed → proxy-reloader graceful reload.
+  Plain --dry-run does not execute deploy hooks. Exact next procedure:
+  docs/tls.md section 6, dry-run with --run-deploy-hooks and the production
+  hook, followed by a fresh `certbot renewal: reloaded` log and HTTPS `ok`.
+- Repair commits: 3da1ff6 (initial issuance), 17d2ac9 (worker and initial
+  lifecycle repair), b41e20b (initial HTTPS wait), 5bb007a (domain-specific
+  certificate metadata, synchronous render/reload, project-aware cleanup and
+  strict HTTPS readiness). No new runtime change in this evidence entry.
+- Final local image/permission integration/proxy-smoke gates remain open as
+  recorded below after Docker SIGBUS. CI/review and real `/admin/system` TLS
+  reporting are not claimed. Do not begin another TASK or M6.
+
 ## TASK-M5-004 remediation — 2026-09-22 (current authority)
 
 Current milestone: M5, NOT VERIFIED. Current and sole task: TASK-M5-004.
