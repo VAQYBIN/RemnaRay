@@ -79,8 +79,9 @@ They supersede the absence of real-domain evidence in older entries.
   failed for three independent reasons: nonexistent `aquasecurity/trivy-action`
   tag `0.28.0`, two high transitive audit advisories, and ZAP issue creation
   returning 403 while the scan itself had zero FAIL alerts. Current repair
-  updates Trivy to v0.36.0, disables ZAP issue writing while retaining
-  `fail_action: true`, and pins patched `deepmerge-ts`/`mysql2` overrides.
+  updates Trivy to v0.36.0, grants the ZAP action its existing intended
+  `issues: write` permission while retaining `fail_action: true`, and pins
+  patched `deepmerge-ts`/`mysql2` overrides.
   Local audit and build checks pass; rerun nightly after publishing this
   commit.
 - Repair commits: 3da1ff6 (initial issuance), 17d2ac9 (worker and initial

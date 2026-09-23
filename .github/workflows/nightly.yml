@@ -8,6 +8,7 @@ on:
 
 permissions:
   contents: read
+  issues: write
   security-events: write
 
 jobs:
@@ -123,7 +124,6 @@ jobs:
           target: https://rr.test
           cmd_options: '-I -j'
           fail_action: true
-          allow_issue_writing: false
 
       - name: Tear the stand down
         if: always()
