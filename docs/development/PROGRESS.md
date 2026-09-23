@@ -27,6 +27,11 @@ They supersede the absence of real-domain evidence in older entries.
   all simulated renewals succeeded; HTTPS remained `ok` afterwards.
   Background logs reporting not-yet-due/no-hooks belong to a separate normal
   renewal check. They do not invalidate the successful dry-run transcript.
+- Acceptance instruction corrected after owner feedback: the shipped nginx
+  template explicitly uses `/tmp/nginx.pid`, not `/var/run/nginx.pid`. The
+  failed cat command is not a runtime nginx failure. Section 6 now uses the
+  correct path and stops on errors, preventing two empty PID values from
+  incorrectly passing the equality check. Hook/reload evidence remains open.
 - Pending VPS check: deploy-hook → .renewed → proxy-reloader graceful reload.
   Plain --dry-run does not execute deploy hooks. Exact next procedure:
   docs/tls.md section 6, dry-run with --run-deploy-hooks and the production

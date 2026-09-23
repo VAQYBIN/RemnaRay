@@ -209,15 +209,20 @@ The plain dry-run does not execute deploy hooks. Also verify the production
 hook and file-triggered graceful reload:
 
 ```sh
+(
+set -eu
 CHECK_FROM="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
-MASTER_BEFORE="$(docker compose exec -T proxy-nginx cat /var/run/nginx.pid)"
+MASTER_BEFORE="$(docker compose exec -T proxy-nginx cat /tmp/nginx.pid)"
 docker compose --profile nginx --profile certbot exec -T certbot \
   certbot renew --dry-run --run-deploy-hooks --webroot -w /var/www/certbot \
   --deploy-hook 'sh /scripts/certbot.sh deploy'
 docker compose --profile nginx --profile certbot logs --since "$CHECK_FROM" proxy-reloader
-MASTER_AFTER="$(docker compose exec -T proxy-nginx cat /var/run/nginx.pid)"
+MASTER_AFTER="$(docker compose exec -T proxy-nginx cat /tmp/nginx.pid)"
+test -n "$MASTER_BEFORE"
 test "$MASTER_BEFORE" = "$MASTER_AFTER"
+printf 'nginx master unchanged: %s\n' "$MASTER_AFTER"
 curl -fsS --max-time 20 "https://$DOMAIN/healthz"
+)
 ```
 
 Expected: simulated renewal success, a fresh `certbot renewal: reloaded` log,
