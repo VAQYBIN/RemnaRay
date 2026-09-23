@@ -44,6 +44,13 @@ settings.admin.ip_allowlist ─┼─► proxy-config ──► proxy-conf volum
 | `common-proxy.inc`         | copied              | the upstream headers and timeouts                |
 | `custom.d/*.conf`          | copied, never wiped | the owner's single extension point               |
 
+`security-headers.inc` uses nginx's `add_header_inherit merge` so the shared
+headers remain on nested locations that add their own cache or content headers.
+This covers static Next.js assets, theme assets, `/healthz` and error responses
+as well as the main HTML pages. The web image disables Next.js's
+`X-Powered-By` response header, and the `rr_lang` locale cookie is marked
+`Secure` when the language is changed.
+
 Placeholders are `{{NAME}}` and nothing else is interpreted: `DOMAIN`,
 `EXTRA_DOMAINS`, `ACME_EMAIL`, `TLS_MODE`, `DOCKER_CIDR`, `ADMIN_ALLOWLIST`,
 `ADMIN_ALLOWLIST_BLOCK`, `API_DOCS_BLOCK`, `LOAD_MODULE_BLOCK`,

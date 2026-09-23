@@ -1,5 +1,39 @@
 # RemnaRay Development Progress
 
+## ZAP baseline hardening follow-up — 2026-09-23
+
+Current milestone remains M5 and the sole task remains TASK-M5-004. This is a
+security follow-up to the task's proxy and web acceptance; no new task or
+milestone has started.
+
+- GitHub nightly run [35856332631](https://github.com/VAQYBIN/RemnaRay/actions/runs/35856332631)
+  passed all jobs. Its ZAP report created/updated issue
+  [#2](https://github.com/VAQYBIN/RemnaRay/issues/2): no High alerts and
+  `FAIL-NEW: 0`, with passive Medium/Low/Informational findings.
+- The three actionable findings selected for repair were confirmed locally.
+  nginx dropped server-level security headers from nested locations because
+  `/_next/static/` and `/healthz` define their own `add_header` directives;
+  Next.js emitted `X-Powered-By` by default; and next-intl's `rr_lang` cookie
+  did not request `Secure`.
+- The repair adds nginx `add_header_inherit merge`, sets
+  `poweredByHeader: false`, and configures `rr_lang` with `secure: true`.
+  Proxy smoke now checks HTML, JS, CSS, theme, 404 and `/healthz` responses,
+  cached repeats, no `X-Powered-By`, and the secure locale cookie for both
+  nginx and Caddy. A web config test and the browser E2E language-switch test
+  cover the configuration and user flow.
+- Local verification: web tests 28 passed; root tests 42 passed; web and E2E
+  typechecks passed; lint and format passed; `pnpm build` passed; Compose
+  config validation passed; `pnpm test:m5` passed all 4 tests; corrected nginx
+  proxy smoke passed; corrected Caddy proxy smoke passed.
+- The browser E2E runner itself was not executed on this host because the host
+  lacks `libnspr4.so`; the same language flow is covered by the existing CI
+  browser gate and the local proxy smoke checks the resulting cookie header.
+- Remaining external action: push this repair commit, rerun nightly, inspect
+  the updated ZAP issue, and close or keep it open based on the new report.
+  CSP `form-action`, `style-src 'unsafe-inline'`, external Telegram SRI and
+  COEP/COOP/CORP remain separate decisions because the specification and
+  current Telegram/Next.js integration constrain them.
+
 ## TASK-M5-004 VPS evidence — 2026-09-23 (current authority)
 
 Current milestone: M5. Sole task: TASK-M5-004, NOT VERIFIED overall.

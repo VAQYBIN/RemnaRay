@@ -190,6 +190,69 @@ case "$headers" in
   *) bad 'content-security-policy missing, or carries no nonce' ;;
 esac
 
+# Issue #2: a page can pass while nginx locations with their own add_header
+# lose every inherited security header. Exercise actual JS/CSS, cached assets,
+# an error response and the proxy's own HTTPS health response on both profiles.
+check_security_headers() {
+  local path=$1 expected=$2 headers header count
+  headers=$(curl_from outside -sk -D - -o /dev/null -w 'smoke-status: %{http_code}\n' "https://$DOMAIN$path" | tr 'A-Z' 'a-z' | tr -d '\r')
+  check "$path status" "$expected" "$(printf '%s\n' "$headers" | sed -n 's/^smoke-status: //p')"
+  for header in \
+    'strict-transport-security: max-age=31536000; includesubdomains' \
+    'x-content-type-options: nosniff' \
+    'x-frame-options: deny' \
+    'referrer-policy: strict-origin-when-cross-origin' \
+    'permissions-policy: camera=(), microphone=(), geolocation=()'; do
+    case "$headers" in
+      *"$header"*) ok "$path ${header%%:*}" ;;
+      *) bad "$path ${header%%:*} missing or different" ;;
+    esac
+    count=$(printf '%s\n' "$headers" | grep -c "^${header%%:*}:" || true)
+    check "$path ${header%%:*} occurs once" 1 "$count"
+  done
+  case "$headers" in
+    *'x-powered-by:'*) bad "$path exposes x-powered-by" ;;
+    *) ok "$path has no x-powered-by" ;;
+  esac
+  if [[ "$path" == /_next/static/* ]] && [ "$expected" = 200 ]; then
+    case "$headers" in
+      *'immutable'*) ok "$path still has immutable caching" ;;
+      *) bad "$path lost immutable caching" ;;
+    esac
+  fi
+}
+
+html=$(curl_from outside -fsk "https://$DOMAIN/ru")
+assets=$(printf '%s' "$html" | node -e '
+  let html = "";
+  process.stdin.on("data", (chunk) => (html += chunk));
+  process.stdin.on("end", () => {
+    const paths = [...html.matchAll(/(?:src|href)="(\/_next\/static\/[^"?]+\.(?:js|css))"/gu)].map((match) => match[1]);
+    for (const extension of [".js", ".css"]) {
+      const path = paths.find((value) => value.endsWith(extension));
+      if (!path) throw new Error(`No ${extension} asset found in the rendered page`);
+      console.log(path);
+    }
+  });
+')
+for path in /ru /themes/manta/favicon.svg /healthz; do
+  check_security_headers "$path" 200
+done
+while IFS= read -r path; do
+  check_security_headers "$path" 200
+  check_security_headers "$path" 200
+done <<< "$assets"
+check_security_headers /_next/static/rr-security-missing.js 404
+
+# Force a language change: next-intl need not set a cookie for the default.
+locale_headers=$(curl_from outside -fsk -D - -o /dev/null \
+  -H 'Accept-Language: ru' -H 'Cookie: rr_lang=ru' "https://$DOMAIN/en" | tr -d '\r')
+locale_cookie=$(printf '%s\n' "$locale_headers" | grep -i '^set-cookie: rr_lang=en;' || true)
+case "$locale_cookie" in
+  *'; Secure;'* | *'; Secure') ok 'rr_lang is Secure after changing language' ;;
+  *) bad 'rr_lang missing or not Secure after changing language' ;;
+esac
+
 # ------------------------------------------------------------------- step 5 --
 step '5. what the upstream receives'
 echoed=$(docker run --rm --network "$NETWORK_INSIDE" --add-host "$DOMAIN:$PROXY_INSIDE" \

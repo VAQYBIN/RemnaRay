@@ -15,12 +15,30 @@ test.describe('public site', () => {
     ).toBeVisible();
   });
 
-  test('the footer switches language and keeps the route', async ({ page }) => {
+  test('the footer switches language and remembers it in a secure cookie', async ({
+    page,
+    context,
+  }) => {
     await page.goto('/ru');
     await page.getByRole('button', { name: 'English' }).click();
 
     await expect(page).toHaveURL(/\/en$/u);
     await expect(page.getByRole('heading', { name: 'Choose a plan' })).toBeVisible();
+    const localeCookie = async () =>
+      (await context.cookies()).find((cookie) => cookie.name === 'rr_lang');
+    await expect
+      .poll(localeCookie)
+      .toMatchObject({ value: 'en', secure: true, sameSite: 'Lax', path: '/' });
+    await page.goto('/');
+    await expect(page).toHaveURL(/\/en$/u);
+
+    await page.getByRole('button', { name: 'Русский', exact: true }).click();
+    await expect(page).toHaveURL(/\/ru$/u);
+    await expect
+      .poll(localeCookie)
+      .toMatchObject({ value: 'ru', secure: true, sameSite: 'Lax', path: '/' });
+    await page.goto('/');
+    await expect(page).toHaveURL(/\/ru$/u);
   });
 
   test('legal pages render the localized document', async ({ page }) => {

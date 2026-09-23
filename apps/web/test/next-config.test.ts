@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import config from '../next.config';
+import { routing } from '../i18n/routing';
 
 describe('the site configuration serves versioned theme assets', () => {
   it('allows a local image under /themes with the section 18.2 version query', () => {
@@ -9,5 +10,9 @@ describe('the site configuration serves versioned theme assets', () => {
     expect(themes).toBeDefined();
     // Omitting `search` is what allows `?v=<version>`; an empty string blocks it.
     expect(themes?.search).toBeUndefined();
+  });
+
+  it('remembers the selected locale only over HTTPS', () => {
+    expect(routing.localeCookie).toMatchObject({ name: 'rr_lang', secure: true });
   });
 });
