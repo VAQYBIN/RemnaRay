@@ -84,6 +84,9 @@ They supersede the absence of real-domain evidence in older entries.
   patched `deepmerge-ts`/`mysql2` overrides.
   Local audit and build checks pass; rerun nightly after publishing this
   commit.
+- GitHub run `35855763968` was started for `ff83998` before the Trivy tag
+  correction and must not be used as the final result. The upstream action tag
+  is `v0.36.0`; the workflow now uses that exact tag.
 - Repair commits: 3da1ff6 (initial issuance), 17d2ac9 (worker and initial
   lifecycle repair), b41e20b (initial HTTPS wait), 5bb007a (domain-specific
   certificate metadata, synchronous render/reload, project-aware cleanup and
