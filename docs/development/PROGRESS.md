@@ -67,6 +67,10 @@ They supersede the absence of real-domain evidence in older entries.
   authenticated admin/user sessions 300/min with account trackers and sends
   the shell to login only for 401. API 160, worker 5, web 27 and the new
   admin 429 behavior test pass. Publish the rebuilt app image and recheck VPS.
+- Final local admin repair verification: API 160 tests, worker 5 tests, web 27
+  tests, root 42/42, typechecks, lint and i18n checks pass. The app image
+  `remnaray/app:m5-004-admin-final` builds successfully. Publish the matching
+  image under the VPS tag before the final admin navigation check.
 - Repair commits: 3da1ff6 (initial issuance), 17d2ac9 (worker and initial
   lifecycle repair), b41e20b (initial HTTPS wait), 5bb007a (domain-specific
   certificate metadata, synchronous render/reload, project-aware cleanup and
