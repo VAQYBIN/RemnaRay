@@ -31,11 +31,23 @@ They supersede the absence of real-domain evidence in older entries.
   template explicitly uses `/tmp/nginx.pid`, not `/var/run/nginx.pid`. The
   failed cat command is not a runtime nginx failure. Section 6 now uses the
   correct path and stops on errors, preventing two empty PID values from
-  incorrectly passing the equality check. Hook/reload evidence remains open.
-- Pending VPS check: deploy-hook → .renewed → proxy-reloader graceful reload.
-  Plain --dry-run does not execute deploy hooks. Exact next procedure:
-  docs/tls.md section 6, dry-run with --run-deploy-hooks and the production
-  hook, followed by a fresh `certbot renewal: reloaded` log and HTTPS `ok`.
+  incorrectly passing the equality check.
+- VPS deploy-hook/reload check PASSED (owner transcript, 2026-09-23):
+  `renew --dry-run --run-deploy-hooks` with `sh /scripts/certbot.sh deploy`
+  reported all simulated renewals succeeded. The reloader logged
+  `certbot renewal: reloaded` at 03:36:09 UTC. Both PID readings were nonempty
+  and equal to 1; HTTPS `/healthz` returned `ok` after the reload.
+  This proves the renewal simulation and production hook/reload path, not
+  an actual replacement of the production certificate or a continuous
+  connection/no-dropped-request measurement.
+- The supplied VPS sequence now confirms initial Certbot issuance, secure key
+  permissions, worker startup without legacy variables, both down/up profile
+  switches, HTTPS readiness and simulated renewal with graceful reload.
+  No repeat of this renewal check is required. Exact next work within
+  TASK-M5-004: rerun the final local app build, permission integration,
+  lifecycle isolation/direct-switch tests and both proxy smokes once Docker
+  is stable; then verify TLS-status reporting after setup and resolve the
+  recorded internal API 503 observations. No new TASK is authorized.
 - Repair commits: 3da1ff6 (initial issuance), 17d2ac9 (worker and initial
   lifecycle repair), b41e20b (initial HTTPS wait), 5bb007a (domain-specific
   certificate metadata, synchronous render/reload, project-aware cleanup and
