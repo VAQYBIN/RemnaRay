@@ -1,5 +1,15 @@
 # RemnaRay Development Progress
 
+## VPS administrator recovery — 2026-09-23
+
+The owner confirmed the VPS login issue was a setup email typo; the password was
+correct. The administrator listing exposed the exact stored email and restored
+the login without changing credentials. The deployment now documents and ships
+`./scripts/rr admin:list`, `admin:reset-password` and `admin:reset-totp` for
+future SSH recovery. Password reset clears the failed-login counter and lock,
+preserves TOTP, and writes an audit row without storing the password. TOTP reset
+is explicit and causes first-login enrolment on the next password login.
+
 ## ZAP baseline hardening follow-up — 2026-09-23
 
 Current milestone remains M5 and the sole task remains TASK-M5-004. This is a

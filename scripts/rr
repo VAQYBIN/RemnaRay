@@ -3,6 +3,8 @@ set -eu
 
 command=${1:-help}
 compose_file=${COMPOSE_FILE:-compose.yaml}
+script_dir=$(CDPATH='' cd -- "$(dirname -- "$0")" && pwd)
+recovery_script=$script_dir/admin-recovery.mjs
 
 # NFR-013: one start command per profile. The profile comes from `.env`, so the
 # owner never types it and never edits a proxy configuration by hand.
@@ -34,7 +36,7 @@ esac
 
 usage() {
   cat <<'USAGE'
-Usage: ./scripts/rr {build|up|down|logs|ps|config|proxy:render|proxy:reload|tls:issue|backup|restore|theme:validate}
+Usage: ./scripts/rr {build|up|down|logs|ps|config|proxy:render|proxy:reload|tls:issue|backup|restore|theme:validate|admin:list|admin:reset-password|admin:reset-totp}
 
 The proxy profile comes from RR_PROXY_PROFILE in .env (default: nginx), and
 RR_TLS_MODE=certbot adds the certbot profile.
@@ -47,6 +49,10 @@ active profile starts; otherwise name the images (app, web, nginx, caddy,
 backup).
 
 Set COMPOSE_FILE=compose.dev.yaml for the local PostgreSQL/Valkey dependencies.
+
+Admin recovery commands use the running API container and preserve the existing
+TOTP unless `admin:reset-totp` is explicitly requested. Password input is read
+without echo and is never passed as a command argument or written to the audit log.
 USAGE
 }
 
@@ -137,6 +143,40 @@ wait_for_https() {
 render_proxy() {
   compose exec -T proxy-config node dist/tools/render-proxy.js --profile "$profile" --tls "$tls_mode"
   compose exec -T proxy-reloader node dist/tools/proxy-reloader.js --profile "$profile" --reload
+}
+
+read_secret() {
+  prompt=$1
+  printf '%s' "$prompt" >&2
+  stty -echo
+  IFS= read -r secret
+  stty echo
+  printf '\n' >&2
+  printf '%s' "$secret"
+}
+
+admin_recovery() {
+  action=$1
+  email_value=''
+  password_value=''
+  password_confirm=''
+  printf 'Admin email: ' >&2
+  IFS= read -r email_value
+  if [ -z "$email_value" ]; then echo 'Admin email is required' >&2; return 2; fi
+  if [ "$action" = reset-password ]; then
+    password_value=$(read_secret 'New password: ')
+    password_confirm=$(read_secret 'Repeat password: ')
+    if [ "$password_value" != "$password_confirm" ]; then
+      echo 'Passwords do not match' >&2
+      return 2
+    fi
+  fi
+  RR_RECOVERY_ACTION=$action RR_RECOVERY_EMAIL=$email_value RR_RECOVERY_PASSWORD=$password_value \
+    compose exec -T \
+      -e RR_RECOVERY_ACTION \
+      -e RR_RECOVERY_EMAIL \
+      -e RR_RECOVERY_PASSWORD \
+      api node --input-type=module - < "$recovery_script"
 }
 
 sync_certbot() {
@@ -272,6 +312,12 @@ case "$command" in
   theme:validate)
     shift
     pnpm theme-validate "${1:-themes/manta}"
+    ;;
+  admin:list)
+    RR_RECOVERY_ACTION=list compose exec -T -e RR_RECOVERY_ACTION api node --input-type=module - < "$recovery_script"
+    ;;
+  admin:reset-password | admin:reset-totp)
+    admin_recovery "${command#admin:}"
     ;;
   help | --help | -h)
     usage

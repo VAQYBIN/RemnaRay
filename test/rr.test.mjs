@@ -100,6 +100,15 @@ test('tls:issue overrides the renewal entrypoint with initial certonly issuance'
   assert.match(certbot, /certbot renew --webroot -w \/var\/www\/certbot/);
 });
 
+test('admin:list uses the running API container without exposing recovery secrets', () => {
+  const result = run(['admin:list']);
+  assert.equal(result.status, 0, result.stderr);
+  const call = result.calls.find((args) => args.includes('exec') && args.includes('api'));
+  assert.ok(call);
+  assert.ok(call.includes('-e'));
+  assert.ok(!call.some((arg) => arg.includes('PASSWORD')));
+});
+
 test('tls:issue refuses missing issuance settings and propagates Certbot failures', () => {
   assert.equal(run(['tls:issue'], { RR_ACME_EMAIL: '' }).status, 2);
   assert.equal(run(['tls:issue'], { RR_TLS_MODE: 'custom' }).status, 1);

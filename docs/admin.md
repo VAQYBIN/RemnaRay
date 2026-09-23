@@ -38,6 +38,46 @@ login runs the first-login enrolment again. New and reset passwords require at
 least twelve characters with a lowercase letter, an uppercase letter and a
 digit.
 
+## SSH recovery
+
+If the setup email was mistyped, the password was forgotten, or the
+authenticator is unavailable, recover the account from the deployment checkout
+over SSH. These commands update only the selected administrator and keep the
+PostgreSQL and Valkey data intact.
+
+First list the actual administrator email and account state:
+
+```sh
+./scripts/rr admin:list
+```
+
+If the password is unknown, reset it. The command also clears the failed-login
+counter and any temporary lock:
+
+```sh
+./scripts/rr admin:reset-password
+```
+
+Enter the email exactly as shown by `admin:list`, then enter a password of at
+least twelve characters containing a lowercase letter, an uppercase letter and
+a digit. The password is read without echo and is not stored in the audit log.
+
+If the password is known but the TOTP application or secret is unavailable:
+
+```sh
+./scripts/rr admin:reset-totp
+```
+
+After the next password login, the setup flow displays a new QR code. Register
+it in the authenticator and confirm its six-digit code. Resetting TOTP invalidates
+the previous TOTP secret; do not run it when the existing authenticator still
+works.
+
+The recovery commands create an audit row with a `system` actor and the action
+`admins.recovery.reset-password` or `admins.recovery.reset-totp`. They never
+write the password or TOTP secret to the database log. Do not use `down -v` or
+delete PostgreSQL volumes during recovery.
+
 ## Audit contract
 
 Handlers that change state return `Audited(before, after, body?)`. The
