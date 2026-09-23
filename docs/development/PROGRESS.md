@@ -75,6 +75,14 @@ They supersede the absence of real-domain evidence in older entries.
   app, backup, nginx and caddy jobs passed; web failed on the admin-shell test
   component type mismatch. The test wrapper fix is local and now passes web
   typecheck/test plus `docker build -f deploy/docker/web.Dockerfile`.
+- Nightly workflow audit: runs `35835926307`, `35703473946` and `35578299917`
+  failed for three independent reasons: nonexistent `aquasecurity/trivy-action`
+  tag `0.28.0`, two high transitive audit advisories, and ZAP issue creation
+  returning 403 while the scan itself had zero FAIL alerts. Current repair
+  updates Trivy to v0.36.0, disables ZAP issue writing while retaining
+  `fail_action: true`, and pins patched `deepmerge-ts`/`mysql2` overrides.
+  Local audit and build checks pass; rerun nightly after publishing this
+  commit.
 - Repair commits: 3da1ff6 (initial issuance), 17d2ac9 (worker and initial
   lifecycle repair), b41e20b (initial HTTPS wait), 5bb007a (domain-specific
   certificate metadata, synchronous render/reload, project-aware cleanup and
