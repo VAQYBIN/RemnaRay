@@ -397,6 +397,22 @@ rewards)`; `LedgerRepository.available` honoured it, `settleBalance`
      fails on the previous templates. Verified: lint, typecheck, format,
      API 220, `pnpm test` 43, `pnpm test:m5` 5/5. The full proxy smoke
      (`deploy/ci/proxy-smoke.sh`) was not rerun.
+   - **8b. Done 2026-09-25 — the SVG filter was bypassable.** Theme SVGs are
+     served by `web` from the shop's origin with no CSP (the page policy's
+     matcher skips `/themes`), so script in an SVG opened directly ran next
+     to the console. The upload filter `/<script\b|\son[a-z]+\s*=/` missed
+     `<svg/onload=…>`, `<s:script>`, `javascript:` links (plain,
+     entity-encoded or split by whitespace), animated `href`s,
+     `foreignObject`, HTML `data:` URLs and non-UTF-8 files, and SVGs inside
+     an uploaded theme archive were not checked at all. Now: the asset route
+     answers `Content-Security-Policy: default-src 'none'; img-src data:;
+style-src 'unsafe-inline'; sandbox` and `nosniff`, which makes any theme
+     SVG inert whatever it contains; `assertInertSvg` (UTF-8 only, character
+     references decoded, whitespace dropped) closes those bypasses and runs
+     on every SVG of an archive too. Regressions: `theme.service.test.ts`
+     (10 cases; the shipped `manta` theme still uploads) and
+     `apps/web/test/theme-asset-route.test.ts`. Verified: lint, typecheck,
+     format, API 230, web 37, `pnpm test:e2e` 28 passed / 1 skipped.
 
 9. Outgoing webhooks of section 9.8 are missing (found under item 4).
    `panel.reset-traffic` and `panel.delete-user` are never performed (found

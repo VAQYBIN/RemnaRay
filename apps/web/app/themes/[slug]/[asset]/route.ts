@@ -16,6 +16,15 @@ const themeRoot =
 // path static also prevents Next's output tracer from copying the repository.
 const uploadRoot = resolve('/uploads/themes');
 
+/**
+ * The proxy excludes `/themes` from the page policy, and an SVG opened
+ * directly is a document of the shop's origin that may run script. This one
+ * lets an asset render and nothing else: no script, no requests, sandboxed.
+ * Uploaded logos are checked for script as well; this holds for anything a
+ * theme archive carries.
+ */
+const ASSET_POLICY = "default-src 'none'; img-src data:; style-src 'unsafe-inline'; sandbox";
+
 export async function GET(
   _request: Request,
   { params }: { params: Promise<{ slug: string; asset: string }> },
@@ -33,6 +42,8 @@ export async function GET(
       headers: {
         'Cache-Control': 'public, max-age=86400, immutable',
         'Content-Type': types[extname(asset)] ?? 'application/octet-stream',
+        'Content-Security-Policy': ASSET_POLICY,
+        'X-Content-Type-Options': 'nosniff',
       },
     });
   } catch {

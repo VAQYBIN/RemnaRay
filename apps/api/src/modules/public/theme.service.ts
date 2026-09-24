@@ -166,11 +166,7 @@ export class ThemeService implements OnModuleInit, OnModuleDestroy {
       throw new Error('Only PNG and SVG logos are supported');
     if (contents.length === 0 || contents.length > 10 * 1024 * 1024)
       throw new Error('Logo is empty or too large');
-    if (
-      mimetype === 'image/svg+xml' &&
-      /<script\b|\son[a-z]+\s*=/iu.test(contents.toString('utf8'))
-    )
-      throw new Error('SVG must not contain scripts or event handlers');
+    if (mimetype === 'image/svg+xml') assertInertSvg(contents);
 
     // The filename is accepted only as metadata; it never controls a path.
     const extension = mimetype === 'image/png' ? '.png' : '.svg';
@@ -233,6 +229,9 @@ export class ThemeService implements OnModuleInit, OnModuleDestroy {
       if (theme.slug === '_admin') throw new Error('The admin theme cannot be uploaded');
       if (!/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(theme.slug)) throw new Error('Theme slug is invalid');
       this.validateThemeFiles(source, theme);
+      // The site serves every file of the theme, not only the declared ones.
+      for (const file of filesUnder(source))
+        if (file.toLowerCase().endsWith('.svg')) assertInertSvg(readFileSync(file));
 
       const target = resolve(uploadRoot(), theme.slug);
       await rm(target, { recursive: true, force: true });
@@ -314,4 +313,51 @@ export class ThemeService implements OnModuleInit, OnModuleDestroy {
     const file = actual.startsWith(overridePrefix) ? basename(actual) : declared;
     return `/themes/${slug}/${file}?v=${version}`;
   }
+}
+
+function filesUnder(directory: string): string[] {
+  return readdirSync(directory, { withFileTypes: true }).flatMap((entry) =>
+    entry.isDirectory()
+      ? filesUnder(resolve(directory, entry.name))
+      : entry.isFile()
+        ? [resolve(directory, entry.name)]
+        : [],
+  );
+}
+
+/**
+ * An uploaded SVG is served from the shop's own origin, so it must not be able
+ * to run anything when opened directly. The asset route also answers with a
+ * sandboxing CSP; this refuses the known ways in up front, on text normalized
+ * the way a browser would read it: UTF-8 only (another encoding hides
+ * everything below from a UTF-8 reading), character references decoded, and
+ * whitespace and control characters dropped, which `javascript:` tolerates.
+ */
+export function assertInertSvg(contents: Buffer): void {
+  let text: string;
+  try {
+    text = new TextDecoder('utf-8', { fatal: true }).decode(contents);
+  } catch {
+    throw new Error('SVG must be UTF-8');
+  }
+  if (text.includes('\u0000') || /<\?xml[^>]*encoding\s*=\s*["'](?!utf-?8["'])/iu.test(text))
+    throw new Error('SVG must be UTF-8');
+  const decoded = text.replace(/&#(x[0-9a-f]+|\d+);?/giu, (_match, code: string) =>
+    String.fromCodePoint(
+      Math.min(
+        code[0] === 'x' || code[0] === 'X' ? parseInt(code.slice(1), 16) : Number(code),
+        0x10ffff,
+      ),
+    ),
+  );
+  const compact = decoded.replace(/[\s\p{Cc}]+/gu, '').toLowerCase();
+  if (
+    // `<script>`, also under any namespace prefix (`<svg:script>`).
+    /<(?:[a-z0-9_.-]+:)?script\b/iu.test(decoded) ||
+    // An `on…=` attribute after whitespace, a slash or a quote.
+    /[\s/"']on[a-z]+\s*=/iu.test(decoded) ||
+    /<(?:[a-z0-9_.-]+:)?(?:foreignobject|iframe|embed|object)\b/iu.test(decoded) ||
+    /(?:javascript|vbscript):|data:text\/html|data:application\/xhtml/u.test(compact)
+  )
+    throw new Error('SVG must not contain scripts, event handlers or embedded documents');
 }
