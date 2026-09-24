@@ -181,6 +181,79 @@ test(
         1,
       );
 
+      // EX-03: a second `paid` event under another id for an invoice already
+      // paid is the same payment reported twice (webhook and poll), not money.
+      const repeatBody = JSON.stringify({
+        eventId: 'paid-1-poll',
+        providerInvoiceId: invoice.providerInvoiceId,
+        type: 'paid',
+        paidAmountMinorRub: '29900',
+      });
+      await service.receiveWebhook(
+        'mock',
+        Buffer.from(repeatBody),
+        {
+          'x-mock-signature': createHmac('sha256', 'mock-secret').update(repeatBody).digest('hex'),
+        },
+        '127.0.0.1',
+      );
+      assert.equal(await prisma.transaction.count({ where: { invoiceId: invoice.id } }), 1);
+
+      // Owner decision 2026-09-25: a payment for an invoice the user canceled
+      // is handled like EX-02 — to the balance, no activation, an alert.
+      const canceled = await service.createInvoice({
+        userId: user.id,
+        kind: 'purchase',
+        planId: plan.id,
+        provider: 'mock',
+        idempotencyKey: 'm2-canceled',
+      });
+      await prisma.invoice.update({ where: { id: canceled.id }, data: { status: 'canceled' } });
+      const balanceBefore = await prisma.account
+        .findFirst({ where: { userId: user.id, kind: 'user' } })
+        .then((row) => row.balanceMinor);
+      const expiresBefore = (
+        await prisma.subscription.findFirst({ where: { userId: user.id, status: 'active' } })
+      ).expiresAt;
+      const canceledBody = JSON.stringify({
+        eventId: 'paid-canceled',
+        providerInvoiceId: canceled.providerInvoiceId,
+        type: 'paid',
+        paidAmountMinorRub: '29900',
+      });
+      await service.receiveWebhook(
+        'mock',
+        Buffer.from(canceledBody),
+        {
+          'x-mock-signature': createHmac('sha256', 'mock-secret')
+            .update(canceledBody)
+            .digest('hex'),
+        },
+        '127.0.0.1',
+      );
+      const canceledTransactions = await prisma.transaction.findMany({
+        where: { invoiceId: canceled.id },
+      });
+      assert.equal(canceledTransactions.length, 1);
+      assert.equal(canceledTransactions[0].type, 'topup');
+      assert.equal(
+        await prisma.account
+          .findFirst({ where: { userId: user.id, kind: 'user' } })
+          .then((row) => row.balanceMinor),
+        balanceBefore + 29900n,
+      );
+      assert.deepEqual(
+        (await prisma.subscription.findFirst({ where: { userId: user.id, status: 'active' } }))
+          .expiresAt,
+        expiresBefore,
+      );
+      assert.equal(
+        await prisma.outboxJob.count({
+          where: { jobId: `alert:payment.after_cancel:${canceled.id}` },
+        }),
+        1,
+      );
+
       // Section 9.7: a body that names no event is refused, not stored. With
       // no guard the insert reached Prisma with a null `type` and the webhook
       // path answered 500 to anything posted at it.

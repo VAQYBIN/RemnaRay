@@ -103,14 +103,19 @@ AMOUNT_MISMATCH`); the precheckout body adds `totalAmount`/`currency`
        concurrent redelivery), `pnpm test:m4` 4/4, `pnpm test:e2e` 27 passed /
        1 skipped / 1 failed (the pre-existing locale failure). Not verified:
        a real Telegram Stars payment (TASK-M6 manual acceptance, 26.4 B9).
-     - **Open product/accounting decisions (not implemented, spec silent):**
-       (a) a second, different `successful_payment` for an invoice already
-       `paid` — possible if the user pays two copies of one Stars invoice
-       before the first is applied — is recorded but credits nothing, since
-       `transactions.invoice_id` is unique; (b) a `paid` event on a
-       `canceled` invoice (all providers) is applied as an on-time purchase,
-       while 11.4 makes `canceled` terminal. Both need a rule, e.g. balance
-       credit with an alert as in EX-02.
+     - **Owner decisions, 2026-09-25 (the spec is silent; implemented):**
+       (a) a second, distinct Stars charge for an invoice already `paid` or
+       `underpaid` is credited to the balance as its own top-up (no
+       `invoice_id`, which is unique) with the new `payment.duplicate` alert.
+       Limited to Stars on purpose: other providers report one payment under
+       several ids (webhook and poll), so for them a further `paid` event on a
+       settled invoice stays an EX-03 duplicate — which previously even hit
+       the unique constraint on `underpaid` invoices. (b) a `paid` event on a
+       `canceled` invoice (all providers) is handled like EX-02: balance, no
+       activation, new `payment.after_cancel` alert. Both alert types extend
+       the section 16.5 list; locale keys exist in `ru` and `en`. Regressions
+       in `m2.payment.integration.test.mjs` (canceled, EX-03 repeat) and
+       `m2.stars.integration.test.mjs` (second charge, redelivered).
      - **Recorded debts:** the bot stream retries a permanently failing
        update every 60 s forever with no delivery limit or alert (ingress,
        all update kinds); a cold session can make the pre-checkout answer

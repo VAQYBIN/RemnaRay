@@ -386,12 +386,23 @@ export class PaymentsRepository {
           invoicesTotal.inc({ provider: invoice.provider, status: 'canceled' });
           await this.rewards?.onInvoiceReleased(tx, invoice.id);
         }
-        if (event.type === 'paid' && invoice.status !== 'paid') {
+        // Section 11.4: money is accepted onto an invoice that is pending,
+        // expired (EX-02) or canceled. Another `paid` event for an invoice
+        // already paid or underpaid is the same payment reported again
+        // (EX-03), except for Stars, where a new charge id is new money.
+        const settled = invoice.status === 'paid' || invoice.status === 'underpaid';
+        if (event.type === 'paid' && settled && invoice.provider === 'stars')
+          await this.creditSecondCharge(tx, event.id, invoice, parsed.paidAmountMinorRub);
+        if (event.type === 'paid' && !settled) {
           const paid = parsed.paidAmountMinorRub
             ? BigInt(parsed.paidAmountMinorRub)
             : invoice.amountMinor;
           const underpaid = paid * 100n < invoice.amountMinor * 98n;
-          const late = invoice.status === 'expired' || invoice.expiresAt < event.receivedAt;
+          // Owner decision 2026-09-25: a payment for a canceled invoice goes
+          // to the balance like EX-02; `canceled` stays a terminal intent.
+          const canceled = invoice.status === 'canceled';
+          const late =
+            canceled || invoice.status === 'expired' || invoice.expiresAt < event.receivedAt;
           const credit = paid > 0n ? paid : invoice.amountMinor;
           await tx.invoice.update({
             where: { id: invoice.id },
@@ -477,15 +488,17 @@ export class PaymentsRepository {
               { amount: formatMinorRub(invoice.amountMinor) },
             );
           if (underpaid || late) {
+            const alert = underpaid
+              ? 'payment.underpaid'
+              : canceled
+                ? 'payment.after_cancel'
+                : 'payment.late';
             await tx.outboxJob.create({
               data: {
                 queue: 'notify',
                 name: 'notify.alert',
-                payload: {
-                  type: underpaid ? 'payment.underpaid' : 'payment.late',
-                  details: invoice.id,
-                },
-                jobId: `alert:${underpaid ? 'payment.underpaid' : 'payment.late'}:${invoice.id}`,
+                payload: { type: alert, details: invoice.id },
+                jobId: `alert:${alert}:${invoice.id}`,
               },
             });
           }
@@ -511,6 +524,66 @@ export class PaymentsRepository {
           throw error;
         },
       );
+  }
+
+  /**
+   * Owner decision 2026-09-25: a second, distinct Telegram Stars charge for an
+   * invoice already settled — two copies of one invoice paid before the first
+   * was applied — is new money. `transactions.invoice_id` is unique, so it is
+   * credited to the balance as a top-up of its own, and the administrators
+   * are alerted. Its `telegram_payment_charge_id` is the event it came from.
+   */
+  private async creditSecondCharge(
+    tx: Prisma.TransactionClient,
+    eventId: string,
+    invoice: { id: string; userId: string; provider: string; amountMinor: bigint },
+    paidAmountMinorRub: string | undefined,
+  ): Promise<void> {
+    const credit = paidAmountMinorRub ? BigInt(paidAmountMinorRub) : invoice.amountMinor;
+    if (credit <= 0n) return;
+    const txRow = await tx.transaction.create({
+      data: {
+        userId: invoice.userId,
+        type: 'topup',
+        status: 'completed',
+        amountMinor: credit,
+        currency: 'RUB',
+        provider: invoice.provider,
+        reason: `second payment for invoice ${invoice.id}`,
+      },
+    });
+    await this.postEntry(
+      tx,
+      txRow.id,
+      invoice.userId,
+      invoice.provider,
+      credit,
+      'provider_clearing',
+      'user',
+    );
+    await queueNotification(
+      tx,
+      'payment.to_balance',
+      invoice.userId,
+      `payment.to_balance:${eventId}`,
+      {
+        amount: formatMinorRub(credit),
+      },
+    );
+    await tx.outboxJob.create({
+      data: {
+        queue: 'notify',
+        name: 'notify.alert',
+        payload: { type: 'payment.duplicate', details: invoice.id },
+        jobId: `alert:payment.duplicate:${eventId}`,
+      },
+    });
+    await this.rewards?.onPaid(tx, {
+      id: txRow.id,
+      userId: invoice.userId,
+      type: txRow.type,
+      amountMinor: txRow.amountMinor,
+    });
   }
 
   private async postEntry(

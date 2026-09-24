@@ -9,6 +9,8 @@ Implement Telegram Stars payments (sections 9.5 and 11.3.6). The bot now sends S
 
 Apply a payment event once even when deliveries race: `applyEvent` locks the event row and re-checks it inside the transaction.
 
+A payment for a canceled invoice is credited to the balance like EX-02 (`payment.after_cancel` alert), and a second, distinct Telegram Stars charge for an invoice already paid is credited to the balance (`payment.duplicate` alert); a further `paid` event for a settled invoice of any other provider is an EX-03 duplicate.
+
 Fix reading stored provider configuration: payments decrypted `config_enc` with `JSON.parse`, which threw for every provider configured in the console or the setup wizard, so none of them could create an invoice.
 
 ⚠ Breaking: the Stars provider configuration is now `{"starsPerRub": <number>}`; the former `botToken` and `starAmount` fields are ignored.

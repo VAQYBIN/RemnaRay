@@ -217,6 +217,41 @@ test(
       assert.equal(shortTransactions[0].type, 'topup');
       assert.equal(shortTransactions[0].amountMinor, 14950n);
 
+      // Owner decision 2026-09-25: a second, distinct Stars charge for an
+      // invoice already paid (two copies paid before the first was applied)
+      // is credited to the balance with an alert; the invoice keeps its one
+      // transaction.
+      const balanceBeforeSecond = await prisma.account
+        .findFirst({ where: { userId: user.id, kind: 'user' } })
+        .then((row) => row.balanceMinor);
+      const secondCharge = { ...payment, telegramPaymentChargeId: 'stars-charge-2' };
+      await stars.successfulPayment(secondCharge);
+      await stars.successfulPayment(secondCharge);
+      assert.equal((await prisma.invoice.findUnique({ where: { id: invoice.id } })).status, 'paid');
+      assert.equal(await prisma.transaction.count({ where: { invoiceId: invoice.id } }), 1);
+      const extra = await prisma.transaction.findMany({
+        where: { userId: user.id, invoiceId: null, provider: 'stars' },
+      });
+      assert.equal(extra.length, 1);
+      assert.equal(extra[0].type, 'topup');
+      assert.equal(extra[0].amountMinor, 29900n);
+      assert.equal(await prisma.ledgerEntry.count({ where: { transactionId: extra[0].id } }), 1);
+      assert.equal(
+        await prisma.account
+          .findFirst({ where: { userId: user.id, kind: 'user' } })
+          .then((row) => row.balanceMinor),
+        balanceBeforeSecond + 29900n,
+      );
+      const secondEvent = await prisma.paymentEvent.findFirst({
+        where: { provider: 'stars', externalId: 'stars-charge-2' },
+      });
+      assert.equal(
+        await prisma.outboxJob.count({
+          where: { jobId: `alert:payment.duplicate:${secondEvent.id}` },
+        }),
+        1,
+      );
+
       // No event is invented from an HTTP body: Stars have no webhook.
       const events = await prisma.paymentEvent.count();
       await assert.rejects(payments.receiveWebhook('stars', Buffer.from('{}'), {}, '127.0.0.1'), {

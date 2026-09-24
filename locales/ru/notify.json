@@ -28,6 +28,8 @@
   "alerts.backup.failed": "Резервное копирование завершилось ошибкой.",
   "alerts.provisioning.failed": "Подписка не выдана: provisioning_failed.",
   "alerts.payment.late": "Оплата поступила после истечения счёта.",
+  "alerts.payment.after_cancel": "Оплата поступила по отменённому счёту и зачислена на баланс.",
+  "alerts.payment.duplicate": "Повторная оплата уже оплаченного счёта зачислена на баланс.",
   "alerts.payment.underpaid": "Получена недоплата по счёту.",
   "alerts.payment.provider_refund": "Провайдер сообщил о возврате.",
   "alerts.ledger.mismatch": "Аудит книги нашёл расхождение.",

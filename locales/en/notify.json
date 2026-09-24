@@ -28,6 +28,8 @@
   "alerts.backup.failed": "A backup run failed.",
   "alerts.provisioning.failed": "A subscription could not be provisioned.",
   "alerts.payment.late": "A payment arrived after the invoice expired.",
+  "alerts.payment.after_cancel": "A payment arrived for a canceled invoice and was credited to the balance.",
+  "alerts.payment.duplicate": "A second payment for an already paid invoice was credited to the balance.",
   "alerts.payment.underpaid": "An underpayment was received.",
   "alerts.payment.provider_refund": "The provider reported a refund.",
   "alerts.ledger.mismatch": "The ledger audit found a mismatch.",

@@ -21,6 +21,13 @@ The provider adapters follow the current provider contracts:
   proof arrives as the bot's `successful_payment` update through the internal
   endpoints of section 9.5.
 
+A payment is accepted onto an invoice that is pending, expired or canceled.
+Money for an expired (EX-02) or canceled invoice is credited to the balance
+without activating anything, and administrators are alerted (`payment.late`,
+`payment.after_cancel`). Another `paid` event for an invoice already paid is
+the same payment reported again (EX-03) and changes nothing — except for
+Telegram Stars, where a new charge id is new money (see [stars](./stars.md)).
+
 Provider configuration is deliberately incomplete until an administrator
 enables the provider and records a successful health check.
 

@@ -33,6 +33,10 @@ bot:
   the meantime is credited to the balance (EX-02), and a smaller `total_amount`
   is scaled to roubles so the underpayment rule applies. If the API cannot
   record it, the bot leaves the update pending and it is delivered again.
+- A second charge with another `telegram_payment_charge_id` for an invoice
+  already paid — two copies of one invoice paid before the first was applied —
+  is credited to the balance as a top-up of its own, and administrators get
+  the `payment.duplicate` alert.
 
 Payment updates are exempt from the bot's per-user rate limit and are handled
 before any open dialog. Refunds go to the balance; `refundStarPayment` is not
