@@ -65,6 +65,41 @@ describe('payment provider boundaries', () => {
   });
 });
 
+describe('CryptoBot invoice (section 11.3.5)', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it('bills the fiat RUB amount as a decimal string in roubles', async () => {
+    const bodies: Array<Record<string, unknown>> = [];
+    vi.stubGlobal('fetch', (_url: string, init: RequestInit) => {
+      bodies.push(JSON.parse(init.body as string) as Record<string, unknown>);
+      return Promise.resolve(
+        Response.json({ ok: true, result: { invoice_id: 7, pay_url: 'https://t.me/pay' } }),
+      );
+    });
+
+    await new CryptoBotProvider().createInvoice(
+      {
+        invoiceId: 'client-key',
+        shopInvoiceId: '0199aaaa-bbbb-7ccc-8ddd-eeeeeeeeeeee',
+        amountMinor: 29950n,
+        currency: 'RUB',
+        description: 'Premium',
+        user: { id: 'u', telegramId: 1n, language: 'ru' },
+        returnUrl: 'https://shop.test/pay/success',
+        failUrl: 'https://shop.test/pay/fail',
+        expiresAt: new Date(Date.now() + 3_600_000),
+      },
+      { token: 'token', baseUrl: 'http://cryptobot.test/api' },
+    );
+
+    // Crypto Pay `amount` is a String "in float" of the fiat currency; the
+    // 299.50 ₽ invoice was sent as 2.995.
+    expect(bodies[0]).toMatchObject({ currency_type: 'fiat', fiat: 'RUB', amount: '299.50' });
+  });
+});
+
 describe('Telegram Stars pricing and invoice link (section 11.3.6)', () => {
   afterEach(() => {
     vi.unstubAllGlobals();

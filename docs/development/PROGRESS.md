@@ -133,8 +133,25 @@ AMOUNT_MISMATCH`); the precheckout body adds `totalAmount`/`currency`
      1 skipped / 0 failed. The customer entry-flow repair of 2026-09-23 is
      now verified in the browser.
 
-3. CryptoBot invoice amount is divided by 100 twice (`amount()` already
-   returns rubles).
+3. **Done 2026-09-25 — CryptoBot invoice amount divided by 100 twice**
+   (section 11.3.5). `amount()` already returns roubles, so a 299 ₽ invoice
+   was created as 2.99 ₽; it is now sent as the decimal string `"299.00"`.
+   Contract: Crypto Pay `createInvoice.amount` is a String "in float" of the
+   fiat currency (help.send.tg Crypto Pay API via Context7; matches the
+   11.3.5 example `amount: "299"`). Regression in
+   `builtin-providers.test.ts`. Verified: lint, typecheck, build, API 190,
+   `pnpm test:m2` 2/2. No real CryptoBot invoice was created.
+   - **3a. Recorded, not repaired — rest of the adapter vs 11.3.5:** the
+     config has `token`/`baseUrl` instead of `apiToken`, `testnet`,
+     `acceptedAssets`; `accepted_assets` and `paid_btn_name/url` are not sent;
+     the link is read from `pay_url` while 11.3.5 names `bot_invoice_url`
+     (the current Invoice field list is NOT VERIFIED: the official help page
+     is script-rendered and Context7 has only the request side); `payload`
+     carries the idempotency key, not the invoice id; `paid_amount`/
+     `paid_asset` are not written to `providerAmount`/`fx_rate`;
+     `healthcheck` answers ok without calling the API; the webhook `eventId`
+     is `invoice_id` where 11.3.5 says `update_id` (which the vendor calls
+     non-unique). Poll event ids are item 6.
 4. Nothing schedules `maintenance.subscriptions-expire` or recurring
    `panel.reconcile-all` (section 7.3, FR-024).
 5. `panel.sync-user` reuses `jobId panel:<userId>`, so BullMQ drops every

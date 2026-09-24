@@ -477,7 +477,7 @@ export class CryptoBotProvider implements PaymentProvider {
       body: JSON.stringify({
         currency_type: 'fiat',
         fiat: 'RUB',
-        amount: Number(amount(p.amountMinor)) / 100,
+        amount: amount(p.amountMinor),
         description: p.description,
         payload: p.invoiceId,
         expires_in: Math.max(1, Math.floor((p.expiresAt.getTime() - Date.now()) / 1000)),
