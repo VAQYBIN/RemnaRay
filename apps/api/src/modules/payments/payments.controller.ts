@@ -20,6 +20,16 @@ import { InternalTokenGuard } from '../auth/auth.guards';
 export class PaymentsWebhookController {
   constructor(private readonly payments: PaymentsService) {}
 
+  /** Section 9.7 names Robokassa's ResultURL `/webhooks/robokassa/result`. */
+  @Post('robokassa/result')
+  robokassaResult(
+    @Req() request: RawBodyRequest<FastifyRequest>,
+    @Headers() headers: Record<string, string>,
+    @Res() response: FastifyReply,
+  ) {
+    return this.webhook('robokassa', request, headers, response);
+  }
+
   @Post(':provider')
   async webhook(
     @Param('provider') provider: string,

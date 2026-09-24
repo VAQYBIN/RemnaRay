@@ -18,16 +18,6 @@ describe('payment provider boundaries', () => {
     expect(provider.verifyWebhook(Buffer.from('{}'), {}, '192.0.2.1', {}).ok).toBe(false);
   });
 
-  it('verifies Robokassa ResultURL and returns its acknowledgement', () => {
-    const provider = new RobokassaProvider();
-    const cfg = { merchantLogin: 'shop', password2: 'secret' };
-    const signature = createHash('md5').update('shop:10.00:42:secret').digest('hex');
-    const event = Buffer.from(`OutSum=10.00&InvId=42&SignatureValue=${signature}`);
-    expect(provider.verifyWebhook(event, {}, '', cfg).ok).toBe(true);
-    provider.parseWebhook(event);
-    expect(provider.ackResponse().body).toBe('OK42');
-  });
-
   it('verifies Lava with the additional webhook key', () => {
     const body = Buffer.from('{"orderId":"x","status":"paid"}');
     const provider = new LavaProvider();
@@ -99,6 +89,190 @@ describe('status polling (sections 7.3, 11.3)', () => {
       expect(second.eventId).not.toBe(first.eventId);
     },
   );
+});
+
+describe('Robokassa (section 11.3.4)', () => {
+  const md5 = (value: string) => createHash('md5').update(value).digest('hex');
+  const uuid = '0199aaaa-bbbb-7ccc-8ddd-eeeeeeeeeeee';
+  const cfg = { merchantLogin: 'shop', password1: 'p1', password2: 'p2' };
+  const params = (overrides: Record<string, unknown> = {}) => ({
+    invoiceId: 'client-key',
+    shopInvoiceId: uuid,
+    shopInvoiceNumber: 42n,
+    amountMinor: 29900n,
+    currency: 'RUB' as const,
+    description: 'Shop: Premium',
+    user: { id: 'u', telegramId: 1n, email: 'buyer@example.com', language: 'en' },
+    returnUrl: `https://shop.test/pay/${uuid}`,
+    failUrl: `https://shop.test/pay/${uuid}`,
+    webhookUrl: 'https://shop.test/webhooks/robokassa',
+    expiresAt: new Date(Date.now() + 3_600_000),
+    ...overrides,
+  });
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it('builds the payment link with InvId = numeric_id and Shp_inv = the invoice id', async () => {
+    const created = await new RobokassaProvider().createInvoice(params(), cfg);
+    const url = new URL(created.paymentUrl);
+
+    expect(`${url.origin}${url.pathname}`).toBe('https://auth.robokassa.ru/Merchant/Index.aspx');
+    expect(Object.fromEntries(url.searchParams)).toEqual({
+      MerchantLogin: 'shop',
+      OutSum: '299.00',
+      InvId: '42',
+      Description: 'Shop: Premium',
+      Culture: 'en',
+      Email: 'buyer@example.com',
+      Shp_inv: uuid,
+      SignatureValue: md5(`shop:299.00:42:p1:Shp_inv=${uuid}`),
+    });
+    expect(created.providerInvoiceId).toBe('42');
+  });
+
+  it('signs the URL-encoded receipt and sends that encoded value', async () => {
+    const created = await new RobokassaProvider().createInvoice(
+      params({
+        receipt: {
+          customer: {},
+          items: [
+            {
+              description: 'Premium',
+              quantity: '1.00',
+              amountMinor: 29900n,
+              vatCode: 1,
+              paymentSubject: 'service',
+              paymentMode: 'full_payment',
+            },
+          ],
+        },
+      }),
+      { ...cfg, sno: 'usn_income', tax: 'none' },
+    );
+    const url = new URL(created.paymentUrl);
+    const receipt = url.searchParams.get('Receipt') ?? '';
+
+    expect(JSON.parse(decodeURIComponent(receipt))).toEqual({
+      sno: 'usn_income',
+      items: [
+        {
+          name: 'Premium',
+          quantity: 1,
+          sum: 299,
+          payment_method: 'full_payment',
+          payment_object: 'service',
+          tax: 'none',
+        },
+      ],
+    });
+    expect(url.searchParams.get('SignatureValue')).toBe(
+      md5(`shop:299.00:42:${receipt}:p1:Shp_inv=${uuid}`),
+    );
+  });
+
+  it('uses the test passwords and IsTest=1 in test mode', async () => {
+    const created = await new RobokassaProvider().createInvoice(params(), {
+      ...cfg,
+      isTest: true,
+      testPassword1: 't1',
+      testPassword2: 't2',
+    });
+    const url = new URL(created.paymentUrl);
+
+    expect(url.searchParams.get('IsTest')).toBe('1');
+    expect(url.searchParams.get('SignatureValue')).toBe(md5(`shop:299.00:42:t1:Shp_inv=${uuid}`));
+  });
+
+  it('refuses an InvId above 2^31 − 1', async () => {
+    await expect(
+      new RobokassaProvider().createInvoice(params({ shopInvoiceNumber: 2_147_483_648n }), cfg),
+    ).rejects.toThrow(/InvId/u);
+  });
+
+  it('verifies ResultURL as MD5(OutSum:InvId:Password2:Shp_inv=…), case-insensitively', () => {
+    const provider = new RobokassaProvider();
+    const signature = md5(`299.000000:42:p2:Shp_inv=${uuid}`).toUpperCase();
+    const body = Buffer.from(
+      `OutSum=299.000000&InvId=42&SignatureValue=${signature}&Shp_inv=${uuid}&Fee=5.00`,
+    );
+
+    expect(provider.verifyWebhook(body, {}, '', cfg).ok).toBe(true);
+    // The merchant login is not part of the ResultURL signature.
+    const withLogin = Buffer.from(
+      `OutSum=299.000000&InvId=42&Shp_inv=${uuid}&SignatureValue=${md5(`shop:299.000000:42:p2`)}`,
+    );
+    expect(provider.verifyWebhook(withLogin, {}, '', cfg).ok).toBe(false);
+    // Shp_inv is signed: another invoice id breaks the signature.
+    const swapped = Buffer.from(
+      `OutSum=299.000000&InvId=42&SignatureValue=${signature}&Shp_inv=other`,
+    );
+    expect(provider.verifyWebhook(swapped, {}, '', cfg).ok).toBe(false);
+  });
+
+  it('answers OK<InvId> of the notification it was given', () => {
+    const provider = new RobokassaProvider();
+    const event = provider.parseWebhook(
+      Buffer.from(`OutSum=299.000000&InvId=42&SignatureValue=x&Shp_inv=${uuid}`),
+    );
+
+    expect(event).toMatchObject({
+      providerInvoiceId: '42',
+      type: 'paid',
+      paidAmount: { amount: '299.000000', currency: 'RUB' },
+    });
+    // Another notification parsed in between must not change this answer.
+    provider.parseWebhook(Buffer.from('OutSum=1&InvId=43&SignatureValue=x'));
+    expect(provider.ackResponse(event ?? undefined)).toEqual({
+      status: 200,
+      body: 'OK42',
+      contentType: 'text/plain',
+    });
+  });
+
+  it('polls OpStateExt and reads State.Code 100 as paid', async () => {
+    const requests: string[] = [];
+    let state = 5;
+    vi.stubGlobal('fetch', (url: string) => {
+      requests.push(url);
+      return Promise.resolve(
+        new Response(
+          `<?xml version="1.0" encoding="utf-8"?><OperationStateResponse xmlns="http://merchant.roboxchange.com/WebService/"><Result><Code>0</Code></Result><State><Code>${String(state)}</Code><RequestDate>2026-09-25T10:00:00+03:00</RequestDate></State></OperationStateResponse>`,
+          { headers: { 'content-type': 'text/xml' } },
+        ),
+      );
+    });
+    const provider = new RobokassaProvider();
+
+    const pending = await provider.fetchStatus('42', cfg);
+    state = 100;
+    const paid = await provider.fetchStatus('42', cfg);
+
+    expect(requests[0]).toBe(
+      `https://auth.robokassa.ru/Merchant/WebService/Service.asmx/OpStateExt?MerchantLogin=shop&InvoiceID=42&Signature=${md5('shop:42:p2')}`,
+    );
+    expect(pending.type).toBe('pending');
+    expect(paid.type).toBe('paid');
+    expect(paid.eventId).not.toBe(pending.eventId);
+  });
+
+  it('keeps an unknown operation pending and does not poll in test mode', async () => {
+    const fetch = vi.fn(() =>
+      Promise.resolve(
+        new Response(
+          '<OperationStateResponse><Result><Code>3</Code></Result></OperationStateResponse>',
+        ),
+      ),
+    );
+    vi.stubGlobal('fetch', fetch);
+    const provider = new RobokassaProvider();
+
+    expect((await provider.fetchStatus('42', cfg)).type).toBe('pending');
+    // OpStateExt does not serve test payments.
+    fetch.mockClear();
+    expect((await provider.fetchStatus('42', { ...cfg, isTest: true })).type).toBe('pending');
+    expect(fetch).not.toHaveBeenCalled();
+  });
 });
 
 describe('Lava invoice (section 11.3.3)', () => {

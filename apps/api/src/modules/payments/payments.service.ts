@@ -75,9 +75,14 @@ export class PaymentsService {
     const config = await this.providerConfig(input.provider);
     // The row's id is taken before the provider is called: Telegram Stars
     // carry it in the invoice payload `inv_<id>` (section 11.3.6).
-    const [{ id: shopInvoiceId } = { id: '' }] = await this.infra.db.$queryRaw<
-      Array<{ id: string }>
-    >(Prisma.sql`SELECT uuidv7()::text AS id`);
+    // Robokassa's `InvId` is `numeric_id` (section 11.3.4), taken from the
+    // column's own identity sequence for the same reason.
+    const [{ id: shopInvoiceId, numericId } = { id: '', numericId: null }] = await this.infra.db
+      .$queryRaw<Array<{ id: string; numericId: bigint | null }>>(Prisma.sql`
+        SELECT uuidv7()::text AS id,
+               nextval(pg_get_serial_sequence('invoices', 'numeric_id')) AS "numericId"
+      `);
+    const shopInvoiceNumber = numericId ?? undefined;
     const fiscalMode = this.settings ? String(await this.settings.get('fiscal.mode')) : 'none';
     const fiscalEmail = this.settings
       ? String(await this.settings.get('fiscal.fallback_email'))
@@ -86,6 +91,7 @@ export class PaymentsService {
     const params = {
       invoiceId: input.idempotencyKey,
       shopInvoiceId,
+      ...(shopInvoiceNumber === undefined ? {} : { shopInvoiceNumber }),
       amountMinor: amount,
       currency: 'RUB' as const,
       description,
@@ -123,6 +129,7 @@ export class PaymentsService {
     const created = await provider.createInvoice(params, config);
     const invoiceInput = {
       id: shopInvoiceId,
+      numericId: shopInvoiceNumber,
       userId: input.userId,
       kind: input.kind,
       ...(input.planId ? { planId: input.planId } : {}),
@@ -229,7 +236,7 @@ export class PaymentsService {
           jobId: `evt:${stored.id}`,
         },
       });
-    return provider.ackResponse();
+    return provider.ackResponse(event);
   }
 
   async recheck(invoiceId: string) {

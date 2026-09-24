@@ -1,9 +1,10 @@
 import { execFileSync } from 'node:child_process';
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { createHmac, randomBytes } from 'node:crypto';
+import { createHash, createHmac, randomBytes } from 'node:crypto';
 import process from 'node:process';
 import { Buffer } from 'node:buffer';
+import { URL } from 'node:url';
 import { PostgreSqlContainer } from '@testcontainers/postgresql';
 
 test(
@@ -337,6 +338,65 @@ test(
         globalThis.fetch = previousFetch;
         if (previousKey === undefined) delete process.env.RR_APP_KEY;
         else process.env.RR_APP_KEY = previousKey;
+      }
+
+      // Section 11.3.4 Robokassa end to end: `InvId` is the invoice's
+      // `numeric_id`, `Shp_inv` its id, and a signed ResultURL pays it and is
+      // answered `OK<InvId>` — the same answer for a repeated notification.
+      const { RobokassaProvider } =
+        await import('../apps/api/dist/modules/payments/builtin-providers.js');
+      const { encryptSetting: encryptRobokassa } =
+        await import('../apps/api/dist/modules/settings/settings.crypto.js');
+      const robokassaKey = randomBytes(32).toString('base64');
+      const keyBeforeRobokassa = process.env.RR_APP_KEY;
+      process.env.RR_APP_KEY = robokassaKey;
+      try {
+        registry.register(new RobokassaProvider());
+        await prisma.paymentProvider.update({
+          where: { code: 'robokassa' },
+          data: {
+            enabled: true,
+            configEnc: encryptRobokassa(
+              { merchantLogin: 'shop', password1: 'p1', password2: 'p2' },
+              robokassaKey,
+            ).enc,
+          },
+        });
+        const robokassa = await service.createInvoice({
+          userId: user.id,
+          kind: 'purchase',
+          planId: plan.id,
+          provider: 'robokassa',
+          idempotencyKey: 'm2-robokassa',
+        });
+        const row = await prisma.invoice.findUnique({ where: { id: robokassa.id } });
+        assert.equal(row.providerInvoiceId, String(row.numericId));
+        const link = new URL(row.paymentUrl);
+        assert.equal(link.searchParams.get('InvId'), String(row.numericId));
+        assert.equal(link.searchParams.get('Shp_inv'), robokassa.id);
+        const outSum = '299.000000';
+        const signature = createHash('md5')
+          .update(`${outSum}:${String(row.numericId)}:p2:Shp_inv=${robokassa.id}`)
+          .digest('hex')
+          .toUpperCase();
+        const result = Buffer.from(
+          `OutSum=${outSum}&InvId=${String(row.numericId)}&SignatureValue=${signature}&Shp_inv=${robokassa.id}&Fee=8.37`,
+        );
+        const first = await service.receiveWebhook('robokassa', result, {}, '127.0.0.1');
+        const repeated = await service.receiveWebhook('robokassa', result, {}, '127.0.0.1');
+        assert.deepEqual(
+          [first.body, repeated.body],
+          [`OK${String(row.numericId)}`, `OK${String(row.numericId)}`],
+        );
+        assert.equal(first.contentType, 'text/plain');
+        assert.equal(
+          (await prisma.invoice.findUnique({ where: { id: robokassa.id } })).status,
+          'paid',
+        );
+        assert.equal(await prisma.transaction.count({ where: { invoiceId: robokassa.id } }), 1);
+      } finally {
+        if (keyBeforeRobokassa === undefined) delete process.env.RR_APP_KEY;
+        else process.env.RR_APP_KEY = keyBeforeRobokassa;
       }
 
       // Section 9.7: a body that names no event is refused, not stored. With

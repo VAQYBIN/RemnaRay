@@ -29,6 +29,8 @@ export type CreateInvoiceParams = {
   invoiceId: string;
   /** `invoices.id` of the row about to be written (Stars payload `inv_<id>`). */
   shopInvoiceId: string;
+  /** `invoices.numeric_id` of that row (Robokassa `InvId`, section 11.3.4). */
+  shopInvoiceNumber?: bigint;
   amountMinor: bigint;
   currency: 'RUB';
   description: string;
@@ -83,7 +85,12 @@ export interface PaymentProvider {
     config: ProviderConfig,
   ): ProviderVerification;
   parseWebhook(raw: Buffer, config: ProviderConfig): ProviderEvent | null;
-  ackResponse(): { status: number; body: string | object; contentType: string };
+  /** `event` is the notification being answered, for providers that echo its id. */
+  ackResponse(event?: ProviderEvent): {
+    status: number;
+    body: string | object;
+    contentType: string;
+  };
   fetchStatus(providerInvoiceId: string, config: ProviderConfig): Promise<ProviderEvent>;
   healthcheck(config: ProviderConfig): Promise<{ ok: boolean; latencyMs: number; error?: string }>;
 }

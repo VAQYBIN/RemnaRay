@@ -196,6 +196,32 @@ export class YooKassaProvider implements PaymentProvider {
   }
 }
 
+const md5 = (value: string) => createHash('md5').update(value).digest('hex');
+/** Robokassa takes `InvId` as a signed 32-bit integer (section 11.3.4). */
+const ROBOKASSA_MAX_INV_ID = 2_147_483_647n;
+
+/** Test mode signs with the test passwords (section 11.3.4). */
+function robokassaPasswords(cfg: ProviderConfig) {
+  const test = cfg.isTest === true;
+  return {
+    password1: String((test ? cfg.testPassword1 : cfg.password1) ?? ''),
+    password2: String((test ? cfg.testPassword2 : cfg.password2) ?? ''),
+  };
+}
+
+/** `Shp_*` parameters in alphabetical order as `Shp_key=value`, the signature tail. */
+function shpTail(params: Iterable<[string, string]>): string[] {
+  return [...params]
+    .filter(([key]) => key.startsWith('Shp_'))
+    .sort(([left], [right]) => (left < right ? -1 : left > right ? 1 : 0))
+    .map(([key, value]) => `${key}=${value}`);
+}
+
+/**
+ * Section 11.3.4, checked against docs.robokassa.ru (pay-interface,
+ * notifications-and-redirects, fiscalization, xml-interfaces). The store must
+ * select MD5 in its technical settings.
+ */
 export class RobokassaProvider implements PaymentProvider {
   readonly code = 'robokassa' as const;
   readonly capabilities = {
@@ -209,66 +235,91 @@ export class RobokassaProvider implements PaymentProvider {
     merchantLogin: z.string(),
     password1: z.string(),
     password2: z.string(),
-    test: z.boolean().default(false),
-    algorithm: z.enum(['MD5', 'SHA256']).default('MD5'),
+    isTest: z.boolean().default(false),
+    testPassword1: z.string().optional(),
+    testPassword2: z.string().optional(),
+    sno: z.string().optional(),
+    tax: z.string().default('none'),
     baseUrl: z.url().default('https://auth.robokassa.ru'),
   });
-  private lastInvoiceId = '';
   async createInvoice(p: CreateInvoiceParams, cfg: ProviderConfig) {
+    const number = p.shopInvoiceNumber;
+    if (number === undefined || number < 1n || number > ROBOKASSA_MAX_INV_ID)
+      throw new Error('robokassa: InvId must be an integer from 1 to 2^31 - 1');
     const sum = amount(p.amountMinor);
+    const invId = String(number);
+    // The receipt is URL-encoded before it is signed, and that encoded text is
+    // the value of the `Receipt` parameter.
     const receipt = p.receipt
-      ? JSON.stringify({
-          sno: cfg.sno ?? 'osn',
-          items: p.receipt.items.map((item) => ({
-            name: item.description,
-            quantity: Number(item.quantity),
-            sum,
-            tax: `vat${item.vatCode}`,
-            payment_object: item.paymentSubject,
-            payment_method: item.paymentMode,
-          })),
-        })
+      ? encodeURIComponent(
+          JSON.stringify({
+            ...(cfg.sno ? { sno: String(cfg.sno) } : {}),
+            items: [
+              {
+                name: truncate(p.receipt.items[0]?.description ?? p.description, 128),
+                quantity: 1,
+                sum: Number(sum),
+                payment_method: 'full_payment',
+                payment_object: 'service',
+                tax: String(cfg.tax ?? 'none'),
+              },
+            ],
+          }),
+        )
       : undefined;
-    const signature = createHash('md5')
-      .update(
-        `${cfg.merchantLogin}:${sum}:${p.invoiceId}${receipt ? `:${receipt}` : ''}:${cfg.password1}`,
-      )
-      .digest('hex');
+    const shp: Array<[string, string]> = [['Shp_inv', p.shopInvoiceId]];
+    const { password1 } = robokassaPasswords(cfg);
+    const signature = md5(
+      [
+        String(cfg.merchantLogin),
+        sum,
+        invId,
+        ...(receipt ? [receipt] : []),
+        password1,
+        ...shpTail(shp),
+      ].join(':'),
+    );
     const query = new URLSearchParams({
       MerchantLogin: String(cfg.merchantLogin),
       OutSum: sum,
-      InvId: p.invoiceId,
-      SignatureValue: signature,
-      Culture: p.user.language,
+      InvId: invId,
+      Description: p.description,
+      Culture: p.user.language === 'en' ? 'en' : 'ru',
+      ...(p.user.email ? { Email: p.user.email } : {}),
+      ...Object.fromEntries(shp),
       ...(receipt ? { Receipt: receipt } : {}),
+      ...(cfg.isTest === true ? { IsTest: '1' } : {}),
+      SignatureValue: signature,
     });
-    const url = `${base(cfg, 'https://auth.robokassa.ru')}/Merchant/Index.aspx?${query}`;
     return {
-      providerInvoiceId: p.invoiceId,
-      paymentUrl: url,
+      providerInvoiceId: invId,
+      paymentUrl: `${base(cfg, 'https://auth.robokassa.ru')}/Merchant/Index.aspx?${query}`,
       expiresAt: p.expiresAt,
       rawSafe: {
         merchantLogin: cfg.merchantLogin,
         outSum: sum,
-        invoiceId: p.invoiceId,
+        invId,
         ...(receipt ? { receipt: true } : {}),
+        ...(cfg.isTest === true ? { isTest: true } : {}),
       },
     };
   }
   verifyWebhook(raw: Buffer, _headers: Record<string, string>, _ip: string, cfg: ProviderConfig) {
     const params = new URLSearchParams(raw.toString());
-    const expected = createHash('md5')
-      .update(
-        `${cfg.merchantLogin}:${params.get('OutSum') ?? ''}:${params.get('InvId') ?? ''}:${cfg.password2}`,
-      )
-      .digest('hex');
+    const expected = md5(
+      [
+        params.get('OutSum') ?? '',
+        params.get('InvId') ?? '',
+        robokassaPasswords(cfg).password2,
+        ...shpTail(params),
+      ].join(':'),
+    );
     return { ok: safeEqual(params.get('SignatureValue') ?? '', expected) };
   }
   parseWebhook(raw: Buffer) {
     const p = new URLSearchParams(raw.toString());
     const id = p.get('InvId');
     if (!id) return null;
-    this.lastInvoiceId = id;
     return {
       eventId: `result:${id}:${p.get('OutSum')}`,
       providerInvoiceId: id,
@@ -276,14 +327,45 @@ export class RobokassaProvider implements PaymentProvider {
       paidAmount: { amount: p.get('OutSum') ?? '0', currency: 'RUB' },
     };
   }
-  ackResponse() {
-    return ack(`OK${this.lastInvoiceId}`);
+  /** `OK<InvId>` of this notification; a duplicate ResultURL gets the same answer. */
+  ackResponse(event?: ProviderEvent) {
+    return ack(`OK${event?.providerInvoiceId ?? ''}`);
   }
-  async fetchStatus(id: string) {
-    return { eventId: `poll:${id}`, providerInvoiceId: id, type: 'pending' as const };
+  async fetchStatus(id: string, cfg: ProviderConfig): Promise<ProviderEvent> {
+    // OpStateExt serves live payments only; a test payment is known by its
+    // ResultURL alone.
+    if (cfg.isTest === true)
+      return { eventId: `poll:${id}:test`, providerInvoiceId: id, type: 'pending' };
+    const query = new URLSearchParams({
+      MerchantLogin: String(cfg.merchantLogin),
+      InvoiceID: id,
+      Signature: md5(`${cfg.merchantLogin}:${id}:${robokassaPasswords(cfg).password2}`),
+    });
+    const response = await fetch(
+      `${base(cfg, 'https://auth.robokassa.ru')}/Merchant/WebService/Service.asmx/OpStateExt?${query}`,
+      { signal: AbortSignal.timeout(10_000) },
+    );
+    if (!response.ok) throw new Error(`payment provider HTTP ${response.status}`);
+    const xml = await response.text();
+    const result = /<Result>\s*<Code>(\d+)<\/Code>/u.exec(xml)?.[1];
+    const state = /<State>\s*<Code>(\d+)<\/Code>/u.exec(xml)?.[1];
+    // Result 0 is success; 3 is an operation the payer has not started yet.
+    if (result !== '0')
+      return { eventId: `poll:${id}:r${result}`, providerInvoiceId: id, type: 'pending' };
+    return {
+      eventId: `poll:${id}:${state}`,
+      providerInvoiceId: id,
+      type: state === '100' ? 'paid' : 'pending',
+    };
   }
-  healthcheck() {
-    return Promise.resolve({ ok: true, latencyMs: 0 });
+  healthcheck(cfg: ProviderConfig) {
+    const { password1, password2 } = robokassaPasswords(cfg);
+    const missing = !cfg.merchantLogin || !password1 || !password2;
+    return Promise.resolve(
+      missing
+        ? { ok: false, latencyMs: 0, error: 'robokassa: merchantLogin and passwords are required' }
+        : { ok: true, latencyMs: 0 },
+    );
   }
 }
 

@@ -27,6 +27,8 @@ export interface RewardHooksPort {
 export type InvoiceInput = {
   /** A pre-allocated `invoices.id`; the database default applies when absent. */
   id?: string | undefined;
+  /** A pre-allocated `invoices.numeric_id`; the identity default applies when absent. */
+  numericId?: bigint | undefined;
   userId: string;
   kind: 'purchase' | 'topup' | 'plan_change';
   planId?: string | undefined;
@@ -93,6 +95,7 @@ export class PaymentsRepository {
       return await this.prisma.invoice.create({
         data: {
           ...(input.id ? { id: input.id } : {}),
+          ...(input.numericId === undefined ? {} : { numericId: input.numericId }),
           userId: input.userId,
           kind: input.kind,
           planId: input.planId ?? null,

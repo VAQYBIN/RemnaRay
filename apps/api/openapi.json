@@ -2315,6 +2315,20 @@
           "400": { "description": "Invalid signature" }
         }
       }
+    },
+    "/webhooks/robokassa/result": {
+      "post": {
+        "operationId": "robokassaResultWebhook",
+        "description": "Robokassa ResultURL (section 11.3.4): form-urlencoded notification, answered text/plain OK<InvId>.",
+        "requestBody": {
+          "required": true,
+          "content": { "application/x-www-form-urlencoded": { "schema": { "type": "object" } } }
+        },
+        "responses": {
+          "200": { "description": "OK<InvId>" },
+          "400": { "description": "Invalid signature" }
+        }
+      }
     }
   },
   "webhooks": {}
