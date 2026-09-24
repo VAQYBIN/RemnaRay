@@ -52,23 +52,11 @@ describe('payment provider boundaries', () => {
     ).toBe(true);
   });
 
-  it('normalizes Stars only after successful_payment', () => {
-    const event = new StarsProvider().parseWebhook(
-      Buffer.from(
-        JSON.stringify({
-          message: {
-            successful_payment: {
-              invoice_payload: 'inv',
-              total_amount: 20,
-              currency: 'XTR',
-              telegram_payment_charge_id: 'charge',
-            },
-          },
-        }),
-      ),
-    );
-    expect(event).toMatchObject({ providerInvoiceId: 'inv', type: 'paid', eventId: 'charge' });
-    expect(new StarsProvider().parseWebhook(Buffer.from('{}'))).toBeNull();
+  it('gives Telegram Stars no HTTP webhook (section 11.3.6)', () => {
+    const provider = new StarsProvider();
+    expect(provider.capabilities.webhooks).toBe(false);
+    expect(provider.verifyWebhook().ok).toBe(false);
+    expect(provider.parseWebhook()).toBeNull();
   });
 
   it('marks Platega as polling-only', () => {

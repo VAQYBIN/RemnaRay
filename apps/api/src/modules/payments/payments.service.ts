@@ -152,6 +152,11 @@ export class PaymentsService {
     ip: string,
   ) {
     const provider = this.providers.get(providerCode);
+    // Section 9.7: a provider without an HTTP webhook is refused before its
+    // body is read or stored. Telegram Stars in particular reach the shop only
+    // through the bot (section 11.3.6), so a body posted here is a forgery.
+    if (!provider.capabilities.webhooks)
+      throw new PaymentError('WEBHOOK_NOT_SUPPORTED', 'WEBHOOK_NOT_SUPPORTED');
     const config = await this.providerConfig(providerCode);
     const verification = provider.verifyWebhook(raw, headers, ip, config);
     const parsedEvent = provider.parseWebhook(raw, config);

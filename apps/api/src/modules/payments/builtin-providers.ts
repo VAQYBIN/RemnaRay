@@ -545,7 +545,7 @@ export class StarsProvider implements PaymentProvider {
   readonly code = 'stars' as const;
   readonly capabilities = {
     receipts: false,
-    webhooks: true,
+    webhooks: false,
     statusPolling: false,
     kind: 'stars' as const,
     currencies: ['XTR'],
@@ -583,31 +583,15 @@ export class StarsProvider implements PaymentProvider {
       rawSafe: { ok: result.ok, providerInvoiceId: p.invoiceId, currency: 'XTR' },
     };
   }
+  /**
+   * Section 11.3.6: Stars have no HTTP webhook. `successful_payment` arrives as
+   * a bot update and reaches the API through the internal bot boundary.
+   */
   verifyWebhook() {
-    return { ok: true };
+    return { ok: false, reason: 'Telegram Stars have no HTTP webhook' };
   }
-  parseWebhook(raw: Buffer) {
-    const update = JSON.parse(raw.toString()) as {
-      message?: {
-        successful_payment?: {
-          invoice_payload?: string;
-          total_amount?: number;
-          telegram_payment_charge_id?: string;
-          currency?: string;
-        };
-      };
-    };
-    const payment = update.message?.successful_payment;
-    if (!payment?.invoice_payload || !payment.telegram_payment_charge_id) return null;
-    return {
-      eventId: payment.telegram_payment_charge_id,
-      providerInvoiceId: payment.invoice_payload,
-      type: 'paid' as const,
-      paidAmount: {
-        amount: String(payment.total_amount ?? 0),
-        currency: payment.currency ?? 'XTR',
-      },
-    };
+  parseWebhook() {
+    return null;
   }
   ackResponse() {
     return ack();

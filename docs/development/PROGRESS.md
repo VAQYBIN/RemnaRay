@@ -26,8 +26,34 @@ tasks; no new TASK or milestone is started.
    (4/4), and `pnpm test:e2e` with the documented `LD_LIBRARY_PATH` browser
    libraries: 27 passed, 1 skipped, 1 failed (below). Proxy smoke was not
    rerun; its stand configuration is unchanged.
-2. Telegram Stars webhook is unauthenticated (`StarsProvider.verifyWebhook`
-   always returns ok); spec 11.3.6 / 9.5 route Stars through the bot only.
+2. **Done — unauthenticated Telegram Stars webhook** (sections 9.7, 11.3.6).
+   `StarsProvider.verifyWebhook` returned ok for any body, so anyone could
+   POST a `successful_payment` to `/webhooks/stars` and mark a Stars invoice
+   paid. `receiveWebhook` now refuses every provider whose
+   `capabilities.webhooks` is false with `WEBHOOK_NOT_SUPPORTED` before the
+   body is parsed or an event stored; Stars is set to `webhooks: false` and no
+   longer parses HTTP bodies. Platega and balance already produced no event
+   and behave the same. Regression: `payments.service.test.ts` (nothing stored,
+   applied or queued for a forged Stars update; Platega/balance refused);
+   the old test asserting HTTP parsing was replaced.
+   Verified locally: API 164 tests, `pnpm -r test`, `pnpm test` (43), lint,
+   typecheck, format, build, i18n, `pnpm test:m2` (1/1), `pnpm test:m4` (4/4),
+   `pnpm test:e2e` 27 passed / 1 skipped / 1 failed (the pre-existing locale
+   failure below).
+   **Found while repairing:** the section 9.5 Stars path does not exist at
+   all — no `stars/precheckout`, `stars/successful-payment` or
+   `stars/create-link` endpoints, no bot handlers for `pre_checkout_query`,
+   `successful_payment` or `/start inv_<id>`. TASK-M2-008's acceptance was
+   therefore never met, and a Stars payment taken by Telegram cannot be
+   applied. Pricing also diverges from 11.3.6 (`starAmount`/`amountMinor/100`
+   instead of `price_overrides.XTR ?? ceil(price × starsPerRub)`, payload is
+   the idempotency key instead of `inv_<invoiceId>`). Keep Stars disabled
+   until item 2a lands.
+
+   - **2a.** Implement the section 9.5 / 11.3.6 Stars path (contract
+     verification of the Telegram Bot API payments methods required first).
+   - **2b.** Pre-existing E2E locale regression from `0c79ae7` (see below).
+
 3. CryptoBot invoice amount is divided by 100 twice (`amount()` already
    returns rubles).
 4. Nothing schedules `maintenance.subscriptions-expire` or recurring
