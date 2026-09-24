@@ -9,6 +9,7 @@ import type { SettingsService } from '../settings/settings.service';
 import { PaymentError } from './payments.errors';
 import { PaymentsRepository } from './payments.repository';
 import { PaymentProviderRegistry } from './payments.registry';
+import type { ProviderEvent } from './payments.types';
 
 @Injectable()
 export class PaymentsService {
@@ -201,14 +202,7 @@ export class PaymentsService {
     } catch {
       parsedRaw = Object.fromEntries(new URLSearchParams(raw.toString('utf8')).entries());
     }
-    const normalizedRaw = {
-      ...parsedRaw,
-      ...(event.paidAmountMinorRub !== undefined
-        ? { paidAmountMinorRub: event.paidAmountMinorRub.toString() }
-        : event.paidAmount?.currency === 'RUB'
-          ? { paidAmountMinorRub: toRubMinor(event.paidAmount.amount).toString() }
-          : {}),
-    };
+    const normalizedRaw = { ...parsedRaw, ...paidInRoubles(event) };
     const stored = await this.repository.insertEvent({
       provider: providerCode,
       externalId,
@@ -255,7 +249,7 @@ export class PaymentsService {
       raw: {
         providerInvoiceId: event.providerInvoiceId,
         type: event.type,
-        paidAmountMinorRub: event.paidAmountMinorRub?.toString(),
+        ...paidInRoubles(event),
       },
       headers: { source: 'poll' },
       signatureOk: true,
@@ -331,6 +325,18 @@ export async function withStarsRuntime(
     ...(typeof token === 'string' && token ? { botToken: token } : {}),
     apiBase: process.env.RR_TELEGRAM_API_URL ?? 'https://api.telegram.org',
   };
+}
+
+/**
+ * The paid amount `applyEvent` compares with the invoice (EX-12), for a
+ * webhook and a poll alike. Without it a payment counts as paid in full.
+ */
+function paidInRoubles(event: ProviderEvent): { paidAmountMinorRub?: string } {
+  if (event.paidAmountMinorRub !== undefined)
+    return { paidAmountMinorRub: event.paidAmountMinorRub.toString() };
+  if (event.paidAmount?.currency === 'RUB')
+    return { paidAmountMinorRub: toRubMinor(event.paidAmount.amount).toString() };
+  return {};
 }
 
 function toRubMinor(value: string): bigint {

@@ -204,6 +204,21 @@ AMOUNT_MISMATCH`); the precheckout body adds `totalAmount`/`currency`
 6. Poll-only payments are never applied (fixed `poll:<id>` event id consumed
    by the first pending poll); Lava `hookUrl` is wrong; Robokassa diverges
    from 11.3.4.
+   - **6a. Done 2026-09-25 — status polling.** CryptoBot and Lava keyed the
+     polled event `poll:<id>` whatever the status, so the first `pending`
+     poll took the id and the later `paid` answer was stored as its
+     duplicate and never applied; they now key `poll:<id>:<status>` like
+     YooKassa and Platega. Found in the same path: `recheck` stored only
+     `paidAmountMinorRub`, never the rouble `paidAmount` the providers
+     report, so `applyEvent` took any polled payment as paid in full and
+     EX-12 could not fire; webhook and poll now share `paidInRoubles()`.
+     Regressions: `builtin-providers.test.ts` (pending and paid answers get
+     different ids for every polling provider), `payments.service.test.ts`
+     (a poll stores the rouble amount), and `m2.payment.integration.test.mjs`
+     (CryptoBot pending → paid by poll gives one purchase; a short poll gives
+     `underpaid`; the invoice stayed `pending` on the previous build).
+     Verified: lint, typecheck, format, API 195, `test:m2` 2/2, `test:m4` 4/4.
+     Robokassa's poll still answers `pending` without asking (6c).
 7. Refund/balance defects: refunds accepted for top-ups, balance plan change
    adds time twice, `settleBalance` ignores held rewards, `expire()` keeps
    promo reservations, global `Idempotency-Key`, unauthenticated events take

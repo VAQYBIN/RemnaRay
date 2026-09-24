@@ -367,7 +367,7 @@ export class LavaProvider implements PaymentProvider {
       body: raw,
     });
     return {
-      eventId: `poll:${id}`,
+      eventId: `poll:${id}:${String(r.status)}`,
       providerInvoiceId: id,
       type: r.status === 'paid' || r.status === 'success' ? 'paid' : 'pending',
     } as ProviderEvent;
@@ -528,7 +528,7 @@ export class CryptoBotProvider implements PaymentProvider {
       (r.result as Record<string, unknown>)?.items as Array<Record<string, unknown>> | undefined
     )?.[0];
     return {
-      eventId: `poll:${id}`,
+      eventId: `poll:${id}:${String(result?.status)}`,
       providerInvoiceId: id,
       type: result?.status === 'paid' ? 'paid' : 'pending',
       ...(result?.amount

@@ -65,6 +65,42 @@ describe('payment provider boundaries', () => {
   });
 });
 
+describe('status polling (sections 7.3, 11.3)', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  // The poll stores what it saw as a payment event keyed by `eventId`. An id
+  // that ignores the status is taken by the first `pending` poll, and the
+  // later `paid` answer is dropped as its duplicate: the payment is never
+  // applied.
+  it.each([
+    ['yookassa', new YooKassaProvider(), { status: 'pending' }, { status: 'succeeded' }],
+    ['platega', new PlategaProvider(), { status: 'PENDING' }, { status: 'CONFIRMED' }],
+    ['lava', new LavaProvider(), { status: 'created' }, { status: 'success' }],
+    [
+      'cryptobot',
+      new CryptoBotProvider(),
+      { result: { items: [{ status: 'active' }] } },
+      { result: { items: [{ status: 'paid', amount: '299.00', fiat: 'RUB' }] } },
+    ],
+  ] as const)(
+    '%s keys a paid answer apart from a pending one',
+    async (_code, provider, pending, paid) => {
+      let answer: object = pending;
+      vi.stubGlobal('fetch', () => Promise.resolve(Response.json(answer)));
+      const cfg = { baseUrl: 'http://provider.test' };
+
+      const first = await provider.fetchStatus('77', cfg);
+      answer = paid;
+      const second = await provider.fetchStatus('77', cfg);
+
+      expect([first.type, second.type]).toEqual(['pending', 'paid']);
+      expect(second.eventId).not.toBe(first.eventId);
+    },
+  );
+});
+
 describe('CryptoBot invoice (section 11.3.5)', () => {
   afterEach(() => {
     vi.unstubAllGlobals();

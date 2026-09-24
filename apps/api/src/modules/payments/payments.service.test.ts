@@ -139,3 +139,55 @@ describe('PaymentsService provider configuration', () => {
     expect(minutes).toBeLessThanOrEqual(60);
   });
 });
+
+describe('PaymentsService.recheck (section 7.3 status polling)', () => {
+  const appKey = randomBytes(32).toString('base64');
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    vi.unstubAllEnvs();
+  });
+
+  it('stores the amount a poll reports in roubles, so EX-12 sees an underpayment', async () => {
+    vi.stubEnv('RR_APP_KEY', appKey);
+    vi.stubGlobal('fetch', () =>
+      Promise.resolve(
+        Response.json({
+          ok: true,
+          result: { items: [{ status: 'paid', amount: '150.00', fiat: 'RUB' }] },
+        }),
+      ),
+    );
+    const db = {
+      paymentProvider: {
+        findUnique: vi.fn().mockResolvedValue({
+          code: 'cryptobot',
+          enabled: true,
+          configEnc: encryptSetting({ token: 't', baseUrl: 'http://cryptobot.test/api' }, appKey)
+            .enc,
+        }),
+      },
+    };
+    const repository = {
+      findInvoice: vi
+        .fn()
+        .mockResolvedValue({ id: 'invoice-1', provider: 'cryptobot', providerInvoiceId: '77' }),
+      insertEvent: vi.fn().mockResolvedValue({ id: 'event-1', duplicate: false }),
+      applyEvent: vi.fn(),
+    };
+    const service = new PaymentsService(
+      { db } as unknown as Infrastructure,
+      repository as unknown as PaymentsRepository,
+      createPaymentProviderRegistry({}),
+    );
+
+    await service.recheck('invoice-1');
+
+    expect(repository.insertEvent).toHaveBeenCalledWith(
+      expect.objectContaining({
+        externalId: 'poll:77:paid',
+        raw: expect.objectContaining({ paidAmountMinorRub: '15000' }) as object,
+      }),
+    );
+    expect(repository.applyEvent).toHaveBeenCalledWith('event-1');
+  });
+});

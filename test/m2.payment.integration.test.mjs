@@ -1,7 +1,7 @@
 import { execFileSync } from 'node:child_process';
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { createHmac } from 'node:crypto';
+import { createHmac, randomBytes } from 'node:crypto';
 import process from 'node:process';
 import { Buffer } from 'node:buffer';
 import { PostgreSqlContainer } from '@testcontainers/postgresql';
@@ -253,6 +253,91 @@ test(
         }),
         1,
       );
+
+      // Section 7.3 status polling: the first poll sees the invoice unpaid
+      // and stores that answer; the later `paid` answer has to be applied,
+      // not dropped as a duplicate of it (it used to share `poll:<id>`).
+      const { CryptoBotProvider } =
+        await import('../apps/api/dist/modules/payments/builtin-providers.js');
+      const { encryptSetting } =
+        await import('../apps/api/dist/modules/settings/settings.crypto.js');
+      const appKey = randomBytes(32).toString('base64');
+      const previousKey = process.env.RR_APP_KEY;
+      const previousFetch = globalThis.fetch;
+      process.env.RR_APP_KEY = appKey;
+      registry.register(new CryptoBotProvider());
+      // The migration seeds the row disabled; the console enables it like this.
+      await prisma.paymentProvider.update({
+        where: { code: 'cryptobot' },
+        data: {
+          enabled: true,
+          configEnc: encryptSetting({ token: 't', baseUrl: 'http://cryptobot.test/api' }, appKey)
+            .enc,
+        },
+      });
+      let cryptoStatus = { status: 'active' };
+      let cryptoInvoiceId = 7700;
+      globalThis.fetch = (url) =>
+        Promise.resolve(
+          globalThis.Response.json(
+            String(url).endsWith('/createInvoice')
+              ? {
+                  ok: true,
+                  result: {
+                    invoice_id: ++cryptoInvoiceId,
+                    pay_url: 'https://t.me/CryptoBot?start=x',
+                  },
+                }
+              : { ok: true, result: { items: [{ invoice_id: cryptoInvoiceId, ...cryptoStatus }] } },
+          ),
+        );
+      try {
+        const polled = await service.createInvoice({
+          userId: user.id,
+          kind: 'purchase',
+          planId: plan.id,
+          provider: 'cryptobot',
+          idempotencyKey: 'm2-poll',
+        });
+        // A fresh service per poll: `recheck` allows one poll per 10 s.
+        const poll = () => new PaymentsService(infra, repository, registry).pollPending();
+        await poll();
+        assert.equal(
+          (await prisma.invoice.findUnique({ where: { id: polled.id } })).status,
+          'pending',
+        );
+        cryptoStatus = { status: 'paid', amount: '299.00', fiat: 'RUB' };
+        await poll();
+        assert.equal(
+          (await prisma.invoice.findUnique({ where: { id: polled.id } })).status,
+          'paid',
+        );
+        const polledTransactions = await prisma.transaction.findMany({
+          where: { invoiceId: polled.id },
+        });
+        assert.equal(polledTransactions.length, 1);
+        assert.equal(polledTransactions[0].type, 'purchase');
+
+        // EX-12 through a poll: the rouble amount the provider reports is
+        // compared with the invoice instead of being taken as paid in full.
+        const short = await service.createInvoice({
+          userId: user.id,
+          kind: 'purchase',
+          planId: plan.id,
+          provider: 'cryptobot',
+          idempotencyKey: 'm2-poll-short',
+        });
+        cryptoStatus = { status: 'paid', amount: '150.00', fiat: 'RUB' };
+        await poll();
+        assert.equal(
+          (await prisma.invoice.findUnique({ where: { id: short.id } })).status,
+          'underpaid',
+        );
+      } finally {
+        globalThis.fetch = previousFetch;
+        if (previousKey === undefined) delete process.env.RR_APP_KEY;
+        else process.env.RR_APP_KEY = previousKey;
+      }
 
       // Section 9.7: a body that names no event is refused, not stored. With
       // no guard the insert reached Prisma with a null `type` and the webhook
