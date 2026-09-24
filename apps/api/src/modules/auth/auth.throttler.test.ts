@@ -29,4 +29,28 @@ describe('internal throttling boundary', () => {
     expect(sessionTracker(user.switchToHttp().getRequest())).toBe('user:user-1');
     expect(sessionTracker(publicRequest.switchToHttp().getRequest())).toBe('ip:192.0.2.1');
   });
+
+  // Section 9.1: webhooks — 600/min per provider. They used to be counted as
+  // anonymous requests, 60/min per IP in the visitors' bucket, so a burst of
+  // provider notifications was refused with 429.
+  it.each([
+    ['/webhooks/yookassa', 'webhook:yookassa'],
+    ['/webhooks/robokassa/result', 'webhook:robokassa'],
+    ['/webhooks/remnawave', 'webhook:remnawave'],
+    ['/tg/webhook/s3cr3t-path', 'webhook:telegram'],
+  ])('gives %s its own provider bucket of 600 a minute', (url, tracker) => {
+    const webhook = context(url);
+    expect(sessionRequestLimit(webhook)).toBe(600);
+    expect(sessionTracker(webhook.switchToHttp().getRequest())).toBe(tracker);
+  });
+
+  it('keeps the query string and other paths out of the webhook buckets', () => {
+    expect(sessionTracker(context('/webhooks/lava?x=1').switchToHttp().getRequest())).toBe(
+      'webhook:lava',
+    );
+    expect(sessionRequestLimit(context('/webhooksfoo'))).toBe(60);
+    expect(sessionTracker(context('/tg/webhookx').switchToHttp().getRequest())).toBe(
+      'ip:192.0.2.1',
+    );
+  });
 });

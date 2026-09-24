@@ -376,7 +376,7 @@ rewards)`; `LedgerRepository.available` honoured it, `settleBalance`
      typecheck, typecheck:e2e, format, API 215, `test:m2` 2/2, `test:m4` 4/4,
      `pnpm test:e2e` 28 passed / 1 skipped.
    - **Item 7 closed** (7a–7h, 2026-09-25).
-8. `/api/internal/*` is proxied from the internet (both profiles), SVG upload
+8. **Done (8a–8c)** — `/api/internal/*` is proxied from the internet (both profiles), SVG upload
    filter is bypassable, webhooks share the 60/min anonymous bucket.
    - **8a. Done 2026-09-25 — `/api/internal/*` reached the API from the
      internet.** Both profiles routed it with the rest of `/api/*`, and the
@@ -413,6 +413,19 @@ style-src 'unsafe-inline'; sandbox` and `nosniff`, which makes any theme
      (10 cases; the shipped `manta` theme still uploads) and
      `apps/web/test/theme-asset-route.test.ts`. Verified: lint, typecheck,
      format, API 230, web 37, `pnpm test:e2e` 28 passed / 1 skipped.
+   - **8c. Done 2026-09-25 — webhooks shared the anonymous bucket.** Section
+     9.1 limits webhooks to 600 a minute per provider; the throttler counted
+     them as anonymous requests, 60 a minute per IP in the visitors' bucket,
+     so a burst of notifications from a provider's few addresses was refused
+     with 429 and spent the visitors' allowance. `/webhooks/<provider>…` and
+     `/tg/webhook/…` (provider `telegram`) now have their own bucket
+     `webhook:<provider>` of 600 a minute. **Trade-off kept from the
+     specification:** a bucket per provider can be spent by forged requests
+     to that path; the proxy still limits each IP to 30r/s, and polling
+     backs up every provider but Stars and Robokassa test mode. Regressions
+     in `auth.throttler.test.ts`. Verified: lint, typecheck, format, API 235,
+     `test:m2` 2/2.
+   - **Item 8 closed** (8a–8c, 2026-09-25).
 
 9. Outgoing webhooks of section 9.8 are missing (found under item 4).
    `panel.reset-traffic` and `panel.delete-user` are never performed (found

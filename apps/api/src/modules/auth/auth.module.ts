@@ -23,14 +23,28 @@ export function skipThrottleForInternal(context: ExecutionContext): boolean {
   return path.startsWith('/api/internal/');
 }
 
+/**
+ * Section 9.1: webhooks are limited to 600 a minute per provider, apart from
+ * the anonymous visitors' 60 a minute per IP. The Telegram webhook is the
+ * `telegram` provider.
+ */
+export function webhookProvider(url: string): string | null {
+  const path = url.split('?')[0] ?? '';
+  if (/^\/tg\/webhook\//u.test(path)) return 'telegram';
+  return /^\/webhooks\/([^/]+)/u.exec(path)?.[1] ?? null;
+}
+
 /** Section 9.1 grants authenticated sessions 300 requests per minute. */
 export function sessionRequestLimit(context: ExecutionContext): number {
   const request = context.switchToHttp().getRequest<AuthenticatedRequest>();
+  if (webhookProvider(request.url)) return 600;
   return request.admin || request.user ? 300 : 60;
 }
 
 export function sessionTracker(request: Record<string, unknown>): string {
   const typed = request as unknown as AuthenticatedRequest;
+  const provider = webhookProvider(typed.url);
+  if (provider) return `webhook:${provider}`;
   if (typed.admin) return `admin:${typed.admin.id}`;
   if (typed.user) return `user:${typed.user.id}`;
   return `ip:${typed.ip}`;
