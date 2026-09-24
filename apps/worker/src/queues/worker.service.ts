@@ -1,9 +1,10 @@
 import { Injectable, Logger, type OnModuleDestroy, type OnModuleInit } from '@nestjs/common';
 import { queueJobs, recordTlsExpiry } from '@remnaray/metrics';
-import { createRedisConnection, QUEUE_PREFIX, toJobId } from '@remnaray/queues';
+import { createRedisConnection, QUEUE_PREFIX, toJobId, type QueueName } from '@remnaray/queues';
 import { Queue, Worker, type Job } from 'bullmq';
 
 import { backupStatus } from './backup-check';
+import { cronJobs } from './schedule';
 import { certificateStatus } from './tls-check';
 import { workerValkeyUrl } from './worker-config';
 
@@ -74,15 +75,10 @@ export class WorkerService implements OnModuleInit, OnModuleDestroy {
     const payments = new Queue('payments', options);
     const notify = new Queue('notify', options);
     const maintenance = new Queue('maintenance', options);
+    const panel = new Queue('panel', options);
     // Counted, not consumed from here: section 9.9 wants every queue's depth,
     // and a queue the worker only reads counts is cheap to hold open.
-    const counted = [
-      payments,
-      notify,
-      maintenance,
-      new Queue('broadcast', options),
-      new Queue('panel', options),
-    ];
+    const counted = [payments, notify, maintenance, new Queue('broadcast', options), panel];
     this.queues.push(...counted);
 
     // Section 9.9 `rr_queue_jobs{queue,state}`. A gauge, sampled: BullMQ keeps
@@ -132,6 +128,28 @@ export class WorkerService implements OnModuleInit, OnModuleDestroy {
         );
       }, 10 * 60_000),
     );
+    // Section 7.3 minute and quarter-hour crons. A finished job is kept past
+    // its fifteen-minute slot: BullMQ ignores an id only while the job
+    // exists, and the kept id is what makes the slot run once.
+    const byName: Partial<Record<QueueName, Queue>> = { maintenance, panel };
+    const queueCron = () => {
+      for (const job of cronJobs(new Date()))
+        void byName[job.queue]
+          ?.add(
+            job.name,
+            {},
+            {
+              jobId: toJobId(job.jobId),
+              removeOnComplete: { age: 24 * 60 * 60 },
+              removeOnFail: { age: 7 * 24 * 60 * 60 },
+            },
+          )
+          .catch((error: unknown) => {
+            this.logger.warn(`${job.name} was not queued: ${String(error)}`);
+          });
+    };
+    queueCron();
+    this.timers.push(setInterval(queueCron, 60_000));
     // Section 19.2: the certificate is checked at start and once a day.
     // Section 20.3: the same daily cadence for the backup status.
     const queueDaily = () => {

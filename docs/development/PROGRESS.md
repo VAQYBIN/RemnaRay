@@ -152,8 +152,28 @@ AMOUNT_MISMATCH`); the precheckout body adds `totalAmount`/`currency`
      `healthcheck` answers ok without calling the API; the webhook `eventId`
      is `invoice_id` where 11.3.5 says `update_id` (which the vendor calls
      non-unique). Poll event ids are item 6.
-4. Nothing schedules `maintenance.subscriptions-expire` or recurring
-   `panel.reconcile-all` (section 7.3, FR-024).
+4. **Done 2026-09-25 — `maintenance.subscriptions-expire` and recurring
+   `panel.reconcile-all` were never queued** (section 7.3, FR-024, 10.5), so
+   subscriptions never left `active` and the panel was reconciled only once,
+   when the wizard finished. The worker now queues both at start and every
+   minute from `cronJobs()` (`apps/worker/src/queues/schedule.ts`): expiry
+   under `maintenance:subscriptions-expire:<yyyymmddHHMM>`, reconciliation
+   under `reconcile:<yyyymmddHHMM>` of the quarter-hour slot start, with
+   finished jobs kept 24 h (7 days if failed) so the id dedupes a slot across
+   ticks, restarts and replicas (BullMQ ignores an existing id only while the
+   job exists — docs.bullmq.io "Job Ids", via Context7). Regressions:
+   `schedule.test.ts` and the new `test/m1.worker-cron.integration.test.mjs`
+   (real Valkey, fake internal API: both endpoints called once, a restarted
+   worker does not reconcile again in the slot; fails on the previous
+   worker). Verified: lint, typecheck, `pnpm test` 43, `pnpm -r test`,
+   `pnpm test:m1` 2/2.
+   - **Found, not repaired:** FR-024 also names the `subscription.expired`
+     event, which is one of the outgoing webhooks of section 9.8; outgoing
+     webhooks (`settings.webhooks.outgoing[]`, signing, retries,
+     `rr_outgoing_webhook_failures_total`) are not implemented at all. Added
+     to item 9. The other interval jobs (`payments.poll-pending`,
+     `payments.expire`, `notify.scan-expiring`) are keyed by millisecond
+     stamps and kept for ever; their job options belong to item 5.
 5. `panel.sync-user` reuses `jobId panel:<userId>`, so BullMQ drops every
    later renewal; no job sets `attempts`/`backoff` (section 7.3).
 6. Poll-only payments are never applied (fixed `poll:<id>` event id consumed
@@ -165,7 +185,8 @@ AMOUNT_MISMATCH`); the precheckout body adds `totalAmount`/`currency`
    the dedup key, a failing inline apply loses the event.
 8. `/api/internal/*` is proxied from the internet (both profiles), SVG upload
    filter is bypassable, webhooks share the 60/min anonymous bucket.
-9. Remaining review items (panel sync coverage and tags, broadcast resume,
+9. Outgoing webhooks of section 9.8 are missing (found under item 4).
+   Remaining review items (panel sync coverage and tags, broadcast resume,
    `rebuild.yml` Trivy tag `0.28.0`, worker `/backups` mount, restore script
    user/themes) and the M5-004 gates recorded below.
 
