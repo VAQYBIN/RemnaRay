@@ -157,6 +157,39 @@ test(
         await import('../apps/api/dist/modules/ledger/ledger.repository.js');
       const ledger = new LedgerRepository(prisma);
       assert.equal(await ledger.available(referrer.id), 0n);
+      // Paying from the balance obeys the same rule: the 59.80 on the account
+      // is all held, so a 50.00 plan cannot be bought with it.
+      const { BalanceProvider } =
+        await import('../apps/api/dist/modules/payments/builtin-providers.js');
+      registry.register(new BalanceProvider());
+      const cheap = await prisma.plan.create({
+        data: {
+          slug: 'm4-cheap',
+          name: { ru: 'Дёшево', en: 'Cheap' },
+          durationDays: 1,
+          squads: [],
+          priceMinor: 5000n,
+        },
+      });
+      await assert.rejects(
+        payments.createInvoice({
+          userId: referrer.id,
+          kind: 'purchase',
+          planId: cheap.id,
+          provider: 'balance',
+          idempotencyKey: 'held-balance',
+        }),
+        { name: 'PaymentError', code: 'INSUFFICIENT_FUNDS' },
+      );
+      assert.equal(
+        (await prisma.account.findFirst({ where: { kind: 'user', userId: referrer.id } }))
+          .balanceMinor,
+        5980n,
+      );
+      assert.equal(
+        await prisma.transaction.count({ where: { userId: referrer.id, type: 'purchase' } }),
+        0,
+      );
 
       // AC-153: refunding the source reverses the reward and the balance.
       const sourceTransaction = await prisma.transaction.findFirst({

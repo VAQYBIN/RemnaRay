@@ -210,8 +210,17 @@ export class PaymentsRepository {
       );
       const user = accounts.find((row) => row.kind === 'user');
       const revenue = accounts.find((row) => row.kind === 'revenue');
-      if (!user || !revenue || user.balance < invoice.amountMinor)
-        throw new Error('INSUFFICIENT_FUNDS');
+      if (!user || !revenue) throw new Error('ACCOUNT_NOT_FOUND');
+      // Section 15.2: held referral rewards are shown as pending and cannot be
+      // spent; the available balance is `balance_minor − SUM(held rewards)`.
+      const [held] = await tx.$queryRaw<Array<{ held: bigint }>>(Prisma.sql`
+        SELECT COALESCE(SUM(rr.amount_minor), 0)::bigint AS held
+        FROM referral_rewards rr
+        JOIN transactions t ON t.id = rr.transaction_id
+        WHERE t.user_id = ${invoice.userId}::uuid AND rr.status = 'held'
+      `);
+      if (user.balance - (held?.held ?? 0n) < invoice.amountMinor)
+        throw new PaymentError('INSUFFICIENT_FUNDS');
       const transaction = await tx.transaction.create({
         data: {
           userId: invoice.userId,

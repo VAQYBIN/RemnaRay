@@ -13,7 +13,8 @@ export class PaymentError extends Error {
       | 'PAYMENT_PROVIDER_NOT_FOUND'
       | 'REFUND_NOT_PURCHASE'
       | 'REFUND_EXCEEDS_REMAINING'
-      | 'TRANSACTION_NOT_FOUND',
+      | 'TRANSACTION_NOT_FOUND'
+      | 'INSUFFICIENT_FUNDS',
     message: string = code,
   ) {
     super(message);

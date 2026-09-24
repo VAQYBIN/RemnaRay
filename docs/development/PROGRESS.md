@@ -299,13 +299,28 @@ Password#1:Shp_inv=…)` with the URL-encoded receipt signed and sent,
      passes `kind === 'plan_change'`. Regression in
      `m2.payment.integration.test.mjs` (60 days, 91 on the previous code).
      Verified: lint, typecheck, format, API 206, `test:m2` 2/2, `test:m4` 4/4.
+   - **7c. Done 2026-09-25 — paying from the balance spent held rewards.**
+     Section 15.2 makes the available balance `balance_minor − SUM(held
+rewards)`; `LedgerRepository.available` honoured it, `settleBalance`
+     compared the raw balance, so a referrer could spend a reward that a
+     refund of its source would reverse later. The held sum is now read
+     after the account rows are locked and subtracted. The refusal also was a
+     plain `Error`, which `MeService` does not map (HTTP 500); it is now
+     `PaymentError('INSUFFICIENT_FUNDS')`, answered 409. Regression in
+     `m4.rewards.integration.test.mjs` (a 50.00 plan against 59.80 all held →
+     refused, nothing moves; bought on the previous code). Verified: lint,
+     typecheck, format, API 206, `test:m2` 2/2, `test:m4` 4/4.
+     **Not repaired (item 9):** the account pages and `canPayFromBalance`
+     still show the whole balance rather than the available part with the
+     held amount "в обработке" (section 15.2).
 8. `/api/internal/*` is proxied from the internet (both profiles), SVG upload
    filter is bypassable, webhooks share the 60/min anonymous bucket.
 9. Outgoing webhooks of section 9.8 are missing (found under item 4).
    `panel.reset-traffic` and `panel.delete-user` are never performed (found
    under item 5).
    Robokassa SuccessURL/FailURL landing and the `settings.fiscal.mode`
-   vocabulary (found under 6c).
+   vocabulary (found under 6c). Showing the available balance and held
+   rewards to the customer (found under 7c).
    Remaining review items (panel sync coverage and tags, broadcast resume,
    `rebuild.yml` Trivy tag `0.28.0`, worker `/backups` mount, restore script
    user/themes) and the M5-004 gates recorded below.
