@@ -156,6 +156,37 @@ test(
         2000n,
       );
 
+      // FR-066/EX-05: a refund returns revenue of a purchase to the balance.
+      // A top-up never reached revenue, so refunding one credited the same
+      // money to the balance a second time.
+      const topupTransaction = await prisma.transaction.findFirst({
+        where: { invoiceId: topup.id },
+      });
+      const balanceBeforeRefunds = await prisma.account
+        .findFirst({ where: { userId: user.id, kind: 'user' } })
+        .then((row) => row.balanceMinor);
+      await assert.rejects(repository.refund(topupTransaction.id, 5000n, 'not a purchase'), {
+        name: 'PaymentError',
+        code: 'REFUND_NOT_PURCHASE',
+      });
+      // AC-066: 100 of 299, then 200 more is refused and nothing moves.
+      const purchase = await prisma.transaction.findFirst({ where: { invoiceId: invoice.id } });
+      await repository.refund(purchase.id, 10000n, 'partial');
+      await assert.rejects(repository.refund(purchase.id, 20000n, 'too much'), {
+        name: 'PaymentError',
+        code: 'REFUND_EXCEEDS_REMAINING',
+      });
+      assert.equal(
+        (await prisma.transaction.findUnique({ where: { id: purchase.id } })).refundedMinor,
+        10000n,
+      );
+      assert.equal(
+        await prisma.account
+          .findFirst({ where: { userId: user.id, kind: 'user' } })
+          .then((row) => row.balanceMinor),
+        balanceBeforeRefunds + 10000n,
+      );
+
       const late = await service.createInvoice({
         userId: user.id,
         kind: 'topup',

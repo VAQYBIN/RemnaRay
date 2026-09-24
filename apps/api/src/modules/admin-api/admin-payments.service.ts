@@ -6,6 +6,7 @@ import { limitKeyFor, type AdminRole } from '@remnaray/domain/rbac';
 import { Infrastructure } from '../../infra/infra.module';
 import { Audited } from '../admin/audit.interceptor';
 import { ApiError } from '../me/me.errors';
+import { PaymentError } from '../payments/payments.errors';
 import { PaymentsService } from '../payments/payments.service';
 import { SettingsService } from '../settings/settings.service';
 import { bulkExtendSchema, refundSchema } from './admin-users.schemas';
@@ -210,7 +211,26 @@ export class AdminPaymentsService {
           });
       }
     }
-    await this.payments.refund(id, input.amountMinor, input.reason);
+    try {
+      await this.payments.refund(id, input.amountMinor, input.reason);
+    } catch (error) {
+      // Section 9.3 has no refund-specific code; AC-066 asks for 409.
+      if (error instanceof PaymentError && error.code === 'TRANSACTION_NOT_FOUND')
+        throw new NotFoundException('NOT_FOUND');
+      if (
+        error instanceof PaymentError &&
+        (error.code === 'REFUND_EXCEEDS_REMAINING' || error.code === 'REFUND_NOT_PURCHASE')
+      )
+        throw new ApiError(
+          'CONFLICT',
+          HttpStatus.CONFLICT,
+          error.code === 'REFUND_NOT_PURCHASE'
+            ? 'Only a purchase can be refunded to the balance.'
+            : 'The refund exceeds the amount left to refund.',
+          { reason: error.code },
+        );
+      throw error;
+    }
     const after = await this.infra.db.transaction.findUniqueOrThrow({ where: { id } });
     return new Audited(
       { refunded: money(before.refundedMinor, before.currency) },

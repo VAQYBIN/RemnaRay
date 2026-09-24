@@ -10,7 +10,10 @@ export class PaymentError extends Error {
       | 'UNDERPAID'
       | 'WEBHOOK_INVALID_SIGNATURE'
       | 'WEBHOOK_NOT_SUPPORTED'
-      | 'PAYMENT_PROVIDER_NOT_FOUND',
+      | 'PAYMENT_PROVIDER_NOT_FOUND'
+      | 'REFUND_NOT_PURCHASE'
+      | 'REFUND_EXCEEDS_REMAINING'
+      | 'TRANSACTION_NOT_FOUND',
     message: string = code,
   ) {
     super(message);

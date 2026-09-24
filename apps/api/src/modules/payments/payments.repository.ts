@@ -279,17 +279,19 @@ export class PaymentsRepository {
           amountMinor: bigint;
           refundedMinor: bigint;
           provider: string | null;
+          type: string;
         }>
       >(
-        Prisma.sql`SELECT id, user_id AS "userId", amount_minor AS "amountMinor", refunded_minor AS "refundedMinor", provider FROM transactions WHERE id = ${transactionId}::uuid FOR UPDATE`,
+        Prisma.sql`SELECT id, user_id AS "userId", amount_minor AS "amountMinor", refunded_minor AS "refundedMinor", provider, type::text AS type FROM transactions WHERE id = ${transactionId}::uuid FOR UPDATE`,
       );
       const original = rows[0];
-      if (
-        !original ||
-        amountMinor <= 0n ||
-        original.refundedMinor + amountMinor > original.amountMinor
-      )
-        throw new Error('REFUND_EXCEEDS_PURCHASE');
+      if (!original) throw new PaymentError('TRANSACTION_NOT_FOUND');
+      // FR-066/EX-05: `revenue → user` returns what a purchase paid into
+      // revenue. A top-up (or any other credit) never reached revenue, and
+      // "refunding" it would pay the same money into the balance again.
+      if (original.type !== 'purchase') throw new PaymentError('REFUND_NOT_PURCHASE');
+      if (amountMinor <= 0n || original.refundedMinor + amountMinor > original.amountMinor)
+        throw new PaymentError('REFUND_EXCEEDS_REMAINING');
       await this.ensureAccount(tx, 'revenue', original.userId, '');
       await this.ensureAccount(tx, 'user', original.userId, '');
       const accounts = await tx.$queryRaw<Array<{ id: string; kind: string }>>(

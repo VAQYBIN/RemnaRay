@@ -274,6 +274,22 @@ Password#1:Shp_inv=…)` with the URL-encoded receipt signed and sent,
    adds time twice, `settleBalance` ignores held rewards, `expire()` keeps
    promo reservations, global `Idempotency-Key`, unauthenticated events take
    the dedup key, a failing inline apply loses the event.
+   - **7a. Done 2026-09-25 — refunds of non-purchases, and AC-066.**
+     `refund()` took any transaction: a top-up never reached revenue, so
+     "refunding" one paid the same money into the balance a second time out
+     of revenue. FR-066/EX-05 and the 11.7 posting table make a refund
+     `revenue → user` with `parent_id` = the purchase; anything but a
+     `purchase` is now refused (`REFUND_NOT_PURCHASE`). Exceeding the
+     remaining amount threw a plain `Error` (HTTP 500) where AC-066 wants
+     409; the console now answers `CONFLICT` 409 with `details.reason`
+     (`REFUND_EXCEEDS_REMAINING` / `REFUND_NOT_PURCHASE`; section 9.3 has no
+     refund-specific code), and an unknown transaction 404. Regressions:
+     `m2.payment.integration.test.mjs` (top-up refund refused with balances
+     unchanged; AC-066 100 then 200 of 299 → second refused,
+     `refunded_minor = 10000`) and `admin-payments.service.test.ts`.
+     Verified: lint, format, API 206, `test:m2` 2/2, `test:m4` 4/4 on three
+     runs (one earlier `test:m4` run reported one failure that its log did
+     not keep and that did not recur; recorded as a possible flake).
 8. `/api/internal/*` is proxied from the internet (both profiles), SVG upload
    filter is bypassable, webhooks share the 60/min anonymous bucket.
 9. Outgoing webhooks of section 9.8 are missing (found under item 4).
