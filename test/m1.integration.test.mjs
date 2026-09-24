@@ -2,6 +2,7 @@ import { execFileSync } from 'node:child_process';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import process from 'node:process';
+import { setTimeout as delay } from 'node:timers/promises';
 
 import { PostgreSqlContainer } from '@testcontainers/postgresql';
 import { GenericContainer } from 'testcontainers';
@@ -132,6 +133,82 @@ test(
         `notify-sub.activated-${user.id}`,
         'the worker never received the relayed job',
       );
+
+      // Section 7.3 `panel.sync-user`: `jobId = sync:<userId>`, re-queueing
+      // replaces. The shared id used to be the BullMQ id, so the finished
+      // first sync, kept by `removeOnComplete`, swallowed every renewal.
+      const runs = [];
+      let hold;
+      let failNext = false;
+      let release;
+      const panelWorker = new Worker(
+        'panel',
+        async (job) => {
+          runs.push({ id: job.id, attempt: job.attemptsMade, reason: job.data.reason });
+          if (failNext) {
+            failNext = false;
+            throw new Error('panel unavailable');
+          }
+          if (hold) await hold;
+        },
+        {
+          connection: { host: valkey.getHost(), port: valkey.getMappedPort(6379) },
+          prefix: QUEUE_PREFIX,
+        },
+      );
+      try {
+        const sync = async (reason) => {
+          await prisma.$transaction((transaction) =>
+            new OutboxWriter().enqueue(transaction, {
+              queue: 'panel',
+              name: 'panel.sync-user',
+              payload: { userId: user.id, reason },
+              jobId: `sync:${user.id}`,
+            }),
+          );
+          await relay.runOnce();
+        };
+        const until = async (predicate) => {
+          for (let waited = 0; waited < 30_000 && !predicate(); waited += 100) await delay(100);
+          assert.ok(predicate(), `timed out: ${JSON.stringify(runs)}`);
+        };
+        await sync('paid');
+        await until(() => runs.length === 1);
+        await delay(300);
+        await sync('renewal');
+        await until(() => runs.length === 2);
+        assert.equal(runs[1].reason, 'renewal', 'a later sync of the same user was dropped');
+
+        // Requested while one runs: the running sync may have read old state,
+        // so exactly one more runs after it, with the latest request.
+        hold = new Promise((resolve) => (release = resolve));
+        await sync('admin:ban');
+        await until(() => runs.length === 3);
+        await sync('admin:unban');
+        await sync('paid-again');
+        hold = undefined;
+        release();
+        await until(() => runs.length === 4);
+        await delay(1_000);
+        assert.equal(runs.length, 4, JSON.stringify(runs));
+        assert.equal(runs[3].reason, 'paid-again');
+
+        // Ten attempts with backoff: a failure is retried, not dropped.
+        failNext = true;
+        await sync('retry');
+        await until(() => runs.length === 6);
+        assert.deepEqual(
+          runs.slice(4).map((run) => [run.id, run.attempt]),
+          [
+            [runs[4].id, 0],
+            [runs[4].id, 1],
+          ],
+        );
+      } finally {
+        release?.();
+        await panelWorker.close(true);
+      }
+
       redis.disconnect();
       await relay.close();
 

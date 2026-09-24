@@ -316,7 +316,7 @@ export class AdminUsersService {
         queue: 'panel',
         name: 'panel.sync-user',
         payload: { userId: id, reason: 'admin:ban' },
-        jobId: `panel:ban:${id}`,
+        jobId: `sync:${id}`,
       },
     });
     return new Audited({ isBanned: before.isBanned }, { isBanned: updated.isBanned });
@@ -331,7 +331,7 @@ export class AdminUsersService {
         queue: 'panel',
         name: 'panel.sync-user',
         payload: { userId: id, reason: 'admin:unban' },
-        jobId: `panel:unban:${id}`,
+        jobId: `sync:${id}`,
       },
     });
     return new Audited({ isBanned: before.isBanned }, { isBanned: updated.isBanned });

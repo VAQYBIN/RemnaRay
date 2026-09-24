@@ -261,7 +261,7 @@ export class PaymentsRepository {
           queue: 'panel',
           name: 'panel.sync-user',
           payload: { userId: invoice.userId, reason: 'paid' },
-          jobId: `panel:${invoice.userId}`,
+          jobId: `sync:${invoice.userId}`,
         },
       });
     });
@@ -467,7 +467,7 @@ export class PaymentsRepository {
                 queue: 'panel',
                 name: 'panel.sync-user',
                 payload: { userId: invoice.userId, reason: 'paid' },
-                jobId: `panel:${invoice.userId}`,
+                jobId: `sync:${invoice.userId}`,
               },
             });
           }

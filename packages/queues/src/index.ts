@@ -1,4 +1,4 @@
-import { Queue } from 'bullmq';
+import { Queue, type JobsOptions } from 'bullmq';
 import { Prisma, type PrismaClient } from '@remnaray/db';
 import { Redis as RedisClient } from 'ioredis';
 
@@ -49,6 +49,41 @@ export function toJobId(value: string): string {
   return /^\d+$/u.test(safe) ? `j-${safe}` : safe;
 }
 
+/**
+ * Section 7.3 retries per job. A job the table gives one attempt, or does not
+ * list, gets none: `notify.alert`, for one, would repeat an alert to the
+ * administrators it already reached.
+ */
+const RETRIES: Record<string, Pick<JobsOptions, 'attempts' | 'backoff'>> = {
+  // 10 attempts, 5 s doubling: the longest wait is 1280 s, inside the 1 h cap.
+  'panel.sync-user': { attempts: 10, backoff: { type: 'exponential', delay: 5_000 } },
+  'payments.apply-event': { attempts: 5, backoff: { type: 'exponential', delay: 2_000 } },
+  'notify.send': { attempts: 3, backoff: { type: 'fixed', delay: 10_000 } },
+  'broadcast.chunk': { attempts: 3 },
+};
+
+/**
+ * Jobs whose `outbox_jobs.job_id` names the latest request rather than one
+ * occurrence (section 7.3 "повторная постановка — replace"). A sync reads the
+ * user's state when it runs, so a waiting one already covers a new request;
+ * one requested while a sync is running runs once more after it. The BullMQ
+ * id is then the outbox row: a finished job kept under the shared id would
+ * otherwise swallow every later request.
+ */
+const LATEST_WINS = new Set(['panel.sync-user']);
+
+export function jobOptions(row: { id: string; name: string; jobId: string | null }): JobsOptions {
+  const key = toJobId(row.jobId ?? row.id);
+  return {
+    ...RETRIES[row.name],
+    ...(LATEST_WINS.has(row.name)
+      ? { jobId: toJobId(row.id), deduplication: { id: key, keepLastIfActive: true } }
+      : { jobId: key }),
+    removeOnComplete: 1000,
+    removeOnFail: 5000,
+  };
+}
+
 export type RelayResult = { published: number; remaining: number };
 
 export class OutboxRelay {
@@ -86,11 +121,7 @@ export class OutboxRelay {
         if (!QUEUE_NAMES.includes(row.queue as QueueName)) continue;
         const queue = this.queues.get(row.queue as QueueName);
         if (!queue) continue;
-        await queue.add(row.name, row.payload, {
-          jobId: toJobId(row.jobId ?? row.id),
-          removeOnComplete: 1000,
-          removeOnFail: 5000,
-        });
+        await queue.add(row.name, row.payload, jobOptions(row));
         await transaction.outboxJob.update({
           where: { id: row.id },
           data: { publishedAt: new Date() },

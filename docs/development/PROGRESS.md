@@ -174,8 +174,33 @@ AMOUNT_MISMATCH`); the precheckout body adds `totalAmount`/`currency`
      to item 9. The other interval jobs (`payments.poll-pending`,
      `payments.expire`, `notify.scan-expiring`) are keyed by millisecond
      stamps and kept for ever; their job options belong to item 5.
-5. `panel.sync-user` reuses `jobId panel:<userId>`, so BullMQ drops every
-   later renewal; no job sets `attempts`/`backoff` (section 7.3).
+5. **Done 2026-09-25 — `panel.sync-user` dropped every later sync of a user,
+   and no job was retried** (section 7.3). The shared `panel:<userId>` was the
+   BullMQ job id, and the finished first sync, kept by `removeOnComplete`,
+   made BullMQ ignore every renewal, ban and unban after it; admin ban/unban
+   used their own `panel:ban:`/`panel:unban:` ids with the same flaw. All
+   producers now write `jobId = sync:<userId>`, and the relay's
+   `jobOptions()` (`packages/queues`) publishes such a job under its outbox
+   row id with BullMQ deduplication `{ id: sync-<userId>, keepLastIfActive }`
+   — the "replace" of 7.3: a waiting sync covers a new request (it reads the
+   state when it runs), and one requested while a sync runs runs once more
+   after it (docs.bullmq.io Deduplication via Context7; the option is in the
+   installed 6.3.7 typings). Retries per 7.3: `panel.sync-user` 10 ×
+   exponential from 5 s (longest wait 1280 s, inside the 1 h cap),
+   `payments.apply-event` 5 × exponential from 2 s, `notify.send` 3 × 10 s,
+   `broadcast.chunk` 3; jobs the table gives one attempt, and the unlisted
+   `notify.alert` (a retry would repeat the alert to administrators already
+   reached), keep one. Regressions: `packages/queues` unit tests and
+   `test/m1.integration.test.mjs` on real Valkey (renewal after a finished
+   sync runs; two requests during an active sync give exactly one more run
+   with the latest data; a failed attempt is retried) — it times out on the
+   previous relay with only the first sync run. Verified: lint, typecheck,
+   format, `pnpm -r test`, `pnpm test:m1` 2/2, `test:m2` 2/2, `test:m4` 4/4.
+   - **Found, not repaired (added to item 9):** the worker routes every
+     `panel` job other than `panel.sync-user` to reconciliation, so
+     `panel.reset-traffic` and `panel.delete-user`, queued by the admin
+     console, are never performed and have no internal endpoint; the `panel`
+     worker runs at concurrency 1 where 7.3 says 2.
 6. Poll-only payments are never applied (fixed `poll:<id>` event id consumed
    by the first pending poll); Lava `hookUrl` is wrong; Robokassa diverges
    from 11.3.4.
@@ -186,6 +211,8 @@ AMOUNT_MISMATCH`); the precheckout body adds `totalAmount`/`currency`
 8. `/api/internal/*` is proxied from the internet (both profiles), SVG upload
    filter is bypassable, webhooks share the 60/min anonymous bucket.
 9. Outgoing webhooks of section 9.8 are missing (found under item 4).
+   `panel.reset-traffic` and `panel.delete-user` are never performed (found
+   under item 5).
    Remaining review items (panel sync coverage and tags, broadcast resume,
    `rebuild.yml` Trivy tag `0.28.0`, worker `/backups` mount, restore script
    user/themes) and the M5-004 gates recorded below.

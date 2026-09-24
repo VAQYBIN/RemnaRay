@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { QUEUE_NAMES, QUEUE_PREFIX, toJobId } from './index.js';
+import { jobOptions, QUEUE_NAMES, QUEUE_PREFIX, toJobId } from './index.js';
 
 describe('toJobId', () => {
   it('replaces the separator BullMQ reserves', () => {
@@ -38,5 +38,61 @@ describe('the queue namespace', () => {
 
   it('names the section 7.3 queues', () => {
     expect([...QUEUE_NAMES]).toEqual(['panel', 'payments', 'notify', 'broadcast', 'maintenance']);
+  });
+});
+
+describe('section 7.3 job options', () => {
+  const row = (name: string, jobId: string | null) => ({
+    id: '01a0bec6-c9b4-7329-95c1-a12cbf9679e2',
+    name,
+    jobId,
+  });
+
+  it('retries panel.sync-user ten times from five seconds and keeps the latest request', () => {
+    const options = jobOptions(row('panel.sync-user', 'sync:user-1'));
+    expect(options).toMatchObject({
+      attempts: 10,
+      backoff: { type: 'exponential', delay: 5_000 },
+      deduplication: { id: 'sync-user-1', keepLastIfActive: true },
+    });
+    // The BullMQ id is the outbox row: a kept, finished sync under
+    // `sync:<userId>` used to swallow every later renewal of the user.
+    expect(options.jobId).toBe('01a0bec6-c9b4-7329-95c1-a12cbf9679e2');
+    // The longest wait of ten attempts stays within the one-hour ceiling.
+    expect(5_000 * 2 ** (10 - 2)).toBeLessThanOrEqual(3_600_000);
+  });
+
+  it('retries payments.apply-event five times from two seconds', () => {
+    expect(jobOptions(row('payments.apply-event', 'evt:e-1'))).toMatchObject({
+      jobId: 'evt-e-1',
+      attempts: 5,
+      backoff: { type: 'exponential', delay: 2_000 },
+    });
+  });
+
+  it('retries notify.send three times ten seconds apart', () => {
+    expect(jobOptions(row('notify.send', 'notify:k'))).toMatchObject({
+      jobId: 'notify-k',
+      attempts: 3,
+      backoff: { type: 'fixed', delay: 10_000 },
+    });
+  });
+
+  it('retries broadcast.chunk three times', () => {
+    expect(jobOptions(row('broadcast.chunk', 'broadcast:b:0:1'))).toMatchObject({
+      attempts: 3,
+    });
+  });
+
+  it('runs the jobs the table gives one attempt once, under their own id', () => {
+    for (const name of ['panel.reconcile-all', 'notify.alert', 'payments.poll-pending']) {
+      const options = jobOptions(row(name, `${name}:x`));
+      expect(options.attempts).toBeUndefined();
+      expect(options.deduplication).toBeUndefined();
+      expect(options.jobId).toBe(toJobId(`${name}:x`));
+    }
+    expect(jobOptions(row('notify.alert', null)).jobId).toBe(
+      '01a0bec6-c9b4-7329-95c1-a12cbf9679e2',
+    );
   });
 });
