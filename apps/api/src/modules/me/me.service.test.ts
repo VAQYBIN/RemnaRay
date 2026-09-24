@@ -309,6 +309,26 @@ describe('MeService', () => {
     });
   });
 
+  it('does not cancel an invoice paid between the check and the update', async () => {
+    const paidMeanwhile = { id: 'inv-1', userId: 'user-1', status: 'pending' };
+    const test = service({
+      invoice: {
+        findUnique: vi.fn().mockResolvedValue(paidMeanwhile),
+        // The conditional update finds no pending row: the payment won.
+        updateMany: vi.fn().mockResolvedValue({ count: 0 }),
+        update: vi.fn(),
+      },
+    });
+    (test.db as Record<string, unknown>).$transaction = (fn: (tx: unknown) => unknown) =>
+      fn(test.db);
+
+    await expect(test.instance.cancelInvoice('user-1', 'inv-1')).rejects.toMatchObject({
+      response: { error: { code: 'INVOICE_NOT_PENDING' } },
+    });
+    expect(test.db.invoice.update).not.toHaveBeenCalled();
+    expect(test.db.promocodeRedemption.updateMany).not.toHaveBeenCalled();
+  });
+
   it('never exposes another user invoice', async () => {
     const test = service({
       invoice: {

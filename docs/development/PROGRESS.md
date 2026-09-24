@@ -270,7 +270,7 @@ Password#1:Shp_inv=…)` with the URL-encoded receipt signed and sent,
      `/pay/<id>`; `settings.fiscal.mode` uses `none|receipt|manual` where
      FR-062/section 18 say `none|provider_receipt` (all of api, setup and
      web; added to item 9).
-7. Refund/balance defects: refunds accepted for top-ups, balance plan change
+7. **Done (7a–7h)** — Refund/balance defects: refunds accepted for top-ups, balance plan change
    adds time twice, `settleBalance` ignores held rewards, `expire()` keeps
    promo reservations, global `Idempotency-Key`, unauthenticated events take
    the dedup key, a failing inline apply loses the event.
@@ -363,9 +363,19 @@ rewards)`; `LedgerRepository.available` honoured it, `settleBalance`
      (`applyEvent` ignores processed events). Regressions in
      `payments.service.test.ts`. Verified: lint, typecheck, format, API 214,
      `test:m2` 2/2, `test:m4` 4/4.
-   - **7h. Queued (found under 7d):** `MeService.cancelInvoice` checks
-     `pending` and then updates without a condition, so a payment applied in
-     between leaves a paid invoice marked `canceled`.
+   - **7h. Done 2026-09-25 — cancel could overwrite a paid invoice.**
+     `MeService.cancelInvoice` read `pending` and then updated without a
+     condition, so a payment applied in between left a paid invoice (with
+     its transaction and subscription) marked `canceled`. The cancel is now
+     one transaction: `UPDATE … WHERE status = 'pending'` (PostgreSQL
+     re-checks the condition after the row lock `applyEvent` holds), the
+     promocode release only when it changed a row, and 409
+     `INVOICE_NOT_PENDING` otherwise. A payment that arrives after a
+     successful cancel still goes to the balance (owner decision of
+     2026-09-25). Regression in `me.service.test.ts`. Verified: lint,
+     typecheck, typecheck:e2e, format, API 215, `test:m2` 2/2, `test:m4` 4/4,
+     `pnpm test:e2e` 28 passed / 1 skipped.
+   - **Item 7 closed** (7a–7h, 2026-09-25).
 8. `/api/internal/*` is proxied from the internet (both profiles), SVG upload
    filter is bypassable, webhooks share the 60/min anonymous bucket.
 9. Outgoing webhooks of section 9.8 are missing (found under item 4).

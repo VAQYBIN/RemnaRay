@@ -322,14 +322,22 @@ export class MeService {
     const invoice = await this.requireInvoice(userId, id);
     if (invoice.status !== 'pending')
       throw new ApiError('INVOICE_NOT_PENDING', HttpStatus.CONFLICT);
-    const canceled = await this.infra.db.invoice.update({
-      where: { id },
-      data: { status: 'canceled' },
+    // The status is checked again by the update itself: a payment applied
+    // since the read above holds the row and leaves it `paid`, and an invoice
+    // already paid must never be marked canceled.
+    const canceled = await this.infra.db.$transaction(async (tx) => {
+      const { count } = await tx.invoice.updateMany({
+        where: { id, status: 'pending' },
+        data: { status: 'canceled' },
+      });
+      if (count === 0) return null;
+      await tx.promocodeRedemption.updateMany({
+        where: { invoiceId: id, status: 'reserved' },
+        data: { status: 'released' },
+      });
+      return tx.invoice.findUniqueOrThrow({ where: { id } });
     });
-    await this.infra.db.promocodeRedemption.updateMany({
-      where: { invoiceId: id, status: 'reserved' },
-      data: { status: 'released' },
-    });
+    if (!canceled) throw new ApiError('INVOICE_NOT_PENDING', HttpStatus.CONFLICT);
     return this.invoiceView(canceled);
   }
 
