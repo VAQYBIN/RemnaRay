@@ -39,10 +39,12 @@ e2e/.stack.json
 e2e/.auth/
 
 .codex
+.claude
 .agents
 AGENTS.md
 docs/task
 docs/development/*
+docs/superpowers
 !docs/development/PROGRESS.md
 
 .turbo/
