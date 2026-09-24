@@ -20,7 +20,10 @@ function redirect(location: string, cookie?: string): Response {
  */
 export async function GET(request: Request) {
   const token = new URL(request.url).searchParams.get('token');
-  const locale = localeFromCookie(request.headers.get('cookie')) ?? routing.defaultLocale;
+  const locale =
+    localeFromCookie(request.headers.get('cookie')) ??
+    localeFromAcceptLanguage(request.headers.get('accept-language')) ??
+    routing.defaultLocale;
   const login = `/${locale}?login=1`;
   if (!token) return redirect(login);
 
@@ -43,4 +46,34 @@ function localeFromCookie(header: string | null): (typeof routing.locales)[numbe
     .find((item) => item.startsWith('rr_lang='))
     ?.slice('rr_lang='.length);
   return routing.locales.find((item) => item === value);
+}
+
+/**
+ * Section 13.1 orders the sources as `rr_lang`, then `Accept-Language`, then
+ * the default. next-intl 4 writes `rr_lang` only when the chosen locale
+ * differs from `Accept-Language`, so the header is what carries the choice of
+ * a visitor whose browser already speaks it.
+ */
+function localeFromAcceptLanguage(
+  header: string | null,
+): (typeof routing.locales)[number] | undefined {
+  const ranked = (header ?? '')
+    .split(',')
+    .map((item, index) => {
+      const [tag = '', ...params] = item.trim().split(';');
+      const q = params.map((param) => param.trim()).find((param) => param.startsWith('q='));
+      const quality = q ? Number(q.slice(2)) : 1;
+      return {
+        language: tag.trim().toLowerCase().split('-')[0],
+        quality: Number.isFinite(quality) ? quality : 0,
+        index,
+      };
+    })
+    .filter((item) => item.quality > 0)
+    .sort((left, right) => right.quality - left.quality || left.index - right.index);
+  for (const { language } of ranked) {
+    const locale = routing.locales.find((item) => item === language);
+    if (locale) return locale;
+  }
+  return undefined;
 }

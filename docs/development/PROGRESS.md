@@ -122,7 +122,16 @@ AMOUNT_MISMATCH`); the precheckout body adds `totalAmount`/`currency`
        approach the ten-second deadline (upsert + API call); a
        `successful_payment` naming no known invoice is kept as
        `INVOICE_NOT_FOUND` without an alert.
-   - **2b.** Pre-existing E2E locale regression from `0c79ae7` (see below).
+   - **2b. Done 2026-09-25** — pre-existing E2E locale regression from
+     `0c79ae7`. Root cause: next-intl 4 writes `rr_lang` only when the locale
+     differs from `Accept-Language` (verified in the next-intl 4.0 notes via
+     Context7), and `/auth/tg` skipped the header, going from the cookie
+     straight to the default `ru`. The route now follows the section 13.1
+     order `rr_lang` → `Accept-Language` (quality-ordered) → default, with
+     regressions in `apps/web/test/auth-tg-route.test.ts`. Verified: lint,
+     typecheck, typecheck:e2e, format, web 35, `pnpm test:e2e` 28 passed /
+     1 skipped / 0 failed. The customer entry-flow repair of 2026-09-23 is
+     now verified in the browser.
 
 3. CryptoBot invoice amount is divided by 100 twice (`amount()` already
    returns rubles).
@@ -143,7 +152,7 @@ AMOUNT_MISMATCH`); the precheckout body adds `totalAmount`/`currency`
    `rebuild.yml` Trivy tag `0.28.0`, worker `/backups` mount, restore script
    user/themes) and the M5-004 gates recorded below.
 
-**Pre-existing E2E failure, not caused by the repair above:**
+**Pre-existing E2E failure, not caused by the repair above (fixed as 2b):**
 `e2e/specs/account.spec.ts:84` "preserves the selected locale when the bot
 opens the account" fails on clean HEAD `3770b17` too (bot entry lands on
 `/ru/account` after visiting `/en`). It was added in `0c79ae7`, whose entry
