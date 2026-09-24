@@ -261,6 +261,23 @@ export class MeService {
       if (!Number.isInteger(amount) || amount < config.minMinor || amount > config.maxMinor)
         throw new ApiError('TOPUP_AMOUNT_OUT_OF_RANGE', HttpStatus.BAD_REQUEST, undefined, config);
     }
+    const key = idempotencyKey || randomUUID();
+    const request = {
+      userId,
+      kind: input.kind,
+      provider: input.provider,
+      ...(input.planId ? { planId: input.planId } : {}),
+      ...(input.amountMinor === undefined ? {} : { amountMinor: BigInt(input.amountMinor) }),
+      idempotencyKey: key,
+    };
+    // A repeated request is answered before a promocode slot is reserved for
+    // it: the first request already holds the slot.
+    try {
+      const replayed = await this.payments.replay(request);
+      if (replayed) return await this.invoiceView(replayed);
+    } catch (error) {
+      throw this.paymentFailure(error);
+    }
     // Section 15.5: the slot is reserved under a row lock before the invoice
     // exists, so two concurrent buyers can never oversell `max_uses`.
     const reservation = input.promocode
@@ -269,15 +286,10 @@ export class MeService {
 
     try {
       const invoice = await this.payments.createInvoice({
-        userId,
-        kind: input.kind,
-        provider: input.provider,
-        ...(input.planId ? { planId: input.planId } : {}),
-        ...(input.amountMinor === undefined ? {} : { amountMinor: BigInt(input.amountMinor) }),
+        ...request,
         ...(reservation
           ? { discountMinor: reservation.discountMinor, promocodeId: reservation.promocodeId }
           : {}),
-        idempotencyKey: idempotencyKey || randomUUID(),
       });
       if (!invoice) throw new ApiError('NOT_FOUND', HttpStatus.NOT_FOUND);
       if (reservation)
@@ -671,8 +683,8 @@ export class MeService {
       const status =
         error.message === 'IDEMPOTENCY_REQUIRED'
           ? HttpStatus.BAD_REQUEST
-          : error.message === 'INSUFFICIENT_FUNDS'
-            ? HttpStatus.CONFLICT
+          : error.message === 'IDEMPOTENCY_KEY_REUSED'
+            ? HttpStatus.UNPROCESSABLE_ENTITY
             : HttpStatus.CONFLICT;
       return new ApiError(error.message, status);
     }

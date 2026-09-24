@@ -322,6 +322,23 @@ rewards)`; `LedgerRepository.available` honoured it, `settleBalance`
      `m4.rewards.integration.test.mjs` (reserve → expire → released → another
      buyer takes the slot; stayed `reserved` on the previous code). Verified:
      lint, typecheck, format, API 206, `test:m2` 2/2, `test:m4` 4/4.
+   - **7e. Done 2026-09-25 — `Idempotency-Key` was global.** Section 9.2
+     scopes the key to the user (`rr:idem:<userId>:<key>`) and 9.3 answers a
+     key reused with another body `IDEMPOTENCY_KEY_REUSED` 422, but
+     `createInvoice` returned whatever invoice carried the key: another
+     user's (with its payment link), or the first invoice for a different
+     plan, provider or top-up amount. A replay is now returned only for the
+     same user and the same request (`PaymentsService.replay`, also applied
+     when a concurrent insert wins the unique key) and refused 422
+     otherwise; `MeService` checks the replay before reserving a promocode,
+     so replaying a promo purchase no longer takes a second slot.
+     Regressions: `payments.service.test.ts` (6 cases) and
+     `m4.rewards.integration.test.mjs` (replay → same invoice, one
+     redemption; another user → 422; fails on the previous code). Verified:
+     lint, typecheck, format, API 212, bot 24, web 35, `test:m2` 2/2,
+     `test:m4` 4/4. **Still missing:** the Valkey response store with
+     `Idempotent-Replay: true` for the other money-creating POSTs of 9.2
+     (trial, plan change quote paths); added to item 9.
    - **7h. Queued (found under 7d):** `MeService.cancelInvoice` checks
      `pending` and then updates without a condition, so a payment applied in
      between leaves a paid invoice marked `canceled`.
@@ -332,7 +349,8 @@ rewards)`; `LedgerRepository.available` honoured it, `settleBalance`
    under item 5).
    Robokassa SuccessURL/FailURL landing and the `settings.fiscal.mode`
    vocabulary (found under 6c). Showing the available balance and held
-   rewards to the customer (found under 7c).
+   rewards to the customer (found under 7c). The Valkey `Idempotent-Replay`
+   response store of section 9.2 (found under 7e).
    Remaining review items (panel sync coverage and tags, broadcast resume,
    `rebuild.yml` Trivy tag `0.28.0`, worker `/backups` mount, restore script
    user/themes) and the M5-004 gates recorded below.

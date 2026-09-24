@@ -32,7 +32,7 @@ export class PaymentsService {
     idempotencyKey: string;
   }) {
     if (!input.idempotencyKey) throw new PaymentError('IDEMPOTENCY_REQUIRED');
-    const existing = await this.repository.findByIdempotencyKey(input.idempotencyKey);
+    const existing = await this.replay(input);
     if (existing) return existing;
     const user = await this.infra.db.user.findUniqueOrThrow({ where: { id: input.userId } });
     let amount = input.amountMinor ?? 0n;
@@ -154,6 +154,9 @@ export class PaymentsService {
         : {}),
     };
     const invoice = await this.repository.createInvoice(invoiceInput);
+    // A concurrent request with the key won the insert; its invoice is ours
+    // only if it is the same request.
+    if (invoice.id !== shopInvoiceId) return replayed(invoice, input);
     if (input.provider === 'balance') await this.repository.settleBalance(invoice.id);
     if (provider.capabilities.statusPolling && invoice.status === 'pending') {
       await this.infra.db.outboxJob.create({
@@ -237,6 +240,17 @@ export class PaymentsService {
         },
       });
     return provider.ackResponse(event);
+  }
+
+  /**
+   * Section 9.2: a repeated `Idempotency-Key` returns the invoice the first
+   * request created — for the same user and the same request only (section
+   * 9.3 `IDEMPOTENCY_KEY_REUSED`). The column is unique across users, and the
+   * key alone used to hand one user another user's invoice.
+   */
+  async replay(input: InvoiceRequest) {
+    const existing = await this.repository.findByIdempotencyKey(input.idempotencyKey);
+    return existing ? replayed(existing, input) : null;
   }
 
   async recheck(invoiceId: string) {
@@ -351,4 +365,32 @@ function paidInRoubles(event: ProviderEvent): { paidAmountMinorRub?: string } {
 function toRubMinor(value: string): bigint {
   const [whole, fraction = ''] = value.split('.');
   return BigInt(whole || '0') * 100n + BigInt(fraction.padEnd(2, '0').slice(0, 2));
+}
+
+type InvoiceRequest = {
+  userId: string;
+  kind: 'purchase' | 'topup' | 'plan_change';
+  planId?: string | undefined;
+  provider: string;
+  amountMinor?: bigint | undefined;
+  idempotencyKey: string;
+};
+
+function replayed<
+  T extends {
+    userId: string;
+    kind: string;
+    planId: string | null;
+    provider: string;
+    amountMinor: bigint;
+  },
+>(invoice: T, input: InvoiceRequest): T {
+  const same =
+    invoice.userId === input.userId &&
+    invoice.kind === input.kind &&
+    (invoice.planId ?? undefined) === (input.kind === 'topup' ? undefined : input.planId) &&
+    invoice.provider === input.provider &&
+    (input.kind !== 'topup' || invoice.amountMinor === input.amountMinor);
+  if (!same) throw new PaymentError('IDEMPOTENCY_KEY_REUSED');
+  return invoice;
 }

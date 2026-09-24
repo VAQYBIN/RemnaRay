@@ -245,3 +245,77 @@ describe('PaymentsService.createInvoice URLs handed to the provider', () => {
     );
   });
 });
+
+describe('PaymentsService.createInvoice Idempotency-Key (sections 9.2, 9.3)', () => {
+  const stored = {
+    id: 'invoice-a',
+    userId: 'user-a',
+    kind: 'purchase',
+    planId: 'plan-1',
+    provider: 'mock',
+    amountMinor: 29900n,
+    status: 'pending',
+    paymentUrl: 'https://pay.example/a',
+  };
+  function harness() {
+    const registry = createPaymentProviderRegistry({ RR_PAYMENTS_MOCK: 'true' });
+    const create = vi.spyOn(registry.get('mock'), 'createInvoice');
+    const repository = {
+      findByIdempotencyKey: vi.fn().mockResolvedValue(stored),
+      createInvoice: vi.fn(),
+    };
+    const service = new PaymentsService(
+      { db: {} } as unknown as Infrastructure,
+      repository as unknown as PaymentsRepository,
+      registry,
+    );
+    return { create, repository, service };
+  }
+  const request = (overrides: Record<string, unknown> = {}) => ({
+    userId: 'user-a',
+    kind: 'purchase' as const,
+    planId: 'plan-1',
+    provider: 'mock',
+    idempotencyKey: 'key-1',
+    ...overrides,
+  });
+
+  it('replays the same request of the same user', async () => {
+    const { create, service } = harness();
+    await expect(service.createInvoice(request())).resolves.toBe(stored);
+    expect(create).not.toHaveBeenCalled();
+  });
+
+  it('never hands one user the invoice another user created under the key', async () => {
+    const { create, service } = harness();
+    await expect(service.createInvoice(request({ userId: 'user-b' }))).rejects.toMatchObject({
+      name: 'PaymentError',
+      code: 'IDEMPOTENCY_KEY_REUSED',
+    });
+    expect(create).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    ['another plan', { planId: 'plan-2' }],
+    ['another provider', { provider: 'balance' }],
+    ['another kind', { kind: 'plan_change' }],
+  ])('refuses the key reused for %s', async (_name, overrides) => {
+    const { service } = harness();
+    await expect(service.createInvoice(request(overrides))).rejects.toMatchObject({
+      code: 'IDEMPOTENCY_KEY_REUSED',
+    });
+  });
+
+  it('refuses the key reused for another top-up amount', async () => {
+    const { repository, service } = harness();
+    repository.findByIdempotencyKey.mockResolvedValue({
+      ...stored,
+      kind: 'topup',
+      planId: null,
+      amountMinor: 10000n,
+    });
+    await expect(
+      service.createInvoice(request({ kind: 'topup', planId: undefined, amountMinor: 20000n })),
+    ).rejects.toMatchObject({ code: 'IDEMPOTENCY_KEY_REUSED' });
+  });
+});

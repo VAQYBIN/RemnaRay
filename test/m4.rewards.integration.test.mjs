@@ -308,6 +308,26 @@ test(
       );
       assert.ok(retaken.id);
 
+      // Section 9.2 Idempotency-Key: the same request replays the invoice
+      // without reserving the promocode again; another user presenting the
+      // key is refused rather than handed that invoice.
+      const replayCode = await prisma.promocode.create({
+        data: { code: 'REPLAY01', type: 'discount_percent', value: 10n, maxUses: 1 },
+      });
+      const body = { kind: 'purchase', planId: plan.id, provider: 'mock', promocode: 'REPLAY01' };
+      const original = await me.createInvoice(buyers[0].id, body, 'shared-key');
+      const again = await me.createInvoice(buyers[0].id, body, 'shared-key');
+      assert.equal(again.id, original.id);
+      assert.equal(
+        await prisma.promocodeRedemption.count({ where: { promocodeId: replayCode.id } }),
+        1,
+      );
+      await assert.rejects(
+        me.createInvoice(buyers[1].id, { ...body, promocode: undefined }, 'shared-key'),
+        (error) =>
+          error.getStatus() === 422 && error.response.error.code === 'IDEMPOTENCY_KEY_REUSED',
+      );
+
       await prisma.$disconnect();
     } finally {
       await postgres.stop();
