@@ -285,6 +285,29 @@ test(
         assert.equal(used.usedCount, 1);
       }
 
+      // Section 11.4: an invoice that expires gives its promocode slot back.
+      // Expiry only changed the status, so the one use stayed reserved for
+      // ever and every later buyer was told PROMO_EXHAUSTED.
+      await prisma.promocode.create({
+        data: { code: 'EXPIRES1', type: 'discount_percent', value: 10n, maxUses: 1 },
+      });
+      const abandoned = await me.createInvoice(
+        buyers[0].id,
+        { kind: 'purchase', planId: plan.id, provider: 'mock', promocode: 'EXPIRES1' },
+        'promo-abandoned',
+      );
+      await repository.expire(new Date(Date.now() + 31 * 60_000));
+      assert.equal(
+        (await prisma.promocodeRedemption.findFirst({ where: { invoiceId: abandoned.id } })).status,
+        'released',
+      );
+      const retaken = await me.createInvoice(
+        buyers[1].id,
+        { kind: 'purchase', planId: plan.id, provider: 'mock', promocode: 'EXPIRES1' },
+        'promo-retaken',
+      );
+      assert.ok(retaken.id);
+
       await prisma.$disconnect();
     } finally {
       await postgres.stop();

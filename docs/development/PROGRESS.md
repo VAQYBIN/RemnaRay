@@ -313,6 +313,18 @@ rewards)`; `LedgerRepository.available` honoured it, `settleBalance`
      **Not repaired (item 9):** the account pages and `canPayFromBalance`
      still show the whole balance rather than the available part with the
      held amount "в обработке" (section 15.2).
+   - **7d. Done 2026-09-25 — an expired invoice kept its promocode
+     reservation.** `expire()` only changed the status, so a `max_uses`
+     slot reserved by an abandoned invoice stayed reserved and every later
+     buyer got `PROMO_EXHAUSTED` (section 11.4 releases it on expiry). Expiry
+     is now one transaction: `UPDATE … RETURNING` the expired invoices and
+     `onInvoiceReleased` for each. Regression in
+     `m4.rewards.integration.test.mjs` (reserve → expire → released → another
+     buyer takes the slot; stayed `reserved` on the previous code). Verified:
+     lint, typecheck, format, API 206, `test:m2` 2/2, `test:m4` 4/4.
+   - **7h. Queued (found under 7d):** `MeService.cancelInvoice` checks
+     `pending` and then updates without a condition, so a payment applied in
+     between leaves a paid invoice marked `canceled`.
 8. `/api/internal/*` is proxied from the internet (both profiles), SVG upload
    filter is bypassable, webhooks share the 60/min anonymous bucket.
 9. Outgoing webhooks of section 9.8 are missing (found under item 4).

@@ -169,22 +169,24 @@ export class PaymentsRepository {
   }
 
   async expire(now = new Date()): Promise<number> {
-    // Grouped first: the counter is per provider, and `updateMany` reports
-    // only how many rows it touched.
-    const expiring = await this.prisma.invoice.groupBy({
-      by: ['provider'],
-      where: { status: 'pending', expiresAt: { lt: now } },
-      _count: { _all: true },
+    // Section 11.4: an expired invoice gives its promocode reservation back, in
+    // the same transaction as the status change. The row locks the UPDATE
+    // takes also order it against a payment being applied to the invoice.
+    const expired = await this.prisma.$transaction(async (tx) => {
+      const rows = await tx.$queryRaw<Array<{ id: string; provider: string }>>(Prisma.sql`
+        UPDATE invoices SET status = 'expired', updated_at = now()
+        WHERE status = 'pending' AND expires_at < ${now}
+        RETURNING id, provider
+      `);
+      for (const row of rows) await this.rewards?.onInvoiceReleased(tx, row.id);
+      return rows;
     });
-    const count = await this.prisma.invoice
-      .updateMany({
-        where: { status: 'pending', expiresAt: { lt: now } },
-        data: { status: 'expired' },
-      })
-      .then((result) => result.count);
-    for (const row of expiring)
-      invoicesTotal.inc({ provider: row.provider, status: 'expired' }, row._count._all);
-    return count;
+    const byProvider = new Map<string, number>();
+    for (const row of expired)
+      byProvider.set(row.provider, (byProvider.get(row.provider) ?? 0) + 1);
+    for (const [provider, count] of byProvider)
+      invoicesTotal.inc({ provider, status: 'expired' }, count);
+    return expired.length;
   }
 
   async settleBalance(invoiceId: string): Promise<void> {
