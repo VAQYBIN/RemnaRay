@@ -196,9 +196,10 @@ export class PaymentsRepository {
           amountMinor: bigint;
           planId: string | null;
           status: string;
+          kind: string;
         }>
       >(
-        Prisma.sql`SELECT id, user_id AS "userId", amount_minor AS "amountMinor", plan_id AS "planId", status FROM invoices WHERE id = ${invoiceId}::uuid FOR UPDATE`,
+        Prisma.sql`SELECT id, user_id AS "userId", amount_minor AS "amountMinor", plan_id AS "planId", status, kind::text AS kind FROM invoices WHERE id = ${invoiceId}::uuid FOR UPDATE`,
       );
       const invoice = rows[0];
       if (!invoice || invoice.status !== 'pending') return;
@@ -243,8 +244,15 @@ export class PaymentsRepository {
         where: { id: invoice.id },
         data: { status: 'paid', paidAt: new Date() },
       });
+      // EX-06: the unused time was priced into this invoice as the plan-change
+      // credit, so a plan change starts now, as it does when a provider pays.
       if (invoice.planId)
-        await this.activateSubscription(tx, invoice.userId, invoice.planId, false);
+        await this.activateSubscription(
+          tx,
+          invoice.userId,
+          invoice.planId,
+          invoice.kind === 'plan_change',
+        );
       await queueNotification(
         tx,
         'payment.succeeded',

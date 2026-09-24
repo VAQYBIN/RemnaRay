@@ -286,6 +286,34 @@ test(
         1,
       );
 
+      // EX-06/FR-023 through the balance: the unused time is paid out as the
+      // plan-change credit, so the new plan starts now. The balance path kept
+      // the old expiry as well, handing the same time over twice.
+      const upgrade = await prisma.plan.create({
+        data: {
+          slug: 'm2-upgrade',
+          name: { ru: 'Upgrade', en: 'Upgrade' },
+          durationDays: 60,
+          squads: [],
+          priceMinor: 39900n,
+        },
+      });
+      const beforeChange = Date.now();
+      const changed = await service.createInvoice({
+        userId: user.id,
+        kind: 'plan_change',
+        planId: upgrade.id,
+        provider: 'balance',
+        idempotencyKey: 'm2-plan-change-balance',
+      });
+      assert.equal((await prisma.invoice.findUnique({ where: { id: changed.id } })).status, 'paid');
+      const afterChange = await prisma.subscription.findFirst({
+        where: { userId: user.id, status: 'active' },
+      });
+      assert.equal(afterChange.planId, upgrade.id);
+      const days = (afterChange.expiresAt.getTime() - beforeChange) / 86_400_000;
+      assert.ok(days >= 59.99 && days <= 60.01, `the new plan runs ${String(days)} days`);
+
       // Section 7.3 status polling: the first poll sees the invoice unpaid
       // and stores that answer; the later `paid` answer has to be applied,
       // not dropped as a duplicate of it (it used to share `poll:<id>`).

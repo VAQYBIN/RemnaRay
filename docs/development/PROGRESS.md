@@ -290,6 +290,15 @@ Password#1:Shp_inv=…)` with the URL-encoded receipt signed and sent,
      Verified: lint, format, API 206, `test:m2` 2/2, `test:m4` 4/4 on three
      runs (one earlier `test:m4` run reported one failure that its log did
      not keep and that did not recur; recorded as a possible flake).
+   - **7b. Done 2026-09-25 — a plan change paid from the balance added the
+     time twice.** The invoice price already subtracts the EX-06 credit for
+     the unused time, and a provider-paid plan change starts the new plan
+     now; `settleBalance` called `activateSubscription(..., false)` for every
+     kind, so a balance-paid plan change also kept the old expiry and added
+     the new period on top (30 days left + 60-day plan → 91 days). It now
+     passes `kind === 'plan_change'`. Regression in
+     `m2.payment.integration.test.mjs` (60 days, 91 on the previous code).
+     Verified: lint, typecheck, format, API 206, `test:m2` 2/2, `test:m4` 4/4.
 8. `/api/internal/*` is proxied from the internet (both profiles), SVG upload
    filter is bypassable, webhooks share the 60/min anonymous bucket.
 9. Outgoing webhooks of section 9.8 are missing (found under item 4).
