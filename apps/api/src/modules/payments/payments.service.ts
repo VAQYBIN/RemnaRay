@@ -197,13 +197,18 @@ export class PaymentsService {
       paymentsEventsTotal.inc({ provider: providerCode, type: 'unknown', result: 'unparsed' });
       throw new PaymentError('WEBHOOK_INVALID_SIGNATURE', 'Invalid event payload');
     }
-    const externalId =
-      event.eventId ??
-      createHash('sha256')
-        .update(
-          `${providerCode}:${event.providerInvoiceId}:${event.type}:${event.paidAmount?.amount ?? ''}`,
-        )
-        .digest('hex');
+    // An event that fails verification is kept for audit (AC-063c) under a
+    // key of its own body: under the provider's event id it would take the
+    // deduplication slot of the genuine notification, which would then be
+    // dropped as its duplicate and never applied.
+    const externalId = verification.ok
+      ? (event.eventId ??
+        createHash('sha256')
+          .update(
+            `${providerCode}:${event.providerInvoiceId}:${event.type}:${event.paidAmount?.amount ?? ''}`,
+          )
+          .digest('hex'))
+      : `unverified:${createHash('sha256').update(raw).digest('hex')}`;
     const invoice = await this.infra.db.invoice.findFirst({
       where: { provider: providerCode, providerInvoiceId: event.providerInvoiceId },
       select: { id: true },

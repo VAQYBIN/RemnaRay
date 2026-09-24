@@ -458,6 +458,48 @@ test(
         else process.env.RR_APP_KEY = keyBeforeRobokassa;
       }
 
+      // AC-063c keeps a badly signed event for audit, but it must not take
+      // the event id: a forged body naming the id of the real notification
+      // used to make that notification a "duplicate" that was never applied.
+      const target = await service.createInvoice({
+        userId: user.id,
+        kind: 'topup',
+        provider: 'mock',
+        amountMinor: 7000n,
+        idempotencyKey: 'm2-forged-first',
+      });
+      const forged = JSON.stringify({
+        eventId: 'real-event',
+        providerInvoiceId: target.providerInvoiceId,
+        type: 'pending',
+      });
+      await assert.rejects(
+        service.receiveWebhook(
+          'mock',
+          Buffer.from(forged),
+          { 'x-mock-signature': 'forged' },
+          '203.0.113.9',
+        ),
+        { code: 'WEBHOOK_INVALID_SIGNATURE' },
+      );
+      const audit = await prisma.paymentEvent.findFirst({
+        where: { provider: 'mock', signatureOk: false, invoiceId: target.id },
+      });
+      assert.ok(audit, 'the forged event is kept for audit (AC-063c)');
+      const genuine = JSON.stringify({
+        eventId: 'real-event',
+        providerInvoiceId: target.providerInvoiceId,
+        type: 'paid',
+        paidAmountMinorRub: '7000',
+      });
+      await service.receiveWebhook(
+        'mock',
+        Buffer.from(genuine),
+        { 'x-mock-signature': createHmac('sha256', 'mock-secret').update(genuine).digest('hex') },
+        '127.0.0.1',
+      );
+      assert.equal((await prisma.invoice.findUnique({ where: { id: target.id } })).status, 'paid');
+
       // Section 9.7: a body that names no event is refused, not stored. With
       // no guard the insert reached Prisma with a null `type` and the webhook
       // path answered 500 to anything posted at it.

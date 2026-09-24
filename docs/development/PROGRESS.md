@@ -337,8 +337,21 @@ rewards)`; `LedgerRepository.available` honoured it, `settleBalance`
      redemption; another user → 422; fails on the previous code). Verified:
      lint, typecheck, format, API 212, bot 24, web 35, `test:m2` 2/2,
      `test:m4` 4/4. **Still missing:** the Valkey response store with
-     `Idempotent-Replay: true` for the other money-creating POSTs of 9.2
-     (trial, plan change quote paths); added to item 9.
+     `Idempotent-Replay: true` for the money-creating POSTs of 9.2 (the
+     trial among them); added to item 9.
+   - **7f. Done 2026-09-25 — an unverified webhook took the event's
+     deduplication key.** The 9.7 pseudo-code inserts the event under
+     `external_id` before acting on `signature_ok`, and `external_id` is
+     whatever the body claims; a forged body naming the id of the genuine
+     notification made that notification a duplicate that was never
+     applied. **Decision:** a failed verification is still stored for audit
+     (AC-063c, `signature_ok=false`) but under
+     `unverified:<sha256(body)>`, so it can neither block nor be mistaken for
+     the real event (11.6: duplicate provider events are side-effect free,
+     and only authenticated ones are events). Regression in
+     `m2.payment.integration.test.mjs` (forged pending under `real-event`,
+     then the signed paid event → invoice paid; stayed `pending` before).
+     Verified: lint, typecheck, format, API 212, `test:m2` 2/2, `test:m4` 4/4.
    - **7h. Queued (found under 7d):** `MeService.cancelInvoice` checks
      `pending` and then updates without a condition, so a payment applied in
      between leaves a paid invoice marked `canceled`.
