@@ -38,7 +38,7 @@ VALKEY_URL=redis://valkey:6379/0
 RR_TRUSTED_PROXIES=172.28.0.0/16
 RR_EXTERNAL_HTTP_PORT=8080
 RR_LOG_LEVEL=info
-RR_PAYMENTS_MOCK=true
+RR_PAYMENTS_MOCK=false
 ENV
 chmod 600 "$env_file"
 printf 'Created %s with mode 600.\n' "$env_file"

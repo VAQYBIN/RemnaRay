@@ -20,6 +20,7 @@ describe('loadEnv', () => {
     expect(result.POSTGRES_USER).toBe('remnaray');
     expect(result.VALKEY_URL).toBe('redis://valkey:6379/0');
     expect(result.RR_API_DOCS).toBe(false);
+    expect(result.RR_PAYMENTS_MOCK).toBe(false);
   });
 
   it('requires ACME email only for ACME mode', () => {

@@ -18,6 +18,10 @@ pnpm dev
 dependencies in `compose.dev.yaml` are the only containers you need; the
 production `compose.yaml` is for deployments, not for development.
 
+Export `RR_PAYMENTS_MOCK=true` for the API to pay through the `mock` provider
+locally. It is off by default because the provider must never reach a live
+shop; see [`docs/payments/README.md`](docs/payments/README.md#the-mock-provider).
+
 Node 24.21 or newer and pnpm 11.26.0 are pinned in `package.json`; Corepack
 installs the right pnpm for you.
 

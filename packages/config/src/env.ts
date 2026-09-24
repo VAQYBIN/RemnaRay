@@ -27,6 +27,8 @@ const envSchema = z
     RR_LOG_LEVEL: z.enum(['fatal', 'error', 'warn', 'info', 'debug', 'trace']).default('info'),
     RR_API_DOCS: booleanFromEnv,
     RR_THEME_UPLOAD: booleanFromEnv,
+    // Section 22.4: development and test stands only.
+    RR_PAYMENTS_MOCK: booleanFromEnv,
     RR_BACKUP_S3_ENDPOINT: z.url().optional(),
     RR_BACKUP_S3_BUCKET: z.string().min(1).optional(),
     RR_BACKUP_S3_ACCESS_KEY: z.string().min(1).optional(),

@@ -5,19 +5,9 @@ import { SettingsModule } from '../settings/settings.module';
 import { SettingsService } from '../settings/settings.service';
 import { RewardsModule } from '../rewards/rewards.module';
 import { RewardsService } from '../rewards/rewards.service';
-import { MockPaymentProvider } from '@remnaray/payments-mock';
-import {
-  BalanceProvider,
-  CryptoBotProvider,
-  LavaProvider,
-  PlategaProvider,
-  RobokassaProvider,
-  StarsProvider,
-  YooKassaProvider,
-} from './builtin-providers';
 import { PaymentsInternalController, PaymentsWebhookController } from './payments.controller';
 import { PaymentsRepository } from './payments.repository';
-import { PaymentProviderRegistry } from './payments.registry';
+import { PaymentProviderRegistry, createPaymentProviderRegistry } from './payments.registry';
 import { PaymentsService } from './payments.service';
 
 @Module({
@@ -27,21 +17,7 @@ import { PaymentsService } from './payments.service';
     {
       provide: PaymentProviderRegistry,
       inject: [],
-      useFactory: () => {
-        const registry = new PaymentProviderRegistry();
-        for (const provider of [
-          new MockPaymentProvider(),
-          new YooKassaProvider(),
-          new RobokassaProvider(),
-          new LavaProvider(),
-          new PlategaProvider(),
-          new CryptoBotProvider(),
-          new StarsProvider(),
-          new BalanceProvider(),
-        ])
-          registry.register(provider);
-        return registry;
-      },
+      useFactory: () => createPaymentProviderRegistry(),
     },
     {
       provide: PaymentsRepository,

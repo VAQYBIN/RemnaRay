@@ -22,3 +22,13 @@ The provider adapters follow the current provider contracts:
 
 Provider configuration is deliberately incomplete until an administrator
 enables the provider and records a successful health check.
+
+## The `mock` provider
+
+`mock` exists for development and test stands only (section 22.4). It is
+registered when `RR_PAYMENTS_MOCK=true` and is absent from the registry
+otherwise, so `/webhooks/mock` and an invoice naming it answer
+`PAYMENT_PROVIDER_NOT_FOUND`. Its webhook secret has a public default: on a
+live shop the variable must be `false` or unset. `scripts/init-env.sh` and
+`.env.example` write `false`; a `.env` created by an earlier version carried
+`true` and has to be edited before the upgrade.

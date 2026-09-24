@@ -1,5 +1,59 @@
 # RemnaRay Development Progress
 
+## Code review repair queue — 2026-09-24
+
+Current milestone remains M5 (NOT VERIFIED); the sole milestone task remains
+TASK-M5-004. A read-only review of the `dev` tree on 2026-09-24 found defects
+in already committed M1/M2 work that outweigh the remaining M5-004 gates. They
+are repaired one per commit, in this order, as follow-ups to the completed
+tasks; no new TASK or milestone is started.
+
+1. **Done — mock payment provider in production** (section 22.4). The API
+   registered `mock` unconditionally, `providerConfig` skipped the enabled
+   check for it and its webhook secret defaults to the public `mock-secret`,
+   so any signed-in customer could create an invoice with `provider:"mock"`
+   and post a signed `paid` webhook with any amount. The registry is now built
+   by `createPaymentProviderRegistry()`, which registers `mock` only for
+   `RR_PAYMENTS_MOCK=true`; `init-env.sh` and `.env.example` write `false`,
+   the E2E stand sets `true` explicitly, and the proxy-smoke stand already did.
+   Regression: `payments.registry.test.ts` (absent for unset/`false`/`1`,
+   present only for `true`). **VPS action:** its `.env` was created by the
+   old `init-env.sh` and carries `RR_PAYMENTS_MOCK=true`; set it to `false`
+   before deploying the new image.
+   Verified locally: API 162 tests, `pnpm -r test`, `pnpm test` (43),
+   `pnpm lint`, `pnpm typecheck`, `pnpm typecheck:e2e`, `pnpm format`,
+   `pnpm build`, `pnpm i18n-check`, `pnpm test:m2` (1/1), `pnpm test:m4`
+   (4/4), and `pnpm test:e2e` with the documented `LD_LIBRARY_PATH` browser
+   libraries: 27 passed, 1 skipped, 1 failed (below). Proxy smoke was not
+   rerun; its stand configuration is unchanged.
+2. Telegram Stars webhook is unauthenticated (`StarsProvider.verifyWebhook`
+   always returns ok); spec 11.3.6 / 9.5 route Stars through the bot only.
+3. CryptoBot invoice amount is divided by 100 twice (`amount()` already
+   returns rubles).
+4. Nothing schedules `maintenance.subscriptions-expire` or recurring
+   `panel.reconcile-all` (section 7.3, FR-024).
+5. `panel.sync-user` reuses `jobId panel:<userId>`, so BullMQ drops every
+   later renewal; no job sets `attempts`/`backoff` (section 7.3).
+6. Poll-only payments are never applied (fixed `poll:<id>` event id consumed
+   by the first pending poll); Lava `hookUrl` is wrong; Robokassa diverges
+   from 11.3.4.
+7. Refund/balance defects: refunds accepted for top-ups, balance plan change
+   adds time twice, `settleBalance` ignores held rewards, `expire()` keeps
+   promo reservations, global `Idempotency-Key`, unauthenticated events take
+   the dedup key, a failing inline apply loses the event.
+8. `/api/internal/*` is proxied from the internet (both profiles), SVG upload
+   filter is bypassable, webhooks share the 60/min anonymous bucket.
+9. Remaining review items (panel sync coverage and tags, broadcast resume,
+   `rebuild.yml` Trivy tag `0.28.0`, worker `/backups` mount, restore script
+   user/themes) and the M5-004 gates recorded below.
+
+**Pre-existing E2E failure, not caused by the repair above:**
+`e2e/specs/account.spec.ts:84` "preserves the selected locale when the bot
+opens the account" fails on clean HEAD `3770b17` too (bot entry lands on
+`/ru/account` after visiting `/en`). It was added in `0c79ae7`, whose entry
+recorded that browser E2E could not run on this host, so it never passed.
+The customer entry-flow repair is therefore not fully verified.
+
 ## Customer account entry-flow regression repair — 2026-09-23
 
 Current milestone remains M5 and the sole milestone task remains TASK-M5-004;
