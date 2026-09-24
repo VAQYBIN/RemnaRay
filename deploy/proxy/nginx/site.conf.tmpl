@@ -75,6 +75,10 @@ server {
         client_max_body_size 5m;
         proxy_pass http://rr_api;
     }
+    # --- the bot's and the worker's API (section 9.5): never from outside ---
+    location ^~ /api/internal/ {
+{{INTERNAL_API_BLOCK}}
+    }
     # --- metrics: the compose network only ---
     location = /metrics { allow {{DOCKER_CIDR}}; deny all; proxy_pass http://rr_api; }
     location = /api/docs {

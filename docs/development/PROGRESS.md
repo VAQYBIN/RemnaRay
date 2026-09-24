@@ -378,6 +378,26 @@ rewards)`; `LedgerRepository.available` honoured it, `settleBalance`
    - **Item 7 closed** (7a–7h, 2026-09-25).
 8. `/api/internal/*` is proxied from the internet (both profiles), SVG upload
    filter is bypassable, webhooks share the 60/min anonymous bucket.
+   - **8a. Done 2026-09-25 — `/api/internal/*` reached the API from the
+     internet.** Both profiles routed it with the rest of `/api/*`, and the
+     external `edge` too, so every bot/worker endpoint (including
+     `auth/issue-token`, which mints a session for any `telegramId`) was
+     guarded by `X-Internal-Token` alone. The proxies now answer it
+     themselves with 404 (`INTERNAL_API_BLOCK`, a Caddy `handle`, and
+     `edge.conf`); only the 22.7 smoke stand routes it
+     (`RR_ECHO_HEADERS=true`, now also on `proxy-config` in
+     `compose.smoke.yaml`) for step 5 and the browser suite. Found with it:
+     the Caddy profile's `/api/docs` denial was a bare `respond`, which Caddy
+     orders after `handle`, so `handle /api/*` forwarded it (no harm today:
+     the API serves no `/api/docs`); it is a `handle` now (Caddy directive
+     order checked via Context7, caddyserver.com). Regressions:
+     `proxy-render.test.ts` and a new `m5.proxy.integration.test.mjs` case
+     that runs both real proxies against a stub upstream (404 without
+     forwarding; forwarded in stand mode; `/api/docs` not forwarded) and
+     fails on the previous templates. Verified: lint, typecheck, format,
+     API 220, `pnpm test` 43, `pnpm test:m5` 5/5. The full proxy smoke
+     (`deploy/ci/proxy-smoke.sh`) was not rerun.
+
 9. Outgoing webhooks of section 9.8 are missing (found under item 4).
    `panel.reset-traffic` and `panel.delete-user` are never performed (found
    under item 5).

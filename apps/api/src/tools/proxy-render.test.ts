@@ -27,6 +27,7 @@ const sources: ProxySources = {
   adminAllowlist: [],
   dockerCidr: '172.28.0.0/16',
   apiDocs: false,
+  internalApi: false,
   caddyRateLimit: true,
 };
 
@@ -294,7 +295,7 @@ describe('Caddy template rendering (section 21.4)', () => {
 
   it('adds the redirect site and the administration allowlist only when they apply', () => {
     expect(renderCaddy('acme')).not.toContain('redir https://shop.example.com');
-    expect(renderCaddy('acme')).toContain('respond /api/docs 404');
+    expect(renderCaddy('acme')).toContain('handle /api/docs {');
 
     const restricted = renderCaddy('acme', {
       extraDomains: ['www.example.com', 'shop.example.net'],
@@ -310,6 +311,48 @@ describe('Caddy template rendering (section 21.4)', () => {
       ['www.example.com {', '\ttls /certs/fullchain.pem /certs/privkey.pem', '\tredir'].join('\n'),
     );
     expect(restricted).toContain('@rr_denied not client_ip 203.0.113.0/24');
-    expect(restricted).not.toContain('respond /api/docs 404');
+    expect(restricted).not.toContain('handle /api/docs {');
+  });
+});
+
+describe('the internal API is not published (section 9.5)', () => {
+  it('nginx answers /api/internal/ itself with 404 unless the smoke stand opens it', () => {
+    const closed = render('acme').get('site.conf') ?? '';
+    expect(closed).toContain('location ^~ /api/internal/ {\n        return 404;\n    }');
+
+    const stand = render('acme', { internalApi: true }).get('site.conf') ?? '';
+    expect(stand).toMatch(/location \^~ \/api\/internal\/ \{\n[^}]*proxy_pass http:\/\/rr_api;/u);
+    expect(stand).not.toContain('return 404;\n    }\n    # --- metrics');
+  });
+
+  it('Caddy answers it in a `handle`, which wins over `handle /api/*`', () => {
+    const closed = renderCaddy('acme');
+    expect(closed).toContain('\thandle /api/internal/* {\n\t\trespond 404\n\t}');
+    expect(renderCaddy('acme', { internalApi: true })).not.toContain('handle /api/internal/*');
+  });
+
+  it('Caddy closes /api/docs in a `handle` too: a bare `respond` ran after `handle /api/*`', () => {
+    const closed = renderCaddy('acme');
+    expect(closed).not.toMatch(/^\s*respond \/api\/docs 404$/mu);
+    expect(closed).toContain('\thandle /api/docs {\n\t\trespond 404\n\t}');
+    expect(renderCaddy('acme', { apiDocs: true })).not.toContain('handle /api/docs');
+  });
+
+  it('the external profile`s edge refuses it as well', () => {
+    const edge = readFileSync(resolve(proxyRoot, 'external/edge.conf'), 'utf8');
+    expect(edge).toMatch(/location \^~ \/api\/internal\/ \{ return 404; \}/u);
+  });
+
+  it('only the smoke stand`s test mode opens it', () => {
+    const previous = process.env.RR_ECHO_HEADERS;
+    try {
+      delete process.env.RR_ECHO_HEADERS;
+      expect(sourcesFrom([]).internalApi).toBe(false);
+      process.env.RR_ECHO_HEADERS = 'true';
+      expect(sourcesFrom([]).internalApi).toBe(true);
+    } finally {
+      if (previous === undefined) delete process.env.RR_ECHO_HEADERS;
+      else process.env.RR_ECHO_HEADERS = previous;
+    }
   });
 });

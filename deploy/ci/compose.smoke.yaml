@@ -6,10 +6,17 @@
 #     translated to the compose gateway, which is inside the allowed range, so
 #     `/metrics` would answer 200 and the check of step 4 would pass by
 #     accident.
-#   * `RR_ECHO_HEADERS` — the upstream echo of step 5.
+#   * `RR_ECHO_HEADERS` — the upstream echo of step 5, and `/api/internal/*`
+#     routed by the proxy for it and for the browser suite.
 
 services:
   api:
+    environment:
+      RR_ECHO_HEADERS: 'true'
+
+  # The same test mode makes the proxies route `/api/internal/*`, which a
+  # deployment answers with 404: step 5 and the browser suite use it.
+  proxy-config:
     environment:
       RR_ECHO_HEADERS: 'true'
 

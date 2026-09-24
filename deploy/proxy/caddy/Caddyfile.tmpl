@@ -187,6 +187,8 @@ http:// {
 		}
 	}
 {{CADDY_API_DOCS_BLOCK}}
+	# The bot's and the worker's API (section 9.5): never from outside.
+{{CADDY_INTERNAL_API_BLOCK}}
 	handle /api/* {
 {{CADDY_RATE_LIMIT_API}}
 		reverse_proxy api:3000 {

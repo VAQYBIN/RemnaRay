@@ -53,8 +53,16 @@ as well as the main HTML pages. The web image disables Next.js's
 
 Placeholders are `{{NAME}}` and nothing else is interpreted: `DOMAIN`,
 `EXTRA_DOMAINS`, `ACME_EMAIL`, `TLS_MODE`, `DOCKER_CIDR`, `ADMIN_ALLOWLIST`,
-`ADMIN_ALLOWLIST_BLOCK`, `API_DOCS_BLOCK`, `LOAD_MODULE_BLOCK`,
-`EXTRA_DOMAINS_SUFFIX` and `EXTRA_DOMAINS_SERVER`.
+`ADMIN_ALLOWLIST_BLOCK`, `API_DOCS_BLOCK`, `INTERNAL_API_BLOCK`,
+`LOAD_MODULE_BLOCK`, `EXTRA_DOMAINS_SUFFIX` and `EXTRA_DOMAINS_SERVER`.
+
+`/api/internal/*` is the API of the bot and the worker (section 9.5), which
+reach `api:3000` on the compose network. Both profiles answer it themselves
+with `404`, and so does the `edge` of the external profile. Only the section
+22.7 smoke stand, which sets `RR_ECHO_HEADERS=true` on `proxy-config`, routes
+it, for the header echo of step 5 and the browser suite's sign-in. In the
+Caddy profile this and the `/api/docs` denial are `handle` blocks: a bare
+`respond` is ordered after `handle`, so `handle /api/*` would answer first.
 
 The `extra_domains` redirect server is emitted only when there are extra
 domains: an empty `server_name` would make nginx redirect every unmatched host.

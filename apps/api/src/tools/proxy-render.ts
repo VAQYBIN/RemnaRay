@@ -22,6 +22,13 @@ export type ProxySources = {
   dockerCidr: string;
   apiDocs: boolean;
   /**
+   * Section 9.5: `/api/internal/*` is for the bot and the worker, which reach
+   * `api:3000` on the compose network; the proxies answer it with 404. Only
+   * the section 22.7 smoke stand (`RR_ECHO_HEADERS=true`) routes it, for its
+   * header echo and the browser suite's sign-in scaffolding.
+   */
+  internalApi: boolean;
+  /**
    * Section 21.4: the stock `caddy:2-alpine` has no rate-limit module, and the
    * renderer then drops the `rate_limit` blocks rather than emit a
    * configuration Caddy cannot load. The throttler keeps the limits.
@@ -86,6 +93,16 @@ export function placeholders(
     ADMIN_ALLOWLIST: sources.adminAllowlist.join(' '),
     ADMIN_ALLOWLIST_BLOCK: allowlist,
     API_DOCS_BLOCK: sources.apiDocs ? '' : indentedBlock(['deny all;'], '        '),
+    INTERNAL_API_BLOCK: indentedBlock(
+      sources.internalApi
+        ? [
+            'limit_req zone=rr_api burst=30 nodelay;',
+            'client_max_body_size 1m;',
+            'proxy_pass http://rr_api;',
+          ]
+        : ['return 404;'],
+      '        ',
+    ),
     LOAD_MODULE_BLOCK:
       options.tlsMode === 'acme' ? 'load_module modules/ngx_http_acme_module.so;\n' : '',
     ...caddyPlaceholders(sources, options),
@@ -139,7 +156,12 @@ function caddyPlaceholders(sources: ProxySources, options: RenderOptions): Recor
             '\trespond @rr_denied 403',
           ].join('\n')
         : '',
-    CADDY_API_DOCS_BLOCK: sources.apiDocs ? '' : '\trespond /api/docs 404',
+    // A `handle`, not a bare `respond`: `respond` is ordered after `handle`,
+    // so `handle /api/*` answered these first and the denial never applied.
+    CADDY_API_DOCS_BLOCK: sources.apiDocs ? '' : '\thandle /api/docs {\n\t\trespond 404\n\t}',
+    CADDY_INTERNAL_API_BLOCK: sources.internalApi
+      ? ''
+      : '\thandle /api/internal/* {\n\t\trespond 404\n\t}',
     // The redirect site needs the same certificate source as the main one:
     // without it Caddy would try to issue for a name the owner may have
     // pointed here only for the redirect, and in `custom` mode there is no
@@ -298,6 +320,7 @@ export function sourcesFrom(rows: SettingRow[]): ProxySources {
     adminAllowlist: listOf(settingValue(rows, 'admin.ip_allowlist')),
     dockerCidr: process.env.RR_DOCKER_CIDR ?? '172.28.0.0/16',
     apiDocs: process.env.RR_API_DOCS === 'true',
+    internalApi: process.env.RR_ECHO_HEADERS === 'true',
     caddyRateLimit: caddyHasRateLimit(process.env.RR_CADDY_IMAGE),
   };
 }

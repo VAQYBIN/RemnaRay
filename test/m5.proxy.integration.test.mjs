@@ -466,3 +466,133 @@ test(
     }
   },
 );
+
+test(
+  'Section 9.5: neither proxy forwards /api/internal/* outside the smoke stand',
+  { timeout: 600_000 },
+  async () => {
+    docker(['build', '-f', 'deploy/proxy/nginx/Dockerfile', '-t', IMAGE, '.']);
+    docker(['build', '-f', 'deploy/proxy/caddy/Dockerfile', '-t', CADDY_IMAGE, '.']);
+    const { renderProfile, writeAtomically } =
+      await import('../apps/api/dist/tools/proxy-render.js');
+    const prefix = `rr-internal-${String(process.pid)}`;
+    const network = `${prefix}-net`;
+    const certs = mkdtempSync(join(tmpdir(), 'rr-internal-certs-'));
+    selfSigned(certs);
+    const directories = [];
+    const containers = [];
+    // One upstream stands in for both `api` and `web` and names itself, so a
+    // response says whether the proxy answered or forwarded.
+    const upstream = `const http = require('node:http');
+      for (const port of [3000, 3001])
+        http.createServer((q, r) => r.end('upstream ' + q.url)).listen(port);`;
+    const probe = (path, method = 'GET') =>
+      docker(
+        [
+          'run',
+          '--rm',
+          '--network',
+          network,
+          'curlimages/curl:8.17.0',
+          '-sk',
+          '-X',
+          method,
+          '-w',
+          '\n%{http_code}',
+          `https://shop.example.test${path}`,
+        ],
+        { expectSuccess: false },
+      ).trim();
+    try {
+      docker(['network', 'create', network]);
+      containers.push(`${prefix}-up`);
+      docker([
+        'run',
+        '-d',
+        '--name',
+        `${prefix}-up`,
+        '--network',
+        network,
+        '--network-alias',
+        'api',
+        '--network-alias',
+        'web',
+        'node:24-alpine',
+        'node',
+        '-e',
+        upstream,
+      ]);
+      for (const profile of ['nginx', 'caddy'])
+        for (const internalApi of [false, true]) {
+          const directory = mkdtempSync(join(tmpdir(), `rr-internal-${profile}-`));
+          directories.push(directory);
+          writeAtomically(
+            directory,
+            renderProfile(
+              resolve(TEMPLATES, profile),
+              {
+                domain: 'shop.example.test',
+                extraDomains: [],
+                acmeEmail: '',
+                adminAllowlist: [],
+                dockerCidr: '172.28.0.0/16',
+                apiDocs: false,
+                internalApi,
+                caddyRateLimit: true,
+              },
+              { profile, tlsMode: 'custom', certificatePresent: true },
+            ),
+          );
+          const name = `${prefix}-${profile}-${String(internalApi)}`;
+          containers.push(name);
+          docker([
+            'run',
+            '-d',
+            '--name',
+            name,
+            '--network',
+            network,
+            '--network-alias',
+            'shop.example.test',
+            '-v',
+            profile === 'nginx'
+              ? `${directory}:/etc/nginx/conf.d:ro`
+              : `${directory}:/etc/caddy:ro`,
+            '-v',
+            profile === 'nginx' ? `${certs}:/etc/nginx/certs:ro` : `${certs}:/certs:ro`,
+            profile === 'nginx' ? IMAGE : CADDY_IMAGE,
+          ]);
+          let ready = '';
+          for (let attempt = 0; attempt < 30 && !ready.endsWith('200'); attempt += 1) {
+            await sleep(500);
+            ready = probe('/api/v1/public/config');
+          }
+          assert.match(
+            ready,
+            /^upstream \/api\/v1\/public\/config\n200$/u,
+            `${name} never proxied`,
+          );
+
+          const internal = probe('/api/internal/v1/echo-headers', 'POST');
+          if (internalApi)
+            assert.match(internal, /^upstream \/api\/internal\/v1\/echo-headers\n200$/u, name);
+          else {
+            assert.match(internal, /(?:^|\n)404$/u, `${name} must answer /api/internal itself`);
+            assert.doesNotMatch(internal, /upstream/u, `${name} forwarded /api/internal`);
+          }
+          // The Caddy profile's API docs denial ran after `handle /api/*`.
+          const apiDocs = probe('/api/docs');
+          assert.match(apiDocs, /(?:^|\n)(?:403|404)$/u, `${name} forwarded /api/docs`);
+          assert.doesNotMatch(apiDocs, /upstream/u, `${name} forwarded /api/docs`);
+
+          docker(['rm', '-f', name], { expectSuccess: false });
+          containers.splice(containers.indexOf(name), 1);
+        }
+    } finally {
+      for (const container of containers) docker(['rm', '-f', container], { expectSuccess: false });
+      docker(['network', 'rm', network], { expectSuccess: false });
+      rmSync(certs, { recursive: true, force: true });
+      for (const directory of directories) rmSync(directory, { recursive: true, force: true });
+    }
+  },
+);
