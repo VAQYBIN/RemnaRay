@@ -2,6 +2,7 @@ import { createHmac, timingSafeEqual } from 'node:crypto';
 import { Injectable } from '@nestjs/common';
 import {
   createRemnawaveClient,
+  PanelError,
   type PanelUser,
   type RemnawaveClient,
 } from '@remnaray/remnawave-sdk';
@@ -209,6 +210,47 @@ export class RemnawaveService {
       await this.infra.redis.del(lockKey);
       throw error;
     }
+  }
+
+  /**
+   * Queue consumer for `panel.reset-traffic`, the console's "reset traffic"
+   * (FR-141, `POST /api/users/{userId}/actions/reset-traffic`, ADR-010). A
+   * user the panel does not know yet has no traffic to reset.
+   */
+  async resetTraffic(userId: string): Promise<{ reset: boolean }> {
+    const row = await this.infra.db.panelUser.findUnique({ where: { userId } });
+    if (!row || row.panelUserId === null) return { reset: false };
+    const client = await this.client();
+    try {
+      const updated = await client.users.resetTraffic(row.panelUserId);
+      await this.saveSnapshot(userId, updated, false);
+      return { reset: true };
+    } finally {
+      await client.close();
+    }
+  }
+
+  /**
+   * Queue consumer for `panel.delete-user`: section 19.5 anonymization deletes
+   * the panel user (`DELETE /api/users/{userId}`, ADR-010). A panel that no
+   * longer has the user answers 404, which is the state asked for. The local
+   * mapping goes too, so reconciliation does not look for the user again.
+   */
+  async deleteUser(userId: string): Promise<{ deleted: boolean }> {
+    const row = await this.infra.db.panelUser.findUnique({ where: { userId } });
+    if (!row) return { deleted: false };
+    if (row.panelUserId !== null) {
+      const client = await this.client();
+      try {
+        await client.users.delete(row.panelUserId);
+      } catch (error) {
+        if (!(error instanceof PanelError && error.status === 404)) throw error;
+      } finally {
+        await client.close();
+      }
+    }
+    await this.infra.db.panelUser.deleteMany({ where: { userId } });
+    return { deleted: true };
   }
 
   async verifyWebhook(

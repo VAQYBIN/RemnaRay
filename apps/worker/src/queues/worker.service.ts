@@ -261,10 +261,21 @@ function notifyCall(job: Job<Record<string, unknown>>): InternalCall {
   return { path: '/api/internal/v1/notify/send', body: job.data };
 }
 
-function panelCall(job: Job<Record<string, unknown>>): InternalCall {
-  if (job.name === 'panel.sync-user')
-    return { path: '/api/internal/v1/remnawave/sync-user', body: job.data };
-  return { path: '/api/internal/v1/remnawave/reconcile' };
+export function panelCall(job: Pick<Job<Record<string, unknown>>, 'name' | 'data'>): InternalCall {
+  switch (job.name) {
+    case 'panel.sync-user':
+      return { path: '/api/internal/v1/remnawave/sync-user', body: job.data };
+    case 'panel.reset-traffic':
+      return { path: '/api/internal/v1/remnawave/reset-traffic', body: job.data };
+    case 'panel.delete-user':
+      return { path: '/api/internal/v1/remnawave/delete-user', body: job.data };
+    case 'panel.reconcile-all':
+      return { path: '/api/internal/v1/remnawave/reconcile' };
+    default:
+      // A job this worker does not know fails rather than running something
+      // else: every panel job used to fall through to a full reconciliation.
+      throw new Error(`unknown panel job ${job.name}`);
+  }
 }
 
 function maintenanceCall(job: Job<Record<string, unknown>>): InternalCall {

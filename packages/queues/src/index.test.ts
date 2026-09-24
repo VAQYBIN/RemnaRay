@@ -137,3 +137,15 @@ describe('section 9.8 outgoing webhook retries', () => {
     expect(() => backoffStrategy(1, 'custom')).toThrow(/unknown backoff type/u);
   });
 });
+
+describe('the other panel writes', () => {
+  it.each(['panel.reset-traffic', 'panel.delete-user'])('retries %s like a sync', (name) => {
+    expect(
+      jobOptions({ id: '01a0bec6-c9b4-7329-95c1-a12cbf9679e2', name, jobId: 'panel:delete:u' }),
+    ).toMatchObject({
+      attempts: 10,
+      backoff: { type: 'exponential', delay: 5_000 },
+      jobId: 'panel-delete-u',
+    });
+  });
+});

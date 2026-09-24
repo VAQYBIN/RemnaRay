@@ -470,8 +470,32 @@ style-src 'unsafe-inline'; sandbox` and `nosniff`, which makes any theme
      A failed `m1.integration` leaves a Valkey client reconnecting for ever,
      so the run hangs instead of ending.
 
-   Still open: `panel.reset-traffic` and `panel.delete-user` are never performed (found
-   under item 5).
+   - **9b. Done 2026-09-25 — `panel.reset-traffic` and `panel.delete-user`
+     were never performed** (found under item 5). The console queued them
+     (FR-141 "reset traffic"; section 19.5 anonymization), but the worker's
+     `panelCall` sent every panel job other than `panel.sync-user` to
+     `/remnawave/reconcile`: the panel's traffic was never reset (only the
+     local copy was zeroed) and an anonymized user kept their panel user.
+     Now `RemnawaveService.resetTraffic` calls
+     `POST /api/users/{userId}/actions/reset-traffic` and stores the answer,
+     and `deleteUser` calls `DELETE /api/users/{userId}`, takes a 404 as
+     deleted and drops the `panel_users` row (a user never provisioned has
+     nothing to reset or delete). Both routes and the numeric id are the
+     ADR-010 findings for panel v3.4.4. Internal routes
+     `/api/internal/v1/remnawave/{reset-traffic,delete-user}`; the worker
+     routes the four panel job names explicitly and fails an unknown one.
+     Retries: those of `panel.sync-user` (EX-10; section 7.3 lists neither).
+     Regressions: `remnawave.service.test.ts` (the module's first tests; a
+     stub panel over HTTP: the path, 404 as deleted, a failing panel keeps
+     the mapping for the retry), `panel-call.test.ts`, `packages/queues`.
+     Verified: lint, typecheck, format, `pnpm -r test` (API 253, worker 13),
+     `pnpm test` 43, `test:m1` 2/2. **Not verified:** against a live panel.
+     **Found, not repaired:** the section 10 rules that reset traffic on a
+     same-plan renewal (`panel.sync-user` with `reason='renew'` calls
+     `resetTraffic` before `update`) and on a downgrade below the used traffic
+     (FR-023) are not implemented; every paid sync is `reason: 'paid'`.
+
+   Still open: the traffic resets on renewal and downgrade (found under 9b).
    Robokassa SuccessURL/FailURL landing and the `settings.fiscal.mode`
    vocabulary (found under 6c). Showing the available balance and held
    rewards to the customer (found under 7c). The Valkey `Idempotent-Replay`

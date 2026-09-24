@@ -11,6 +11,7 @@ import { z } from 'zod';
 
 import { RemnawaveService } from './remnawave.service';
 
+const userSchema = z.object({ userId: z.uuid() });
 const syncUserSchema = z.object({ userId: z.uuid(), reason: z.string().max(64).default('queue') });
 
 @Controller('api/internal/v1/remnawave')
@@ -25,6 +26,30 @@ export class RemnawaveInternalController {
     try {
       const result = await this.panel.syncUser(input.userId, input.reason);
       return { synced: result !== null };
+    } catch (error) {
+      throw new BadRequestException(`PANEL_UNAVAILABLE: ${String(error)}`);
+    }
+  }
+
+  /** Queue consumer for `panel.reset-traffic` (FR-141). */
+  @Post('reset-traffic')
+  @HttpCode(200)
+  async resetTraffic(@Body() body: unknown) {
+    const { userId } = userSchema.parse(body);
+    try {
+      return await this.panel.resetTraffic(userId);
+    } catch (error) {
+      throw new BadRequestException(`PANEL_UNAVAILABLE: ${String(error)}`);
+    }
+  }
+
+  /** Queue consumer for `panel.delete-user` (section 19.5). */
+  @Post('delete-user')
+  @HttpCode(200)
+  async deleteUser(@Body() body: unknown) {
+    const { userId } = userSchema.parse(body);
+    try {
+      return await this.panel.deleteUser(userId);
     } catch (error) {
       throw new BadRequestException(`PANEL_UNAVAILABLE: ${String(error)}`);
     }

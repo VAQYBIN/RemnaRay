@@ -1749,6 +1749,28 @@
         "responses": { "200": { "description": "Reconcile result" } }
       }
     },
+    "/api/internal/v1/remnawave/reset-traffic": {
+      "post": {
+        "operationId": "resetPanelTraffic",
+        "summary": "Job panel.reset-traffic: reset the user's traffic in the panel",
+        "responses": { "200": { "description": "OK" } },
+        "requestBody": {
+          "required": true,
+          "content": { "application/json": { "schema": { "type": "object" } } }
+        }
+      }
+    },
+    "/api/internal/v1/remnawave/delete-user": {
+      "post": {
+        "operationId": "deletePanelUser",
+        "summary": "Job panel.delete-user: delete the anonymized user's panel user",
+        "responses": { "200": { "description": "OK" } },
+        "requestBody": {
+          "required": true,
+          "content": { "application/json": { "schema": { "type": "object" } } }
+        }
+      }
+    },
     "/api/internal/v1/remnawave/sync-user": {
       "post": {
         "operationId": "syncPanelUser",

@@ -91,6 +91,10 @@ export function backoffStrategy(attemptsMade: number, type?: string): number {
 const RETRIES: Record<string, Pick<JobsOptions, 'attempts' | 'backoff'>> = {
   // 10 attempts, 5 s doubling: the longest wait is 1280 s, inside the 1 h cap.
   'panel.sync-user': { attempts: 10, backoff: { type: 'exponential', delay: 5_000 } },
+  // 7.3 does not list them; EX-10 queues every panel operation with retries,
+  // so the other panel writes get the sync's.
+  'panel.reset-traffic': { attempts: 10, backoff: { type: 'exponential', delay: 5_000 } },
+  'panel.delete-user': { attempts: 10, backoff: { type: 'exponential', delay: 5_000 } },
   'payments.apply-event': { attempts: 5, backoff: { type: 'exponential', delay: 2_000 } },
   'notify.send': { attempts: 3, backoff: { type: 'fixed', delay: 10_000 } },
   'broadcast.chunk': { attempts: 3 },
