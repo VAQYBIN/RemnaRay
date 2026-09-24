@@ -10,6 +10,7 @@ import Redis from 'ioredis';
 import { ApiClient } from './api-client.js';
 import { BotI18n } from './i18n.js';
 import { registerScreens } from './screens/index.js';
+import { isPaymentUpdate, registerStars } from './screens/stars.js';
 import { installConversations } from './conversations.js';
 import type { BotConfig, BotSession, RrContext } from './types.js';
 
@@ -89,7 +90,8 @@ export function createBot(options: {
       limit: 20,
       storageClient: redis,
       keyPrefix: 'rr:tg:limit:',
-      keyGenerator: (ctx) => ctx.from?.id.toString(),
+      // Stars payment updates are never limited (section 11.3.6).
+      keyGenerator: (ctx) => (isPaymentUpdate(ctx) ? undefined : ctx.from?.id.toString()),
     }),
   );
   bot.use(
@@ -119,6 +121,8 @@ export function createBot(options: {
     }
     await next();
   });
+  // Before conversations: an open dialog must not swallow `successful_payment`.
+  registerStars(bot, api);
   installConversations(bot, redis, api);
   bot.catch(async (error) => {
     const updateId = error.ctx.update.update_id;

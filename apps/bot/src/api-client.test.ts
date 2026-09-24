@@ -66,4 +66,58 @@ describe('ApiClient', () => {
     await api.forwardSupport(42, 7, 'hello');
     expect(body).toContain('hello');
   });
+
+  it('reads the code of a section 9.3 error envelope', async () => {
+    const api = new ApiClient({
+      fetchImpl: () =>
+        Promise.resolve(
+          Response.json(
+            { error: { code: 'INVOICE_EXPIRED', message: 'INVOICE_EXPIRED' } },
+            { status: 409 },
+          ),
+        ),
+    });
+    await expect(api.request('/failure')).rejects.toMatchObject({
+      status: 409,
+      code: 'INVOICE_EXPIRED',
+    });
+  });
+
+  it('hands Telegram Stars payment updates to the section 9.5 endpoints', async () => {
+    const requests: Array<{ url: string; body: unknown; actingUser: string | null }> = [];
+    const api = new ApiClient({
+      baseUrl: 'http://api.test',
+      fetchImpl: (input, init) => {
+        const request = new Request(input, init);
+        requests.push({
+          url: request.url,
+          body: JSON.parse(init?.body as string) as unknown,
+          actingUser: request.headers.get('x-acting-user'),
+        });
+        return Promise.resolve(Response.json({ ok: true }));
+      },
+    });
+    await api.starsCreateLink(42, 'invoice-1');
+    await api.starsPrecheckout({
+      telegramId: 42,
+      invoicePayload: 'inv_1',
+      totalAmount: 225,
+      currency: 'XTR',
+    });
+    await api.starsSuccessfulPayment({
+      telegramId: 42,
+      telegramPaymentChargeId: 'charge',
+      providerPaymentChargeId: 'provider',
+      invoicePayload: 'inv_1',
+      totalAmount: 225,
+      currency: 'XTR',
+    });
+    expect(requests.map((request) => request.url)).toEqual([
+      'http://api.test/api/internal/v1/stars/create-link',
+      'http://api.test/api/internal/v1/stars/precheckout',
+      'http://api.test/api/internal/v1/stars/successful-payment',
+    ]);
+    expect(requests[0]).toMatchObject({ body: { invoiceId: 'invoice-1' }, actingUser: '42' });
+    expect(requests[2]?.body).toMatchObject({ telegramPaymentChargeId: 'charge' });
+  });
 });

@@ -313,3 +313,22 @@ describe('SetupService finish (step 8)', () => {
     expect(test.cache.store.has(`rr:setup:${sessionId}`)).toBe(false);
   });
 });
+
+describe('SetupService payment providers (section 17.4 step 7)', () => {
+  it('checks Telegram Stars with the bot token saved in step 4 (ADR-012)', async () => {
+    const test = build();
+    const healthcheck = vi.fn().mockResolvedValue({ ok: true, latencyMs: 1 });
+    test.registry.get = () => ({
+      capabilities: { receipts: false, kind: 'stars' },
+      healthcheck,
+    });
+    await test.config.set({ bot: { token: '123:bot' } });
+    const { sessionId } = await test.service.token({ token: 'wizard-token' }, '10.0.0.9');
+
+    await test.service.checkProvider({ code: 'stars', config: { starsPerRub: 0.75 } }, sessionId);
+
+    expect(healthcheck).toHaveBeenCalledWith(
+      expect.objectContaining({ starsPerRub: 0.75, botToken: '123:bot' }),
+    );
+  });
+});

@@ -16,6 +16,7 @@ import { NotifyService } from '../notify/notify.service';
 import { PaymentProviderRegistry } from '../payments/payments.registry';
 import { PlansService } from '../plans/plans.service';
 import { ThemeService } from '../public/theme.service';
+import { withStarsRuntime } from '../payments/payments.service';
 import { encryptSetting } from '../settings/settings.crypto';
 import { SettingsService } from '../settings/settings.service';
 import {
@@ -194,7 +195,9 @@ export class SetupService {
     if (!this.providers.has(input.code)) throw new SetupFailure('NOT_FOUND', 404);
     const started = Date.now();
     try {
-      return await this.providers.get(input.code).healthcheck(input.config);
+      return await this.providers
+        .get(input.code)
+        .healthcheck(await this.providerRuntime(input.code, input.config));
     } catch (error) {
       return { ok: false, latencyMs: Date.now() - started, error: this.reason(error) };
     }
@@ -421,7 +424,7 @@ export class SetupService {
       if (!this.providers.has(provider.code)) throw new SetupFailure('NOT_FOUND', 404);
       const definition = this.providers.get(provider.code);
       const health = await definition
-        .healthcheck(provider.config)
+        .healthcheck(await this.providerRuntime(provider.code, provider.config))
         .catch((error: unknown) => ({ ok: false, latencyMs: 0, error: this.reason(error) }));
       await this.infra.db.paymentProvider.upsert({
         where: { code: provider.code },
@@ -544,6 +547,11 @@ export class SetupService {
       data: { currentStep: next, data: data as never, updatedAt: new Date() },
     });
     await this.settings.set({ setup: { step: next } });
+  }
+
+  /** ADR-012: Stars are checked with the bot token step 4 saved, not a token of their own. */
+  private providerRuntime(code: string, config: Record<string, unknown>) {
+    return code === 'stars' ? withStarsRuntime(config, this.settings) : Promise.resolve(config);
   }
 
   private async session(sessionId: string): Promise<SetupSession> {

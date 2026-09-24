@@ -1,5 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { createHash } from 'node:crypto';
+import { Prisma } from '@remnaray/db';
 import { paymentsEventsTotal } from '@remnaray/metrics';
 
 import { Infrastructure } from '../../infra/infra.module';
@@ -35,6 +36,7 @@ export class PaymentsService {
     const user = await this.infra.db.user.findUniqueOrThrow({ where: { id: input.userId } });
     let amount = input.amountMinor ?? 0n;
     let description = 'RemnaRay';
+    let listPrice: { priceMinor: bigint; priceOverrides: unknown } | undefined;
     if (input.kind !== 'topup') {
       if (!input.planId) throw new PaymentError('PLAN_UNAVAILABLE');
       const plan = await this.infra.db.plan.findFirst({
@@ -42,6 +44,7 @@ export class PaymentsService {
       });
       if (!plan) throw new PaymentError('PLAN_UNAVAILABLE');
       amount = plan.priceMinor;
+      listPrice = { priceMinor: plan.priceMinor, priceOverrides: plan.priceOverrides };
       if (input.kind === 'plan_change') {
         const current = await this.infra.db.subscription.findFirst({
           where: { userId: input.userId, status: 'active' },
@@ -64,15 +67,23 @@ export class PaymentsService {
     const discount = input.discountMinor ?? 0n;
     if (discount > 0n) amount = amount > discount ? amount - discount : 1n;
     if (amount <= 0n) throw new PaymentError('PLAN_UNAVAILABLE', 'Amount must be positive');
-    const expiresAt = new Date(Date.now() + 30 * 60_000);
     const provider = this.providers.get(input.provider);
+    const expiresAt = new Date(
+      Date.now() + (await this.invoiceTtlMinutes(input.provider)) * 60_000,
+    );
     const config = await this.providerConfig(input.provider);
+    // The row's id is taken before the provider is called: Telegram Stars
+    // carry it in the invoice payload `inv_<id>` (section 11.3.6).
+    const [{ id: shopInvoiceId } = { id: '' }] = await this.infra.db.$queryRaw<
+      Array<{ id: string }>
+    >(Prisma.sql`SELECT uuidv7()::text AS id`);
     const fiscalMode = this.settings ? String(await this.settings.get('fiscal.mode')) : 'none';
     const fiscalEmail = this.settings
       ? String(await this.settings.get('fiscal.fallback_email'))
       : '';
     const params = {
       invoiceId: input.idempotencyKey,
+      shopInvoiceId,
       amountMinor: amount,
       currency: 'RUB' as const,
       description,
@@ -85,6 +96,7 @@ export class PaymentsService {
       returnUrl: `https://${process.env.RR_DOMAIN ?? 'localhost'}/pay/success`,
       failUrl: `https://${process.env.RR_DOMAIN ?? 'localhost'}/pay/fail`,
       expiresAt,
+      ...(listPrice ? { plan: listPrice } : {}),
       ...(fiscalMode === 'receipt' && provider.capabilities.receipts
         ? {
             receipt: {
@@ -107,6 +119,7 @@ export class PaymentsService {
     };
     const created = await provider.createInvoice(params, config);
     const invoiceInput = {
+      id: shopInvoiceId,
       userId: input.userId,
       kind: input.kind,
       ...(input.planId ? { planId: input.planId } : {}),
@@ -279,16 +292,45 @@ export class PaymentsService {
     return this.repository.refund(transactionId, amountMinor, reason);
   }
 
+  /** Section 11.4: `invoice.ttl_minutes`, and `ttl_minutes_crypto` for CryptoBot and Stars. */
+  private async invoiceTtlMinutes(provider: string): Promise<number> {
+    const crypto = provider === 'cryptobot' || provider === 'stars';
+    const value = this.settings
+      ? await this.settings.get(crypto ? 'invoice.ttl_minutes_crypto' : 'invoice.ttl_minutes')
+      : undefined;
+    return typeof value === 'number' && value > 0 ? value : crypto ? 60 : 30;
+  }
+
   private async providerConfig(code: string): Promise<Record<string, unknown>> {
     const row = await this.infra.db.paymentProvider.findUnique({ where: { code } });
     if (!row?.enabled && code !== 'mock' && code !== 'balance')
       throw new PaymentError('PROVIDER_UNAVAILABLE');
-    if (!row?.configEnc) return {};
-    return decryptSetting(
-      JSON.parse(row.configEnc) as unknown,
-      process.env.RR_APP_KEY ?? '',
-    ) as Record<string, unknown>;
+    // `config_enc` holds the `v1:<nonce>:<ciphertext>:<tag>` string that the
+    // console and the setup wizard write (`encryptSetting(...).enc`).
+    const stored = row?.configEnc
+      ? (decryptSetting({ enc: row.configEnc }, process.env.RR_APP_KEY ?? '') as Record<
+          string,
+          unknown
+        >)
+      : {};
+    return code === 'stars' ? withStarsRuntime(stored, this.settings) : stored;
   }
+}
+
+/**
+ * ADR-012: the Stars provider uses the bot's own token from `settings.bot.token`,
+ * and the same Bot API root every other Telegram call of the API uses.
+ */
+export async function withStarsRuntime(
+  stored: Record<string, unknown>,
+  settings: Pick<SettingsService, 'get'> | undefined,
+): Promise<Record<string, unknown>> {
+  const token = settings ? await settings.get('bot.token') : undefined;
+  return {
+    ...stored,
+    ...(typeof token === 'string' && token ? { botToken: token } : {}),
+    apiBase: process.env.RR_TELEGRAM_API_URL ?? 'https://api.telegram.org',
+  };
 }
 
 function toRubMinor(value: string): bigint {

@@ -4,13 +4,18 @@ import { InlineKeyboard, type Bot } from 'grammy';
 import { ApiClientError, type ApiClient } from '../api-client.js';
 import type { RrContext } from '../types.js';
 import { showAccount, showHome, showTrialConfirm } from './home.js';
-import { createPayment, checkPayment } from './payments.js';
+import { createPayment, checkPayment, showInvoice } from './payments.js';
+import { STARS_START_PAYLOAD, sendStarsInvoice } from './stars.js';
 import { showPlan, showPlans } from './plans.js';
 import { showSubscription, showClients, showQr, confirmRevoke } from './subscription.js';
 import { backButton, formatMinor, show } from './common.js';
 
 export function registerScreens(bot: Bot<RrContext>, api: ApiClient): void {
-  bot.command('start', (ctx) => showHome(ctx, api));
+  bot.command('start', (ctx) => {
+    // FR-134: the site's Stars button opens `t.me/<bot>?start=inv_<id>`.
+    const invoiceId = STARS_START_PAYLOAD.exec(ctx.match.trim())?.[1];
+    return invoiceId ? sendStarsInvoice(ctx, api, invoiceId) : showHome(ctx, api);
+  });
   bot.command('menu', (ctx) => showHome(ctx, api));
   bot.command('buy', (ctx) => showPlans(ctx, api));
   bot.command('sub', (ctx) => showSubscription(ctx, api));
@@ -123,11 +128,7 @@ async function createTopup(
     randomUUID(),
   );
   ctx.session.lastInvoiceId = invoice.id;
-  await show(
-    ctx,
-    ctx.t('bot.screen.pay.wait', { price: formatMinor(amountMinor), until: invoice.expiresAt }),
-    backButton(ctx),
-  );
+  await showInvoice(ctx, invoice);
 }
 
 async function showReferrals(ctx: RrContext, api: ApiClient): Promise<void> {

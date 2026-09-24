@@ -25,7 +25,10 @@ export type ReceiptData = {
 };
 
 export type CreateInvoiceParams = {
+  /** The shop's idempotency key, which most providers use as their invoice id. */
   invoiceId: string;
+  /** `invoices.id` of the row about to be written (Stars payload `inv_<id>`). */
+  shopInvoiceId: string;
   amountMinor: bigint;
   currency: 'RUB';
   description: string;
@@ -34,6 +37,8 @@ export type CreateInvoiceParams = {
   failUrl: string;
   expiresAt: Date;
   receipt?: ReceiptData;
+  /** The plan's list price and `price_overrides`, for providers pricing in their own currency. */
+  plan?: { priceMinor: bigint; priceOverrides: unknown };
 };
 
 export type CreatedInvoice = {

@@ -68,6 +68,8 @@
   "bot.error.too_many_attempts": "Слишком много неверных вводов. Диалог завершён.",
   "bot.error.bot_blocked": "Не удалось отправить сообщение: пользователь заблокировал бота.",
   "bot.error.invoice_expired": "Счёт истёк. Создайте новый.",
+  "bot.error.invoice_unavailable": "Этот счёт больше нельзя оплатить. Создайте новый.",
+  "bot.error.payment_unavailable": "Не удалось проверить счёт. Попробуйте оплатить ещё раз через минуту.",
   "bot.error.invalid_amount": "Сумма вне допустимого диапазона.",
   "bot.error.provider_unavailable": "Способ оплаты временно недоступен.",
   "bot.error.invalid_input": "Неверный формат. Попробуйте ещё раз.",

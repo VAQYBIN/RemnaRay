@@ -32,6 +32,41 @@ describe('Telegram mock Bot API', () => {
     }
   });
 
+  it('answers the Telegram Stars payment methods (Bot API 10.3)', async () => {
+    const mock = new TelegramMock();
+    await mock.start();
+    try {
+      const bot = new Bot(mock.token, { client: { apiRoot: mock.apiRoot } });
+      const link = await bot.api.createInvoiceLink('Plan', 'Plan', 'inv_1', '', 'XTR', [
+        { label: 'Plan', amount: 225 },
+      ]);
+      expect(link).toMatch(/^https:\/\/t\.me\/\$/u);
+      await expect(
+        bot.api.sendInvoice(42, 'Plan', 'Plan', 'inv_1', 'XTR', [{ label: 'Plan', amount: 225 }]),
+      ).resolves.toMatchObject({ chat: { id: 42 }, invoice: { currency: 'XTR' } });
+      await expect(bot.api.answerPreCheckoutQuery('query-1', true)).resolves.toBe(true);
+      expect(mock.calls.map((call) => call.method)).toEqual([
+        'createInvoiceLink',
+        'sendInvoice',
+        'answerPreCheckoutQuery',
+      ]);
+      expect(mock.calls[1]?.payload).toMatchObject({ payload: 'inv_1', currency: 'XTR' });
+    } finally {
+      await mock.stop();
+    }
+  });
+
+  it('answers every other method instead of leaving the request open', async () => {
+    const mock = new TelegramMock();
+    await mock.start();
+    try {
+      const bot = new Bot(mock.token, { client: { apiRoot: mock.apiRoot } });
+      await expect(bot.api.editMessageText(42, 1, 'edited')).resolves.toBeTruthy();
+    } finally {
+      await mock.stop();
+    }
+  });
+
   it('runs the first E2E-01 bot interaction through a real grammY handler', async () => {
     const mock = new TelegramMock();
     await mock.start();

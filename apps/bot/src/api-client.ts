@@ -84,6 +84,16 @@ export type InvoiceView = {
   createdAt: string;
 };
 
+export type StarsInvoice = {
+  invoiceId: string;
+  link: string | null;
+  title: string;
+  description: string;
+  payload: string;
+  currency: 'XTR';
+  amount: number;
+};
+
 export type ReferralState = {
   code: string;
   link: string;
@@ -119,6 +129,7 @@ export class ApiClient {
       userId?: string | number | bigint;
       body?: unknown;
       idempotencyKey?: string;
+      timeoutMs?: number;
     } = {},
   ): Promise<T> {
     const headers: Record<string, string> = {
@@ -131,7 +142,7 @@ export class ApiClient {
     const request: RequestInit = {
       method: options.method ?? 'GET',
       headers,
-      signal: AbortSignal.timeout(10_000),
+      signal: AbortSignal.timeout(options.timeoutMs ?? 10_000),
       redirect: 'error',
       ...(options.body === undefined ? {} : { body: JSON.stringify(options.body) }),
     };
@@ -145,16 +156,8 @@ export class ApiClient {
         payload = text;
       }
     }
-    if (!response.ok) {
-      const code =
-        typeof payload === 'object' &&
-        payload !== null &&
-        'code' in payload &&
-        typeof payload.code === 'string'
-          ? payload.code
-          : `HTTP_${String(response.status)}`;
-      throw new ApiClientError(response.status, code, payload);
-    }
+    if (!response.ok)
+      throw new ApiClientError(response.status, errorCode(payload, response.status), payload);
     return payload as T;
   }
 
@@ -337,6 +340,44 @@ export class ApiClient {
     });
   }
 
+  /** Section 11.3.6 `stars/create-link`: the pending invoice to `sendInvoice` for `/start inv_<id>`. */
+  starsCreateLink(telegramId: number, invoiceId: string) {
+    return this.request<StarsInvoice>('/api/internal/v1/stars/create-link', {
+      method: 'POST',
+      userId: telegramId,
+      body: { invoiceId },
+    });
+  }
+
+  /** Section 9.5 `stars/precheckout`; Telegram waits ten seconds for the answer. */
+  starsPrecheckout(body: {
+    telegramId: number;
+    invoicePayload: string;
+    totalAmount: number;
+    currency: string;
+  }) {
+    return this.request<{ ok: true }>('/api/internal/v1/stars/precheckout', {
+      method: 'POST',
+      body,
+      timeoutMs: 7_000,
+    });
+  }
+
+  /** Section 9.5 `stars/successful-payment`, idempotent by `telegramPaymentChargeId`. */
+  starsSuccessfulPayment(body: {
+    telegramId: number;
+    telegramPaymentChargeId: string;
+    providerPaymentChargeId: string;
+    invoicePayload: string;
+    totalAmount: number;
+    currency: string;
+  }) {
+    return this.request<{ ok: true; invoiceId?: string; status?: string }>(
+      '/api/internal/v1/stars/successful-payment',
+      { method: 'POST', body },
+    );
+  }
+
   markBlocked(telegramId: number): Promise<unknown> {
     return this.request<unknown>(`/api/internal/v1/users/${String(telegramId)}/bot-blocked`, {
       method: 'POST',
@@ -348,4 +389,20 @@ export class ApiClient {
       method: 'POST',
     });
   }
+}
+
+/** Section 9.3 answers `{ error: { code } }`; a few internal routes answer `{ code }`. */
+function errorCode(payload: unknown, status: number): string {
+  if (typeof payload === 'object' && payload !== null) {
+    if ('code' in payload && typeof payload.code === 'string') return payload.code;
+    if (
+      'error' in payload &&
+      typeof payload.error === 'object' &&
+      payload.error !== null &&
+      'code' in payload.error &&
+      typeof payload.error.code === 'string'
+    )
+      return payload.error.code;
+  }
+  return `HTTP_${String(status)}`;
 }

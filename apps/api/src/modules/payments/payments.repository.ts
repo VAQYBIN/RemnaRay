@@ -25,6 +25,8 @@ export interface RewardHooksPort {
 }
 
 export type InvoiceInput = {
+  /** A pre-allocated `invoices.id`; the database default applies when absent. */
+  id?: string | undefined;
   userId: string;
   kind: 'purchase' | 'topup' | 'plan_change';
   planId?: string | undefined;
@@ -90,6 +92,7 @@ export class PaymentsRepository {
       invoicesTotal.inc({ provider: input.provider, status: 'pending' });
       return await this.prisma.invoice.create({
         data: {
+          ...(input.id ? { id: input.id } : {}),
           userId: input.userId,
           kind: input.kind,
           planId: input.planId ?? null,
@@ -352,6 +355,14 @@ export class PaymentsRepository {
     const parsed = event.raw as { providerInvoiceId?: string; paidAmountMinorRub?: string };
     await this.prisma
       .$transaction(async (tx) => {
+        // Two deliveries of one event may both have read `processed_at` as
+        // null above. The event row is the lock that makes applying it once:
+        // the second waits here and then finds the first one's mark.
+        const eventRows = await tx.$queryRaw<Array<{ processedAt: Date | null }>>(Prisma.sql`
+        SELECT processed_at AS "processedAt" FROM payment_events
+        WHERE id = ${event.id}::uuid FOR UPDATE
+      `);
+        if (eventRows[0]?.processedAt) return;
         const invoiceRows = await tx.$queryRaw<
           Array<{
             id: string;

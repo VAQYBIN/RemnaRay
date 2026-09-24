@@ -121,13 +121,41 @@ export class TelegramMock {
       method === 'answerCallbackQuery' ||
       method === 'answerPreCheckoutQuery' ||
       method === 'setMyCommands'
-    )
+    ) {
       this.ok(response, true);
-    return;
-    if (method === 'createInvoiceLink')
-      this.ok(response, `https://t.me/${this.user.username}?start=mock_invoice`);
-    return;
-    this.ok(response, { message_id: this.nextMessage++ });
+      return;
+    }
+    // Bot API 10.3: `createInvoiceLink` returns the link as a string.
+    if (method === 'createInvoiceLink') {
+      this.ok(response, `https://t.me/$mock_invoice_${String(this.nextMessage++)}`);
+      return;
+    }
+    if (method === 'sendInvoice') {
+      const chatId = Number(payload.chat_id);
+      this.ok(response, {
+        message_id: this.nextMessage++,
+        date: Math.floor(Date.now() / 1000),
+        chat: { id: chatId, type: 'private' },
+        invoice: {
+          title: payload.title,
+          description: payload.description,
+          start_parameter: payload.start_parameter ?? '',
+          currency: payload.currency,
+          total_amount: Array.isArray(payload.prices)
+            ? (payload.prices as Array<{ amount: number }>).reduce(
+                (sum, price) => sum + price.amount,
+                0,
+              )
+            : 0,
+        },
+      });
+      return;
+    }
+    this.ok(response, {
+      message_id: this.nextMessage++,
+      date: Math.floor(Date.now() / 1000),
+      chat: { id: Number(payload.chat_id), type: 'private' },
+    });
   }
 
   private ok(response: ServerResponse, result: unknown): void {

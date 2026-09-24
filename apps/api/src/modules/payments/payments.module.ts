@@ -5,14 +5,19 @@ import { SettingsModule } from '../settings/settings.module';
 import { SettingsService } from '../settings/settings.service';
 import { RewardsModule } from '../rewards/rewards.module';
 import { RewardsService } from '../rewards/rewards.service';
-import { PaymentsInternalController, PaymentsWebhookController } from './payments.controller';
+import {
+  PaymentsInternalController,
+  PaymentsWebhookController,
+  StarsInternalController,
+} from './payments.controller';
 import { PaymentsRepository } from './payments.repository';
 import { PaymentProviderRegistry, createPaymentProviderRegistry } from './payments.registry';
 import { PaymentsService } from './payments.service';
+import { StarsService } from './stars.service';
 
 @Module({
   imports: [SettingsModule, RewardsModule],
-  controllers: [PaymentsWebhookController, PaymentsInternalController],
+  controllers: [PaymentsWebhookController, PaymentsInternalController, StarsInternalController],
   providers: [
     {
       provide: PaymentProviderRegistry,
@@ -34,6 +39,12 @@ import { PaymentsService } from './payments.service';
         providers: PaymentProviderRegistry,
         settings: SettingsService,
       ) => new PaymentsService(infra, repository, providers, settings),
+    },
+    {
+      provide: StarsService,
+      inject: [Infrastructure, PaymentsRepository],
+      useFactory: (infra: Infrastructure, repository: PaymentsRepository) =>
+        new StarsService(infra, repository),
     },
   ],
   exports: [PaymentsService, PaymentProviderRegistry],

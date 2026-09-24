@@ -1,8 +1,19 @@
-import { Controller, Headers, Param, Post, Req, Res, UseGuards } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Headers,
+  HttpCode,
+  Param,
+  Post,
+  Req,
+  Res,
+  UseGuards,
+} from '@nestjs/common';
 import type { RawBodyRequest } from '@nestjs/common';
 import type { FastifyReply, FastifyRequest } from 'fastify';
 
 import { PaymentsService } from './payments.service';
+import { StarsService } from './stars.service';
 import { InternalTokenGuard } from '../auth/auth.guards';
 
 @Controller('webhooks')
@@ -50,5 +61,30 @@ export class PaymentsInternalController {
   @Post('poll-pending')
   poll() {
     return this.payments.pollPending();
+  }
+}
+
+/** Section 9.5: the bot hands Telegram Stars payment updates to the shop here. */
+@Controller('api/internal/v1/stars')
+@UseGuards(InternalTokenGuard)
+export class StarsInternalController {
+  constructor(private readonly stars: StarsService) {}
+
+  @Post('create-link')
+  @HttpCode(200)
+  createLink(@Headers('x-acting-user') actingUser: string | undefined, @Body() body: unknown) {
+    return this.stars.invoiceForBot(actingUser, body);
+  }
+
+  @Post('precheckout')
+  @HttpCode(200)
+  precheckout(@Body() body: unknown) {
+    return this.stars.precheckout(body);
+  }
+
+  @Post('successful-payment')
+  @HttpCode(200)
+  successfulPayment(@Body() body: unknown) {
+    return this.stars.successfulPayment(body);
   }
 }

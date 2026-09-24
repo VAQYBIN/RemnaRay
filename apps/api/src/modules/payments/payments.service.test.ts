@@ -1,6 +1,8 @@
-import { describe, expect, it, vi } from 'vitest';
+import { randomBytes } from 'node:crypto';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import type { Infrastructure } from '../../infra/infra.module';
+import { encryptSetting } from '../settings/settings.crypto';
 import type { PaymentsRepository } from './payments.repository';
 import { createPaymentProviderRegistry } from './payments.registry';
 import { PaymentsService } from './payments.service';
@@ -60,5 +62,80 @@ describe('PaymentsService.receiveWebhook (sections 9.7, 11.3.6)', () => {
       ).rejects.toMatchObject({ code: 'WEBHOOK_NOT_SUPPORTED' });
       expect(repository.insertEvent).not.toHaveBeenCalled();
     }
+  });
+});
+
+describe('PaymentsService provider configuration', () => {
+  const appKey = randomBytes(32).toString('base64');
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    vi.unstubAllEnvs();
+  });
+
+  it('reads the configuration the console and the setup wizard store', async () => {
+    vi.stubEnv('RR_APP_KEY', appKey);
+    vi.stubEnv('RR_TELEGRAM_API_URL', 'http://telegram.test');
+    const requests: string[] = [];
+    vi.stubGlobal('fetch', (url: string) => {
+      requests.push(url);
+      return Promise.resolve(Response.json({ ok: true, result: 'https://t.me/$link' }));
+    });
+    const db = {
+      paymentProvider: {
+        findUnique: vi.fn().mockResolvedValue({
+          code: 'stars',
+          enabled: true,
+          // Exactly what ProvidersService.update and SetupService write.
+          configEnc: encryptSetting({ starsPerRub: 0.75 }, appKey).enc,
+        }),
+      },
+      user: {
+        findUniqueOrThrow: vi
+          .fn()
+          .mockResolvedValue({ id: 'user-1', telegramId: 42n, email: null, language: 'ru' }),
+      },
+      $queryRaw: vi.fn().mockResolvedValue([{ id: '0199aaaa-bbbb-7ccc-8ddd-eeeeeeeeeeee' }]),
+    };
+    const repository = {
+      findByIdempotencyKey: vi.fn().mockResolvedValue(null),
+      createInvoice: vi
+        .fn()
+        .mockImplementation((input: Record<string, unknown>) =>
+          Promise.resolve({ ...input, status: 'pending' }),
+        ),
+      findInvoice: vi.fn().mockResolvedValue({ id: 'found' }),
+    };
+    const service = new PaymentsService(
+      { db } as unknown as Infrastructure,
+      repository as unknown as PaymentsRepository,
+      createPaymentProviderRegistry({}),
+      {
+        get: (key: string) => Promise.resolve(key === 'bot.token' ? '123:bot' : undefined),
+      } as never,
+    );
+
+    await service.createInvoice({
+      userId: 'user-1',
+      kind: 'topup',
+      provider: 'stars',
+      amountMinor: 10000n,
+      idempotencyKey: 'key-1',
+    });
+
+    expect(requests).toEqual(['http://telegram.test/bot123:bot/createInvoiceLink']);
+    expect(repository.createInvoice).toHaveBeenCalledWith(
+      expect.objectContaining({
+        id: '0199aaaa-bbbb-7ccc-8ddd-eeeeeeeeeeee',
+        providerInvoiceId: 'inv_0199aaaa-bbbb-7ccc-8ddd-eeeeeeeeeeee',
+        providerAmount: '75',
+        providerCurrency: 'XTR',
+        paymentUrl: 'https://t.me/$link',
+      }),
+    );
+    // Section 11.4: Stars invoices live `invoice.ttl_minutes_crypto`, 60 by default.
+    const [created] = repository.createInvoice.mock.calls[0] as [{ expiresAt: Date }];
+    const minutes = (created.expiresAt.getTime() - Date.now()) / 60_000;
+    expect(minutes).toBeGreaterThan(59);
+    expect(minutes).toBeLessThanOrEqual(60);
   });
 });

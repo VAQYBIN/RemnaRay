@@ -50,8 +50,73 @@ tasks; no new TASK or milestone is started.
    the idempotency key instead of `inv_<invoiceId>`). Keep Stars disabled
    until item 2a lands.
 
-   - **2a.** Implement the section 9.5 / 11.3.6 Stars path (contract
-     verification of the Telegram Bot API payments methods required first).
+   - **2a. Done — Telegram Stars payment path** (sections 9.5, 11.3.6, 11.4;
+     completes TASK-M2-008's acceptance). Contract verified on 2026-09-25
+     against Bot API 10.3 (`createInvoiceLink`, `sendInvoice`,
+     `answerPreCheckoutQuery`, `PreCheckoutQuery`, `SuccessfulPayment`: title
+     1–32, description 1–255, payload 1–128 bytes, empty `provider_token`,
+     one price for XTR, ten-second pre-checkout deadline) and the installed
+     grammY 1.46 signatures; Context7 had no grammY payments documentation.
+     - API: `StarsService` and `POST /api/internal/v1/stars/{create-link,
+precheckout,successful-payment}`. Precheckout approves only a pending,
+       unexpired invoice of the payer in XTR at exactly `provider_amount`
+       (409 `INVOICE_NOT_FOUND|INVOICE_NOT_PENDING|INVOICE_EXPIRED|
+AMOUNT_MISMATCH`); the precheckout body adds `totalAmount`/`currency`
+       to the section 9.5 shape because the amount check needs them.
+       Successful payment stores the event under `telegram_payment_charge_id`
+       and applies it inline; a redelivery re-applies (no-op once processed)
+       and a failure propagates. No outbox job is added: the bot stream is
+       the retry, which avoids two appliers racing on one event.
+     - Provider: payload `inv_<invoices.id>` (the id is taken from
+       PostgreSQL `uuidv7()` before the provider call), price
+       `price_overrides.XTR` scaled by any discount, else
+       `ceil(amount × starsPerRub / 100)`, min 1; exact `fx_rate`; config is
+       `{starsPerRub}` and the token comes from `bot.token` (ADR-012) in
+       payments, console healthcheck and the setup wizard; healthcheck calls
+       `getMe`. Invoice TTL now reads `invoice.ttl_minutes` /
+       `ttl_minutes_crypto` (60 for CryptoBot and Stars).
+     - Bot: handlers for `pre_checkout_query` (localized refusal),
+       `message:successful_payment` (throws on failure so the update stays
+       pending) and `/start inv_<id>` (`sendInvoice` with a start parameter
+       so a forwarded copy cannot be paid by someone else); registered before
+       conversations and exempt from the per-user rate limit; the Pay button
+       uses `starsInvoiceLink`; top-ups now show the invoice screen.
+       `ApiClient` reads `{error:{code}}` envelopes (which also makes the
+       existing `REVOKE_RATE_LIMITED` check reachable).
+     - Site: the Stars button opens `t.me/<bot>?start=inv_<id>` (FR-134).
+     - `telegram-mock` answered nothing for `sendInvoice` and never reached
+       its `createInvoiceLink` branch (unbraced `return`); fixed and tested.
+     - **Critical fix found on the way:** `PaymentsService.providerConfig`
+       `JSON.parse`d `config_enc`, which the console and the setup wizard
+       store as the `v1:…` string, so every provider configured there threw
+       on invoice creation and webhooks. Now read as `{ enc }`; regression in
+       `payments.service.test.ts` and the Stars integration test.
+     - Independent diff review → `applyEvent` now locks the event row and
+       re-checks `processed_at` inside the transaction, so concurrent
+       deliveries of one event apply once without an error (reproduced first
+       with three concurrent deliveries on an `underpaid` invoice).
+     - Verified locally: API 189, bot 24, web 30, telegram-mock 5,
+       `pnpm -r test`, `pnpm test` (43), lint, typecheck, typecheck:e2e,
+       format, build, i18n (1496), OpenAPI regenerated (3 routes),
+       `pnpm test:m2` 2/2 including the new `m2.stars.integration.test.mjs`
+       (duplicate → one transaction, EX-02 → balance, amount/owner refusals,
+       concurrent redelivery), `pnpm test:m4` 4/4, `pnpm test:e2e` 27 passed /
+       1 skipped / 1 failed (the pre-existing locale failure). Not verified:
+       a real Telegram Stars payment (TASK-M6 manual acceptance, 26.4 B9).
+     - **Open product/accounting decisions (not implemented, spec silent):**
+       (a) a second, different `successful_payment` for an invoice already
+       `paid` — possible if the user pays two copies of one Stars invoice
+       before the first is applied — is recorded but credits nothing, since
+       `transactions.invoice_id` is unique; (b) a `paid` event on a
+       `canceled` invoice (all providers) is applied as an on-time purchase,
+       while 11.4 makes `canceled` terminal. Both need a rule, e.g. balance
+       credit with an alert as in EX-02.
+     - **Recorded debts:** the bot stream retries a permanently failing
+       update every 60 s forever with no delivery limit or alert (ingress,
+       all update kinds); a cold session can make the pre-checkout answer
+       approach the ten-second deadline (upsert + API call); a
+       `successful_payment` naming no known invoice is kept as
+       `INVOICE_NOT_FOUND` without an alert.
    - **2b.** Pre-existing E2E locale regression from `0c79ae7` (see below).
 
 3. CryptoBot invoice amount is divided by 100 twice (`amount()` already

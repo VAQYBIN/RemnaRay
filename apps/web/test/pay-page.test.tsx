@@ -58,6 +58,19 @@ describe('FR-134 / AC-134: payment page', () => {
     expect(markup).toContain('https://t.me/manta_bot?start=inv_inv-1');
   });
 
+  it('opens the bot even when the Stars invoice already carries its own link', async () => {
+    const markup = await page(
+      invoice({
+        provider: 'stars',
+        paymentUrl: undefined,
+        starsInvoiceLink: 'https://t.me/$direct-invoice',
+      }),
+    );
+
+    expect(markup).toContain('https://t.me/manta_bot?start=inv_inv-1');
+    expect(markup).not.toContain('$direct-invoice');
+  });
+
   it('stops offering the check action and links to the subscription once paid', async () => {
     const markup = await page(invoice({ status: 'paid', terminal: true }));
 

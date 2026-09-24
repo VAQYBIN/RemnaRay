@@ -114,4 +114,25 @@ describe('ProvidersService (AC-061)', () => {
     expect(JSON.stringify(masked.after)).not.toContain('live_abcdef123456');
     expect(JSON.stringify(masked.after)).toContain('3456');
   });
+
+  it('checks Stars with the bot token from settings (ADR-012)', async () => {
+    const healthcheck = vi.fn().mockResolvedValue({ ok: true, latencyMs: 1 });
+    const test = service([{ ...row, code: 'stars' }], { ok: true, latencyMs: 1 });
+    test.instance = new ProvidersService(
+      { db: test.db } as never,
+      {
+        has: () => true,
+        get: () => ({ capabilities: { receipts: false, kind: 'stars' }, healthcheck }),
+      } as never,
+      {
+        get: (key: string) => Promise.resolve(key === 'bot.token' ? '123:bot' : undefined),
+      } as never,
+    );
+
+    await test.instance.healthcheck('stars');
+
+    expect(healthcheck).toHaveBeenCalledWith(
+      expect.objectContaining({ botToken: '123:bot', apiBase: expect.any(String) as string }),
+    );
+  });
 });

@@ -68,6 +68,8 @@
   "bot.error.too_many_attempts": "Too many invalid inputs. The dialog was closed.",
   "bot.error.bot_blocked": "The message could not be delivered because the bot is blocked.",
   "bot.error.invoice_expired": "The invoice has expired. Create a new one.",
+  "bot.error.invoice_unavailable": "This invoice can no longer be paid. Create a new one.",
+  "bot.error.payment_unavailable": "The invoice could not be checked. Try paying again in a minute.",
   "bot.error.invalid_amount": "The amount is outside the allowed range.",
   "bot.error.provider_unavailable": "Payment methods are temporarily unavailable.",
   "bot.error.invalid_input": "Invalid format. Try again.",

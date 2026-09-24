@@ -1,10 +1,12 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { Injectable, NotFoundException, Optional } from '@nestjs/common';
 import { z } from 'zod';
 
 import { Infrastructure } from '../../infra/infra.module';
 import { Audited } from '../admin/audit.interceptor';
 import { PaymentProviderRegistry } from '../payments/payments.registry';
+import { withStarsRuntime } from '../payments/payments.service';
 import { decryptSetting, encryptSetting } from '../settings/settings.crypto';
+import { SettingsService } from '../settings/settings.service';
 
 const providerPatchSchema = z.object({
   enabled: z.boolean().optional(),
@@ -36,6 +38,7 @@ export class ProvidersService {
   constructor(
     private readonly infra: Infrastructure,
     private readonly registry: PaymentProviderRegistry,
+    @Optional() private readonly settings?: SettingsService,
   ) {}
 
   async list() {
@@ -96,7 +99,10 @@ export class ProvidersService {
     const started = Date.now();
     let result: { ok: boolean; latencyMs: number; error?: string };
     try {
-      result = await provider.healthcheck(this.config(row.configEnc));
+      const config = this.config(row.configEnc);
+      result = await provider.healthcheck(
+        code === 'stars' ? await withStarsRuntime(config, this.settings) : config,
+      );
     } catch (error) {
       result = { ok: false, latencyMs: Date.now() - started, error: String(error).slice(0, 300) };
     }

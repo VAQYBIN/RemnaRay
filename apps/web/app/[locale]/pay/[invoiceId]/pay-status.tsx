@@ -104,9 +104,10 @@ export default function PayStatus({
     <ResourceSection refresh={resource.refresh} state={resource.state}>
       {(data) => {
         const remaining = new Date(data.expiresAt).getTime() - now;
-        const starsLink =
-          data.starsInvoiceLink ??
-          (botUsername ? `https://t.me/${botUsername}?start=inv_${data.id}` : null);
+        // FR-134: the Stars button opens the bot, which sends the invoice.
+        const starsLink = botUsername
+          ? `https://t.me/${botUsername}?start=inv_${data.id}`
+          : (data.starsInvoiceLink ?? null);
         return (
           <Card>
             <CardHeader className="flex-row items-center justify-between gap-3">

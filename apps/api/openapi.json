@@ -1773,6 +1773,47 @@
         "responses": { "201": { "description": "Expired subscription count" } }
       }
     },
+    "/api/internal/v1/stars/create-link": {
+      "post": {
+        "operationId": "starsCreateLink",
+        "summary": "Return the pending Telegram Stars invoice the bot sends for /start inv_<id> (section 11.3.6)",
+        "responses": {
+          "200": { "description": "Invoice title, description, payload and amount in stars" },
+          "409": { "description": "INVOICE_NOT_FOUND, INVOICE_NOT_PENDING or INVOICE_EXPIRED" }
+        },
+        "requestBody": {
+          "required": true,
+          "content": { "application/json": { "schema": { "type": "object" } } }
+        }
+      }
+    },
+    "/api/internal/v1/stars/precheckout": {
+      "post": {
+        "operationId": "starsPrecheckout",
+        "summary": "Approve a Telegram Stars pre_checkout_query (section 9.5)",
+        "responses": {
+          "200": { "description": "The invoice can be paid" },
+          "409": {
+            "description": "INVOICE_NOT_FOUND, INVOICE_NOT_PENDING, INVOICE_EXPIRED or AMOUNT_MISMATCH"
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": { "application/json": { "schema": { "type": "object" } } }
+        }
+      }
+    },
+    "/api/internal/v1/stars/successful-payment": {
+      "post": {
+        "operationId": "starsSuccessfulPayment",
+        "summary": "Record a Telegram Stars successful_payment, idempotent by telegramPaymentChargeId (section 9.5)",
+        "responses": { "200": { "description": "Recorded and applied" } },
+        "requestBody": {
+          "required": true,
+          "content": { "application/json": { "schema": { "type": "object" } } }
+        }
+      }
+    },
     "/api/internal/v1/support/forward": {
       "post": {
         "operationId": "forwardSupportMessage",

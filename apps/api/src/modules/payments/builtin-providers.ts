@@ -541,6 +541,69 @@ export class CryptoBotProvider implements PaymentProvider {
   }
 }
 
+const TELEGRAM_API = 'https://api.telegram.org';
+const STAR_RATE_SCALE = 100_000_000n;
+
+/**
+ * Section 11.3.6: `price_overrides.XTR ?? ceil(price_minor / 100 × starsPerRub)`,
+ * at least one star. The override is the plan's own price in stars; when the
+ * invoice charges less than the list price (a promocode discount, a
+ * plan-change credit) the override is scaled by the same share, so a discount
+ * never raises the price in stars. A top-up has no plan and uses the rate.
+ */
+export function starsAmount(
+  amountMinor: bigint,
+  starsPerRub: number,
+  plan?: { priceMinor: bigint; priceOverrides: unknown },
+): bigint {
+  const overrides = plan?.priceOverrides;
+  const override =
+    overrides && typeof overrides === 'object'
+      ? (overrides as Record<string, unknown>).XTR
+      : undefined;
+  let stars: bigint;
+  if (
+    plan &&
+    plan.priceMinor > 0n &&
+    typeof override === 'number' &&
+    Number.isSafeInteger(override) &&
+    override > 0
+  ) {
+    const charged = amountMinor < plan.priceMinor ? amountMinor : plan.priceMinor;
+    stars = (BigInt(override) * charged + plan.priceMinor - 1n) / plan.priceMinor;
+  } else {
+    const rate = BigInt(starsPerRub.toFixed(8).replace('.', ''));
+    const divisor = 100n * STAR_RATE_SCALE;
+    stars = (amountMinor * rate + divisor - 1n) / divisor;
+  }
+  return stars > 0n ? stars : 1n;
+}
+
+/** `fx_rate = stars / (amount_minor / 100)`, truncated to the column's 8 places. */
+function starsFxRate(stars: bigint, amountMinor: bigint): string {
+  const scaled = (stars * 100n * STAR_RATE_SCALE) / amountMinor;
+  return `${String(scaled / STAR_RATE_SCALE)}.${(scaled % STAR_RATE_SCALE).toString().padStart(8, '0')}`;
+}
+
+/** Telegram counts the 1–32 and 1–255 limits in characters, not UTF-16 units. */
+function truncate(text: string, limit: number): string {
+  return Array.from(text).slice(0, limit).join('');
+}
+
+const starsConfigSchema = z.object({
+  starsPerRub: z.number().positive().max(10_000),
+  botToken: z.string().min(1),
+  apiBase: z.url().default(TELEGRAM_API),
+});
+
+function starsConfig(cfg: ProviderConfig) {
+  if (typeof cfg.starsPerRub !== 'number' || !(cfg.starsPerRub > 0))
+    throw new Error('stars: starsPerRub is not configured');
+  if (typeof cfg.botToken !== 'string' || !cfg.botToken)
+    throw new Error('stars: the bot token is not configured');
+  return starsConfigSchema.parse(cfg);
+}
+
 export class StarsProvider implements PaymentProvider {
   readonly code = 'stars' as const;
   readonly capabilities = {
@@ -550,37 +613,51 @@ export class StarsProvider implements PaymentProvider {
     kind: 'stars' as const,
     currencies: ['XTR'],
   };
-  readonly configSchema = z.object({
-    botToken: z.string(),
-    starAmount: z.number().int().positive().optional(),
-    apiBase: z.url().default('https://api.telegram.org'),
-  });
+  /**
+   * What an administrator configures (section 11.3.6). The bot token comes
+   * from `settings.bot.token` (ADR-012) and is added by `PaymentsService`.
+   */
+  readonly configSchema = z.object({ starsPerRub: z.number().positive().max(10_000) });
   async createInvoice(p: CreateInvoiceParams, cfg: ProviderConfig) {
-    const stars = Number(cfg.starAmount ?? p.amountMinor / 100n);
+    const config = starsConfig(cfg);
+    const stars = starsAmount(p.amountMinor, config.starsPerRub, p.plan);
+    const title = truncate(p.description, 32) || 'RemnaRay';
+    const description = truncate(p.description, 255) || title;
+    const payload = `inv_${p.shopInvoiceId}`;
     const result = await json(
-      `${base(cfg, 'https://api.telegram.org')}/bot${cfg.botToken}/createInvoiceLink`,
+      `${config.apiBase.replace(/\/$/, '')}/bot${config.botToken}/createInvoiceLink`,
       {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify({
-          title: p.description.slice(0, 32),
-          description: p.description.slice(0, 255),
-          payload: p.invoiceId,
+          title,
+          description,
+          payload,
+          provider_token: '',
           currency: 'XTR',
-          prices: [{ label: p.description, amount: stars }],
+          prices: [{ label: title, amount: Number(stars) }],
         }),
       },
     );
+    if (result.ok !== true || typeof result.result !== 'string')
+      throw new Error('stars: createInvoiceLink failed');
     return {
-      providerInvoiceId: p.invoiceId,
-      starsInvoiceLink: String(result.result),
+      providerInvoiceId: payload,
+      starsInvoiceLink: result.result,
       providerAmount: {
         amount: String(stars),
         currency: 'XTR',
-        fxRate: String(stars / Number(p.amountMinor / 100n)),
+        fxRate: starsFxRate(stars, p.amountMinor),
       },
       expiresAt: p.expiresAt,
-      rawSafe: { ok: result.ok, providerInvoiceId: p.invoiceId, currency: 'XTR' },
+      // What the bot needs to send the same invoice with `sendInvoice`.
+      rawSafe: {
+        providerInvoiceId: payload,
+        currency: 'XTR',
+        stars: String(stars),
+        title,
+        description,
+      },
     };
   }
   /**
@@ -596,6 +673,7 @@ export class StarsProvider implements PaymentProvider {
   ackResponse() {
     return ack();
   }
+  /** Telegram offers no status lookup; `successful_payment` is the only proof. */
   fetchStatus(id: string) {
     return Promise.resolve({
       eventId: `poll:${id}`,
@@ -603,18 +681,20 @@ export class StarsProvider implements PaymentProvider {
       type: 'pending' as const,
     });
   }
-  healthcheck() {
-    return Promise.resolve({ ok: true, latencyMs: 0 });
-  }
-  async answerPrecheckout(queryId: string, ok: boolean, cfg: ProviderConfig) {
-    return json(
-      `${base(cfg, 'https://api.telegram.org')}/bot${cfg.botToken}/answerPreCheckoutQuery`,
-      {
-        method: 'POST',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ pre_checkout_query_id: queryId, ok }),
-      },
-    );
+  async healthcheck(cfg: ProviderConfig) {
+    const started = Date.now();
+    try {
+      const config = starsConfig(cfg);
+      const result = await json(`${config.apiBase.replace(/\/$/, '')}/bot${config.botToken}/getMe`);
+      if (result.ok !== true) throw new Error('stars: getMe failed');
+      return { ok: true, latencyMs: Date.now() - started };
+    } catch (error) {
+      return {
+        ok: false,
+        latencyMs: Date.now() - started,
+        error: error instanceof Error ? error.message : 'stars: healthcheck failed',
+      };
+    }
   }
 }
 

@@ -16,12 +16,10 @@ The provider adapters follow the current provider contracts:
 - [Platega](./platega.md) polls `GET /transaction/{id}` because polling is the
   source of truth.
 - [CryptoBot](./cryptobot.md) verifies `crypto-pay-api-signature`.
-- Telegram Stars have no HTTP webhook (section 11.3.6): `/webhooks/stars` is
-  refused with `WEBHOOK_NOT_SUPPORTED` before anything is stored. Payment
-  proof must arrive as the bot's `successful_payment` update through the
-  internal `stars/precheckout` and `stars/successful-payment` endpoints of
-  section 9.5. **That bot path is not implemented yet**, so a Stars payment
-  cannot be applied; keep the provider disabled until it is.
+- [Telegram Stars](./stars.md) have no HTTP webhook: `/webhooks/stars` is
+  refused with `WEBHOOK_NOT_SUPPORTED` before anything is stored, and payment
+  proof arrives as the bot's `successful_payment` update through the internal
+  endpoints of section 9.5.
 
 Provider configuration is deliberately incomplete until an administrator
 enables the provider and records a successful health check.

@@ -35,13 +35,15 @@ export async function checkPayment(
   await showInvoice(ctx, await api.checkInvoice(ctx.from.id, invoiceId));
 }
 
-async function showInvoice(ctx: RrContext, invoice: InvoiceView): Promise<void> {
+export async function showInvoice(ctx: RrContext, invoice: InvoiceView): Promise<void> {
   if (invoice.status === 'paid') {
     await show(ctx, ctx.t('bot.screen.pay.ok'), backButton(ctx));
     return;
   }
   const keyboard = new InlineKeyboard();
-  if (invoice.paymentUrl) keyboard.url(ctx.t('bot.btn.pay'), invoice.paymentUrl).row();
+  // Section 11.3.6: a Stars invoice's link is its `pay` button.
+  const payUrl = invoice.paymentUrl ?? invoice.starsInvoiceLink;
+  if (payUrl) keyboard.url(ctx.t('bot.btn.pay'), payUrl).row();
   keyboard
     .text(ctx.t('bot.btn.check'), `inv:check:${invoice.id}`)
     .row()
