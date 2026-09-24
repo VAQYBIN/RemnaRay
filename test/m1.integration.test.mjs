@@ -92,6 +92,20 @@ test(
       assert.equal(renewed.status, 'active');
       assert.ok(Date.parse(renewed.expiresAt) > Date.parse(activated.expiresAt));
       assert.equal(await subscriptions.expire(new Date(Date.now() + 366 * 86_400_000), 0), 1);
+      // Section 9.8: each of those wrote its event in its own transaction.
+      const events = await prisma.outboxJob.findMany({
+        where: { name: 'webhooks.dispatch' },
+        orderBy: { createdAt: 'asc' },
+      });
+      assert.deepEqual(
+        events.map((row) => row.payload.type),
+        [
+          'subscription.activated',
+          'subscription.activated',
+          'subscription.activated',
+          'subscription.expired',
+        ],
+      );
 
       // Section 7.3: the outbox has to reach a worker. Two defects made that
       // impossible and neither side complained — BullMQ refuses a custom job
@@ -114,7 +128,7 @@ test(
         });
       });
       const relayed = await relay.runOnce();
-      assert.equal(relayed.published, 1, 'the relay published nothing');
+      assert.equal(relayed.published, events.length + 1, 'the relay published nothing');
       assert.equal(relayed.remaining, 0);
 
       const consumed = new Promise((resolve) => {

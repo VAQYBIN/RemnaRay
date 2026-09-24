@@ -21,6 +21,9 @@ series whichever target answered the scrape.
 | `rr_tls_cert_expiry_seconds`                     | `worker`, `api` | the daily `maintenance.tls-check` reading                              |
 | `rr_ledger_audit_mismatch_total`                 | `api`           | the ledger audit, when it finds a disagreement                         |
 
+Section 9.8 adds `rr_outgoing_webhook_failures_total` (`api`): every outgoing
+webhook attempt that did not end in a 2xx, a retried one counted each time.
+
 ## The endpoints
 
 ```

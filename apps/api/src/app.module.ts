@@ -24,6 +24,7 @@ import { NotifyModule } from './modules/notify/notify.module';
 import { BroadcastsModule } from './modules/broadcasts/broadcasts.module';
 import { AdminSettingsModule } from './modules/admin-settings/admin-settings.module';
 import { SetupModule } from './modules/setup/setup.module';
+import { WebhooksModule } from './modules/webhooks/webhooks.module';
 
 @Module({
   imports: [
@@ -48,6 +49,7 @@ import { SetupModule } from './modules/setup/setup.module';
     NotifyModule,
     BroadcastsModule,
     AdminSettingsModule,
+    WebhooksModule,
     LoggerModule.forRoot({
       pinoHttp: {
         level: process.env.RR_LOG_LEVEL ?? 'info',

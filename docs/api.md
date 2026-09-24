@@ -48,7 +48,50 @@ GET /metrics                Prometheus text, from the internal network only
 
 ## Outgoing webhooks
 
-RemnaRay can call you when something happens. Each delivery carries
-`X-RemnaRay-Signature: sha256=<hmac>`, `X-RemnaRay-Event` and
-`X-RemnaRay-Delivery`, retries five times over about fifteen hours, and treats
-any 2xx as delivered. Configure them in Settings → Integrations.
+RemnaRay can call you when something happens (section 9.8). Up to five
+recipients go in the `webhooks.outgoing` setting (Settings → Store in the
+console, a JSON array; the value is secret, so it is written whole):
+
+```json
+[
+  {
+    "url": "https://example.com/hook",
+    "secret": "…",
+    "events": ["payment.succeeded"],
+    "enabled": true
+  }
+]
+```
+
+Events: `user.created`, `subscription.activated` (a purchase, trial, plan
+change, invitee bonus or an administrator's extension), `subscription.expired`,
+`payment.succeeded` (money taken for an invoice, including one credited to the
+balance), `payment.refunded`, `referral.rewarded`. The body is
+
+```json
+{
+  "id": "01J…",
+  "type": "payment.succeeded",
+  "createdAt": "2026-09-18T10:00:00.000Z",
+  "data": {
+    "userId": "…",
+    "telegramId": 123,
+    "transactionId": "…",
+    "invoiceId": "…",
+    "type": "purchase",
+    "amountMinor": 29900,
+    "currency": "RUB",
+    "provider": "yookassa",
+    "planId": "…"
+  }
+}
+```
+
+with `X-RemnaRay-Signature: sha256=<hex HMAC-SHA256 of the raw body with the
+recipient's secret>`, `X-RemnaRay-Event` and `X-RemnaRay-Delivery` (the event
+`id`; deduplicate on it). Any 2xx within 10 s is delivered; anything else,
+a redirect included, is retried 1 min, 5 min, 30 min, 2 h and 12 h later with
+the same body. The event is recorded in the transaction that causes it and
+sent after it commits, from the `webhooks` queue; a recipient removed or
+unsubscribed before a retry is not called again. No delivery table is kept:
+failures are logged and counted in `rr_outgoing_webhook_failures_total`.

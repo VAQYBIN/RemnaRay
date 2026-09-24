@@ -1,3 +1,4 @@
+import { emitWebhook, minor, subscriptionData } from '../webhooks/outgoing';
 import type { ReferralConfig, SourceTransaction, TrialLimits, Tx } from './rewards.types';
 
 const SOURCE_TYPES = new Set(['purchase', 'topup']);
@@ -191,6 +192,16 @@ export async function accrueReferralReward(
       jobId: `notify:referral.reward:${reward.id}`,
     },
   });
+  await emitWebhook(tx, 'referral.rewarded', attribution.referrerId, {
+    rewardId: reward.id,
+    transactionId: rewardTx.id,
+    sourceTransactionId: source.id,
+    refereeId: source.userId,
+    amountMinor: minor(amount),
+    currency: 'RUB',
+    status: reward.status,
+    holdUntil: reward.holdUntil?.toISOString() ?? null,
+  });
 
   return { rewardId: reward.id, amountMinor: amount };
 }
@@ -284,13 +295,14 @@ export async function grantInviteeBonus(
   const days = config.inviteeBonus.value;
   if (live) {
     const base = live.expiresAt > now ? live.expiresAt : now;
-    await tx.subscription.update({
+    const extended = await tx.subscription.update({
       where: { id: live.id },
       data: { expiresAt: new Date(base.getTime() + days * 86_400_000) },
     });
+    await emitWebhook(tx, 'subscription.activated', userId, subscriptionData(extended));
     return;
   }
-  await tx.subscription.create({
+  const created = await tx.subscription.create({
     data: {
       userId,
       source: 'promo',
@@ -303,4 +315,5 @@ export async function grantInviteeBonus(
       squads: trial.squads,
     },
   });
+  await emitWebhook(tx, 'subscription.activated', userId, subscriptionData(created));
 }

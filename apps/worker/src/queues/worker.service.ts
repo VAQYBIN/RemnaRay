@@ -1,6 +1,12 @@
 import { Injectable, Logger, type OnModuleDestroy, type OnModuleInit } from '@nestjs/common';
 import { queueJobs, recordTlsExpiry } from '@remnaray/metrics';
-import { createRedisConnection, QUEUE_PREFIX, toJobId, type QueueName } from '@remnaray/queues';
+import {
+  backoffStrategy,
+  createRedisConnection,
+  QUEUE_PREFIX,
+  toJobId,
+  type QueueName,
+} from '@remnaray/queues';
 import { Queue, Worker, type Job } from 'bullmq';
 
 import { backupStatus } from './backup-check';
@@ -59,6 +65,22 @@ export class WorkerService implements OnModuleInit, OnModuleDestroy {
         options,
       ),
     );
+    // Section 9.8. Up to ten seconds a delivery on a recipient's answer, so
+    // several at once; the retry schedule is the queue package's.
+    this.workers.push(
+      new Worker(
+        'webhooks',
+        async (job: Job<Record<string, unknown>>) =>
+          this.call({
+            path:
+              job.name === 'webhooks.deliver'
+                ? '/api/internal/v1/webhooks/deliver'
+                : '/api/internal/v1/webhooks/dispatch',
+            body: job.data,
+          }),
+        { ...options, concurrency: 5, settings: { backoffStrategy } },
+      ),
+    );
     this.workers.push(
       new Worker(
         'maintenance',
@@ -78,7 +100,14 @@ export class WorkerService implements OnModuleInit, OnModuleDestroy {
     const panel = new Queue('panel', options);
     // Counted, not consumed from here: section 9.9 wants every queue's depth,
     // and a queue the worker only reads counts is cheap to hold open.
-    const counted = [payments, notify, maintenance, new Queue('broadcast', options), panel];
+    const counted = [
+      payments,
+      notify,
+      maintenance,
+      new Queue('broadcast', options),
+      panel,
+      new Queue('webhooks', options),
+    ];
     this.queues.push(...counted);
 
     // Section 9.9 `rr_queue_jobs{queue,state}`. A gauge, sampled: BullMQ keeps

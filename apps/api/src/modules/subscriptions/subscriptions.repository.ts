@@ -1,5 +1,6 @@
 import { Prisma, type PrismaClient } from '@remnaray/db';
 
+import { emitWebhook, subscriptionData } from '../webhooks/outgoing';
 import { SubscriptionError } from './subscriptions.errors';
 
 export type SubscriptionConfig = {
@@ -75,6 +76,12 @@ export class SubscriptionsRepository implements SubscriptionsRepositoryPort {
         },
       });
       await transaction.user.update({ where: { id: userId }, data: { trialUsedAt: startsAt } });
+      await emitWebhook(
+        transaction,
+        'subscription.activated',
+        userId,
+        subscriptionData(subscription),
+      );
       return view(subscription);
     });
   }
@@ -110,6 +117,12 @@ export class SubscriptionsRepository implements SubscriptionsRepositoryPort {
       const subscription = live
         ? await transaction.subscription.update({ where: { id: live.id }, data })
         : await transaction.subscription.create({ data: { userId, ...data } });
+      await emitWebhook(
+        transaction,
+        'subscription.activated',
+        userId,
+        subscriptionData(subscription),
+      );
       return view(subscription);
     });
   }
@@ -180,6 +193,7 @@ export class SubscriptionsRepository implements SubscriptionsRepositoryPort {
           trafficResetStrategy: plan.trafficResetStrategy,
         },
       });
+      await emitWebhook(transaction, 'subscription.activated', userId, subscriptionData(updated));
       return view(updated);
     });
   }
@@ -196,13 +210,28 @@ export class SubscriptionsRepository implements SubscriptionsRepositoryPort {
         subscription.expiresAt.getTime() + graceHours * 3_600_000 > now.getTime()
           ? 'grace'
           : 'expired';
-      if (nextStatus !== subscription.status) {
-        await this.prisma.subscription.update({
-          where: { id: subscription.id },
+      if (nextStatus === subscription.status) continue;
+      // Conditional on the row read: a renewal applied since then keeps the
+      // subscription, and no `subscription.expired` (section 9.8) goes out.
+      const moved = await this.prisma.$transaction(async (transaction) => {
+        const { count } = await transaction.subscription.updateMany({
+          where: {
+            id: subscription.id,
+            status: subscription.status,
+            expiresAt: subscription.expiresAt,
+          },
           data: { status: nextStatus },
         });
-        changed += 1;
-      }
+        if (count === 1 && nextStatus === 'expired')
+          await emitWebhook(
+            transaction,
+            'subscription.expired',
+            subscription.userId,
+            subscriptionData({ ...subscription, status: nextStatus }),
+          );
+        return count;
+      });
+      changed += moved;
     }
     return changed;
   }

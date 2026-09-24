@@ -2329,6 +2329,31 @@
           "400": { "description": "Invalid signature" }
         }
       }
+    },
+    "/api/internal/v1/webhooks/deliver": {
+      "post": {
+        "operationId": "deliverOutgoingWebhook",
+        "summary": "Job webhooks.deliver: one signed attempt; 502 when the recipient did not answer 2xx",
+        "responses": {
+          "200": { "description": "OK" },
+          "502": { "description": "Delivery failed; the job is retried" }
+        },
+        "requestBody": {
+          "required": true,
+          "content": { "application/json": { "schema": { "type": "object" } } }
+        }
+      }
+    },
+    "/api/internal/v1/webhooks/dispatch": {
+      "post": {
+        "operationId": "dispatchOutgoingWebhook",
+        "summary": "Job webhooks.dispatch: one delivery per recipient subscribed to a section 9.8 event",
+        "responses": { "200": { "description": "OK" } },
+        "requestBody": {
+          "required": true,
+          "content": { "application/json": { "schema": { "type": "object" } } }
+        }
+      }
     }
   },
   "webhooks": {}

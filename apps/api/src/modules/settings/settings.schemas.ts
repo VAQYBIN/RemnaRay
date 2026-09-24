@@ -1,5 +1,7 @@
 import { z } from 'zod';
 
+import { OUTGOING_EVENTS } from '../webhooks/outgoing';
+
 const emptyOrUrl = z.union([z.url(), z.literal('')]);
 const minorAmount = z.string().regex(/^\d+$/, 'must be a non-negative integer in minor units');
 const locale = z.enum(['ru', 'en']);
@@ -13,7 +15,7 @@ const clientLink = z.object({
 const webhook = z.object({
   url: z.url(),
   secret: z.string().min(1),
-  events: z.array(z.string().min(1)).min(1),
+  events: z.array(z.enum(OUTGOING_EVENTS)).min(1),
   enabled: z.boolean().default(true),
 });
 
@@ -417,7 +419,8 @@ export const settingRegistry: SettingDefinition[] = [
   }),
   ...definitions('webhooks', {
     outgoing: {
-      schema: z.array(webhook),
+      // Section 9.8: at most five recipients.
+      schema: z.array(webhook).max(5),
       defaultValue: [],
       secret: true,
       description: 'Outgoing webhook destinations.',

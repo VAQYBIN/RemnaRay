@@ -9,6 +9,7 @@ import { ApiError } from '../me/me.errors';
 import { PaymentError } from '../payments/payments.errors';
 import { PaymentsService } from '../payments/payments.service';
 import { SettingsService } from '../settings/settings.service';
+import { emitWebhook, subscriptionData } from '../webhooks/outgoing';
 import { bulkExtendSchema, refundSchema } from './admin-users.schemas';
 
 export type ActingAdmin = { id: string; role: AdminRole };
@@ -275,10 +276,11 @@ export class AdminPaymentsService {
       for (const row of rows) {
         const base = row.expiresAt > new Date() ? row.expiresAt : new Date();
         const expiresAt = new Date(base.getTime() + input.days * 86_400_000);
-        await tx.subscription.update({
+        const updated = await tx.subscription.update({
           where: { id: row.id },
           data: { expiresAt, status: 'active' },
         });
+        await emitWebhook(tx, 'subscription.activated', row.userId, subscriptionData(updated));
         await tx.transaction.create({
           data: {
             userId: row.userId,

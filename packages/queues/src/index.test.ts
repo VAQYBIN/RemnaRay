@@ -1,6 +1,13 @@
 import { describe, expect, it } from 'vitest';
 
-import { jobOptions, QUEUE_NAMES, QUEUE_PREFIX, toJobId } from './index.js';
+import {
+  backoffStrategy,
+  jobOptions,
+  OUTGOING_WEBHOOK_BACKOFF,
+  QUEUE_NAMES,
+  QUEUE_PREFIX,
+  toJobId,
+} from './index.js';
 
 describe('toJobId', () => {
   it('replaces the separator BullMQ reserves', () => {
@@ -36,8 +43,15 @@ describe('the queue namespace', () => {
     expect(QUEUE_PREFIX).toBe('rr:q');
   });
 
-  it('names the section 7.3 queues', () => {
-    expect([...QUEUE_NAMES]).toEqual(['panel', 'payments', 'notify', 'broadcast', 'maintenance']);
+  it('names the section 7.3 queues and the section 9.8 webhooks queue', () => {
+    expect([...QUEUE_NAMES]).toEqual([
+      'panel',
+      'payments',
+      'notify',
+      'broadcast',
+      'maintenance',
+      'webhooks',
+    ]);
   });
 });
 
@@ -94,5 +108,32 @@ describe('section 7.3 job options', () => {
     expect(jobOptions(row('notify.alert', null)).jobId).toBe(
       '01a0bec6-c9b4-7329-95c1-a12cbf9679e2',
     );
+  });
+});
+
+describe('section 9.8 outgoing webhook retries', () => {
+  it('tries a delivery once and retries it five times', () => {
+    expect(
+      jobOptions({
+        id: '01a0bec6-c9b4-7329-95c1-a12cbf9679e2',
+        name: 'webhooks.deliver',
+        jobId: 'webhook:x:y',
+      }),
+    ).toMatchObject({
+      attempts: 6,
+      backoff: { type: OUTGOING_WEBHOOK_BACKOFF },
+      jobId: 'webhook-x-y',
+    });
+  });
+
+  it('waits 1 min, 5 min, 30 min, 2 h and 12 h', () => {
+    // BullMQ passes the attempts made, the failed one included.
+    expect([1, 2, 3, 4, 5].map((made) => backoffStrategy(made, OUTGOING_WEBHOOK_BACKOFF))).toEqual([
+      60_000, 300_000, 1_800_000, 7_200_000, 43_200_000,
+    ]);
+  });
+
+  it('refuses a backoff type it does not know', () => {
+    expect(() => backoffStrategy(1, 'custom')).toThrow(/unknown backoff type/u);
   });
 });

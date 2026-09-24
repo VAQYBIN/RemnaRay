@@ -1,6 +1,7 @@
 import { Prisma, ReferralStatus, type PrismaClient } from '@remnaray/db';
 import { randomInt } from 'node:crypto';
 
+import { emitWebhook } from '../webhooks/outgoing';
 import type { ParsedStartPayload, UserUpsertInput } from './users.schemas';
 
 export type UserSummary = {
@@ -160,6 +161,11 @@ export class UsersRepository implements UsersRepositoryPort {
             },
           });
           await this.ensureTelegramIdentity(transaction, user.id, input.telegramId.toString());
+          await emitWebhook(transaction, 'user.created', user.id, {
+            username: user.username,
+            language: user.language,
+            referrerId: user.referrerId,
+          });
           if (referrer && referrer.id !== user.id) {
             await transaction.referralAttribution.create({
               data: {

@@ -7,6 +7,7 @@ import { Audited } from '../admin/audit.interceptor';
 import { ApiError } from '../me/me.errors';
 import { RemnawaveService } from '../remnawave/remnawave.service';
 import { SettingsService } from '../settings/settings.service';
+import { emitWebhook, subscriptionData } from '../webhooks/outgoing';
 import {
   balanceSchema,
   extendSchema,
@@ -197,6 +198,7 @@ export class AdminUsersService {
         where: { id: subscription.id },
         data: { expiresAt, status: 'active' },
       });
+      await emitWebhook(tx, 'subscription.activated', id, subscriptionData(updated));
       await tx.transaction.create({
         data: {
           userId: id,
@@ -238,6 +240,7 @@ export class AdminUsersService {
           squads: plan.squads,
         },
       });
+      await emitWebhook(tx, 'subscription.activated', id, subscriptionData(updated));
       await tx.transaction.create({
         data: {
           userId: id,

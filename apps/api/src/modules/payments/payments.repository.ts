@@ -4,6 +4,7 @@ import { invoicesTotal, paymentsEventsTotal, revenueMinorTotal } from '@remnaray
 import { PaymentError } from './payments.errors';
 import type { ProviderEvent } from './payments.types';
 import type { Tx } from '../rewards/rewards.types';
+import { emitWebhook, minor, subscriptionData } from '../webhooks/outgoing';
 
 /**
  * Money that settles inside a payment transaction and is not part of the
@@ -72,6 +73,33 @@ async function queueNotification(
       payload: { event, userId, dedupKey, params, ...(subscriptionId ? { subscriptionId } : {}) },
       jobId: `notify:${dedupKey}`,
     },
+  });
+}
+
+/**
+ * Section 9.8 `payment.succeeded`: money taken for an invoice, whether it
+ * bought the plan or went to the balance (a top-up, or EX-02 late payment).
+ */
+async function paymentSucceeded(
+  tx: Prisma.TransactionClient,
+  row: {
+    id: string;
+    userId: string;
+    type: string;
+    amountMinor: bigint;
+    currency: string;
+    provider: string | null;
+  },
+  invoice: { id: string; planId: string | null },
+): Promise<void> {
+  await emitWebhook(tx, 'payment.succeeded', row.userId, {
+    transactionId: row.id,
+    invoiceId: invoice.id,
+    type: row.type,
+    amountMinor: minor(row.amountMinor),
+    currency: row.currency,
+    provider: row.provider,
+    planId: invoice.planId,
   });
 }
 
@@ -271,6 +299,7 @@ export class PaymentsRepository {
         `payment.succeeded:${invoice.id}`,
         { amount: formatMinorRub(invoice.amountMinor) },
       );
+      await paymentSucceeded(tx, transaction, invoice);
       await this.rewards?.onInvoiceSettled(tx, invoice.id);
       await this.rewards?.onPaid(tx, {
         id: transaction.id,
@@ -351,6 +380,14 @@ export class PaymentsRepository {
       await tx.transaction.update({
         where: { id: original.id },
         data: { refundedMinor: original.refundedMinor + amountMinor },
+      });
+      await emitWebhook(tx, 'payment.refunded', original.userId, {
+        transactionId: refund.id,
+        refundedTransactionId: original.id,
+        amountMinor: minor(amountMinor),
+        currency: refund.currency,
+        provider: original.provider,
+        reason,
       });
       await this.rewards?.onRefund(
         tx,
@@ -526,6 +563,7 @@ export class PaymentsRepository {
               },
             });
           }
+          await paymentSucceeded(tx, txRow, invoice);
           if (underpaid) await this.rewards?.onInvoiceReleased(tx, invoice.id);
           else await this.rewards?.onInvoiceSettled(tx, invoice.id);
           await this.rewards?.onPaid(tx, {
@@ -602,6 +640,7 @@ export class PaymentsRepository {
         jobId: `alert:payment.duplicate:${eventId}`,
       },
     });
+    await paymentSucceeded(tx, txRow, { id: invoice.id, planId: null });
     await this.rewards?.onPaid(tx, {
       id: txRow.id,
       userId: invoice.userId,
@@ -712,5 +751,6 @@ export class PaymentsRepository {
       { until: subscription.expiresAt.toISOString().slice(0, 10) },
       subscription.id,
     );
+    await emitWebhook(tx, 'subscription.activated', userId, subscriptionData(subscription));
   }
 }

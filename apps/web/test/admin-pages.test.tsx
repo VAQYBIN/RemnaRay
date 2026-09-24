@@ -13,6 +13,7 @@ const { renderPage } = await import('../test-utils/render-page');
 const DashboardClient = (await import('../app/admin/dashboard-client')).default;
 const UsersClient = (await import('../app/admin/users/users-client')).default;
 const PlansClient = (await import('../app/admin/plans/plans-client')).default;
+const SettingsClient = (await import('../app/admin/settings/settings-client')).default;
 const AdminShell = (await import('../app/admin/admin-shell')).AdminShell;
 const AdminShellForTest = ({ locale }: { locale: 'ru' }) => (
   <AdminShell>{() => <span data-locale={locale}>admin shell</span>}</AdminShell>
@@ -194,5 +195,36 @@ describe('admin pages', () => {
     expect(adminMarkup).toContain('Удалить');
     expect(operatorMarkup).not.toContain('Создать тариф');
     expect(operatorMarkup).not.toContain('Удалить');
+  });
+
+  it('offers the section 9.8 webhook recipients among the settings, secret unshown', async () => {
+    const property = (description: string, secret: boolean) => ({
+      title: description,
+      description,
+      default: null,
+      'x-secret': secret,
+    });
+    const markup = await render(SettingsClient, {
+      '/api/admin/v1/auth/me': session('admin'),
+      '/api/admin/v1/settings/schema': {
+        body: {
+          version: 1,
+          type: 'object',
+          properties: {
+            'brand.name': property('Store name.', false),
+            'webhooks.outgoing': property('Outgoing webhook destinations.', true),
+          },
+        },
+      },
+      '/api/admin/v1/settings': {
+        body: { 'brand.name': 'Manta', 'webhooks.outgoing': { set: true } },
+      },
+      '/api/admin/v1/providers': { body: { items: [] } },
+      '/api/admin/v1/themes': { body: { items: [], active: 'default' } },
+    });
+
+    expect(markup).toContain('id="webhooks.outgoing"');
+    expect(markup).not.toContain('[object Object]');
+    expect(markup).toContain('Outgoing webhook destinations.');
   });
 });

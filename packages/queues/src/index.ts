@@ -2,7 +2,20 @@ import { Queue, type JobsOptions } from 'bullmq';
 import { Prisma, type PrismaClient } from '@remnaray/db';
 import { Redis as RedisClient } from 'ioredis';
 
-export const QUEUE_NAMES = ['panel', 'payments', 'notify', 'broadcast', 'maintenance'] as const;
+/**
+ * The section 7.3 queues, and `webhooks` for the outgoing webhooks of section
+ * 9.8, which 7.3 does not list. A delivery waits up to ten seconds on a
+ * recipient and is retried for half a day; on `notify` it would hold up the
+ * customers' notifications behind a slow recipient.
+ */
+export const QUEUE_NAMES = [
+  'panel',
+  'payments',
+  'notify',
+  'broadcast',
+  'maintenance',
+  'webhooks',
+] as const;
 export type QueueName = (typeof QUEUE_NAMES)[number];
 
 /**
@@ -49,6 +62,27 @@ export function toJobId(value: string): string {
   return /^\d+$/u.test(safe) ? `j-${safe}` : safe;
 }
 
+/** Section 9.8 retries: 1 min, 5 min, 30 min, 2 h, 12 h. */
+export const OUTGOING_WEBHOOK_RETRY_DELAYS = [
+  60_000,
+  5 * 60_000,
+  30 * 60_000,
+  2 * 60 * 60_000,
+  12 * 60 * 60_000,
+] as const;
+
+export const OUTGOING_WEBHOOK_BACKOFF = 'outgoing-webhook';
+
+/**
+ * The worker's `settings.backoffStrategy`. BullMQ calls it with the attempts
+ * made so far, the failed one included, so the first retry reads index 0.
+ * Any other custom type is refused, as BullMQ's own example does.
+ */
+export function backoffStrategy(attemptsMade: number, type?: string): number {
+  if (type !== OUTGOING_WEBHOOK_BACKOFF) throw new Error(`unknown backoff type ${String(type)}`);
+  return OUTGOING_WEBHOOK_RETRY_DELAYS[attemptsMade - 1] ?? -1;
+}
+
 /**
  * Section 7.3 retries per job. A job the table gives one attempt, or does not
  * list, gets none: `notify.alert`, for one, would repeat an alert to the
@@ -60,6 +94,14 @@ const RETRIES: Record<string, Pick<JobsOptions, 'attempts' | 'backoff'>> = {
   'payments.apply-event': { attempts: 5, backoff: { type: 'exponential', delay: 2_000 } },
   'notify.send': { attempts: 3, backoff: { type: 'fixed', delay: 10_000 } },
   'broadcast.chunk': { attempts: 3 },
+  // Reads the recipients and writes one delivery each; internal, so like
+  // apply-event.
+  'webhooks.dispatch': { attempts: 5, backoff: { type: 'exponential', delay: 2_000 } },
+  // Section 9.8: the first attempt and five retries.
+  'webhooks.deliver': {
+    attempts: OUTGOING_WEBHOOK_RETRY_DELAYS.length + 1,
+    backoff: { type: OUTGOING_WEBHOOK_BACKOFF },
+  },
 };
 
 /**

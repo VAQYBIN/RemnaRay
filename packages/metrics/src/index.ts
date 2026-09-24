@@ -109,6 +109,16 @@ export const ledgerAuditMismatchTotal = new Counter({
   registers: [registry],
 });
 
+/**
+ * Section 9.8: v1 keeps no table of outgoing webhook deliveries, only the log
+ * and this count of failed attempts, a retried one counted each time.
+ */
+export const outgoingWebhookFailuresTotal = new Counter({
+  name: 'rr_outgoing_webhook_failures_total',
+  help: 'Outgoing webhook delivery attempts that did not end in a 2xx answer.',
+  registers: [registry],
+});
+
 /** The names section 9.9 lists, in its order. */
 export const SECTION_9_9_METRICS = [
   'rr_http_requests_total',

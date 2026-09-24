@@ -99,6 +99,8 @@ const EDITABLE_GROUPS = [
   'balance',
   'fiscal',
   'notifications',
+  // Section 9.8 recipients, a JSON array; secret, so it is written whole.
+  'webhooks',
   'operator',
   'admin',
 ];

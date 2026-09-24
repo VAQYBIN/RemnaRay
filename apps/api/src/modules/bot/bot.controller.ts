@@ -16,6 +16,7 @@ import { Infrastructure } from '../../infra/infra.module';
 import { InternalTokenGuard, equalToken } from '../auth/auth.guards';
 import { SettingsService } from '../settings/settings.service';
 import { I18nService } from '../public/i18n.service';
+import { emitWebhook, subscriptionData } from '../webhooks/outgoing';
 
 const appendUpdate = `
 if redis.call('EXISTS', KEYS[2]) == 1 then return 0 end
@@ -263,10 +264,11 @@ export class BotAdminController {
     const before = { expiresAt: subscription.expiresAt.toISOString() };
     const afterDate = new Date(subscription.expiresAt.getTime() + body.days * 86_400_000);
     await this.infra.db.$transaction(async (transaction) => {
-      await transaction.subscription.update({
+      const extended = await transaction.subscription.update({
         where: { id: subscription.id },
         data: { expiresAt: afterDate },
       });
+      await emitWebhook(transaction, 'subscription.activated', user.id, subscriptionData(extended));
       await transaction.transaction.create({
         data: {
           userId: user.id,

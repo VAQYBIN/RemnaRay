@@ -66,6 +66,7 @@ describe('bot ingress boundary', () => {
 
   it('authorizes bot admin extension and writes an audit record', async () => {
     let audited = false;
+    const emitted: string[] = [];
     const controller = new BotAdminController({
       db: {
         admin: { findFirst: () => Promise.resolve({ id: 'admin-1', role: 'admin' }) },
@@ -76,7 +77,24 @@ describe('bot ingress boundary', () => {
         },
         $transaction: async (callback: (transaction: unknown) => Promise<void>) =>
           callback({
-            subscription: { update: () => Promise.resolve() },
+            subscription: {
+              update: () =>
+                Promise.resolve({
+                  id: 'sub-1',
+                  planId: null,
+                  source: 'purchase',
+                  status: 'active',
+                  startsAt: new Date('2025-12-01T00:00:00.000Z'),
+                  expiresAt: new Date('2026-01-08T00:00:00.000Z'),
+                }),
+            },
+            user: { findUnique: () => Promise.resolve({ telegramId: 456n }) },
+            outboxJob: {
+              create: ({ data }: { data: { name: string; payload: { type: string } } }) => {
+                emitted.push(`${data.name} ${data.payload.type}`);
+                return Promise.resolve();
+              },
+            },
             transaction: { create: () => Promise.resolve() },
             auditLog: {
               create: () => {
@@ -89,5 +107,7 @@ describe('bot ingress boundary', () => {
     } as never);
     await controller.extend('123', { telegramId: '456', days: 7 });
     expect(audited).toBe(true);
+    // Section 9.8, in the transaction that extends the subscription.
+    expect(emitted).toEqual(['webhooks.dispatch subscription.activated']);
   });
 });

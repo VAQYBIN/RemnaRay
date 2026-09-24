@@ -427,8 +427,50 @@ style-src 'unsafe-inline'; sandbox` and `nosniff`, which makes any theme
      `test:m2` 2/2.
    - **Item 8 closed** (8a–8c, 2026-09-25).
 
-9. Outgoing webhooks of section 9.8 are missing (found under item 4).
-   `panel.reset-traffic` and `panel.delete-user` are never performed (found
+9. Remaining debts, repaired in the order below.
+   - **9a. Done 2026-09-25 — outgoing webhooks of section 9.8 were not
+     implemented** (found under item 4). Each of the six events is written
+     as a `webhooks.dispatch` outbox row in the transaction that causes it
+     (`emitWebhook`, `apps/api/src/modules/webhooks/outgoing.ts`):
+     `user.created` (user upsert), `subscription.activated` (purchase, balance
+     purchase, trial, `subscriptions.activate`, plan change, invitee bonus,
+     console and bot extensions), `subscription.expired` (expiry, now a
+     conditional update so a renewal applied meanwhile is neither expired
+     nor reported), `payment.succeeded` (every provider or balance payment
+     for an invoice, top-ups and EX-02 credits included, and the second Stars
+     charge), `payment.refunded`, `referral.rewarded`. The recipients sit in
+     the encrypted `webhooks.outgoing`, so `webhooks.dispatch` reads them when
+     it runs and writes one `webhooks.deliver` per enabled, subscribed
+     recipient (job id `webhook:<eventId>:<sha256(url)[0:16]>`); a delivery
+     re-reads the recipient, signs the unchanged body, POSTs with a 10 s
+     timeout and no redirects, and answers 502 on anything but 2xx.
+     **Decision:** section 7.3 lists no queue for 9.8; they run on a new
+     `webhooks` queue (worker concurrency 5) so a slow recipient cannot hold
+     up the customers' `notify` jobs. Retries: `attempts: 6` with a custom
+     backoff `outgoing-webhook` of 1 min, 5 min, 30 min, 2 h, 12 h (BullMQ
+     6.3.7 passes the attempts made, the failed one included —
+     `Backoffs.calculate(…, this.attemptsMade + 1, …)` in `job.js`; custom
+     strategies per docs.bullmq.io "Retrying failing jobs", via Context7).
+     `X-RemnaRay-Delivery` is the event ULID. Settings: at most five
+     recipients, events limited to the six; the console's settings page
+     edits the group as JSON. New metric `rr_outgoing_webhook_failures_total`.
+     Regressions: `webhooks.service.test.ts` (real local recipient: signature
+     and headers, 500/404/302/refused fail and count, removed/disabled/
+     unsubscribed skip, fan-out), `packages/queues` (queue, options, delays),
+     the admin settings render test, and `test/m4.webhooks.integration.test.mjs`
+     (real PostgreSQL and Valkey: five events from real flows, the worker
+     fans out, the first attempt fails, the retry waits 60 000 ms, the second
+     attempt is delivered with the same signed body); `m1.integration`
+     asserts the four subscription events. Verified: lint, typecheck,
+     format, `pnpm -r test` (API 246, web 38), `pnpm test` 43, `test:m1`
+     2/2, `test:m2` 2/2, `test:m4` 5/5. **Not verified:** a delivery to a
+     real external receiver; E2E not rerun (no customer path changed).
+     **Found, not repaired:** the settings page is not the section 14 tab
+     set ("Вебхуки" among them); the recipients are edited as one JSON value.
+     A failed `m1.integration` leaves a Valkey client reconnecting for ever,
+     so the run hangs instead of ending.
+
+   Still open: `panel.reset-traffic` and `panel.delete-user` are never performed (found
    under item 5).
    Robokassa SuccessURL/FailURL landing and the `settings.fiscal.mode`
    vocabulary (found under 6c). Showing the available balance and held

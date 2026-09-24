@@ -47,7 +47,15 @@ function service(overrides: Record<string, unknown> = {}, settings: Record<strin
       findMany: vi.fn().mockResolvedValue([]),
       update: vi.fn().mockImplementation(({ data }: { data: { expiresAt: Date } }) => {
         state.expiresAt = data.expiresAt;
-        return Promise.resolve({ id: 'sub-1', expiresAt: data.expiresAt });
+        return Promise.resolve({
+          id: 'sub-1',
+          userId: 'user-1',
+          planId: null,
+          status: 'active',
+          source: 'purchase',
+          startsAt: new Date('2026-01-01T00:00:00.000Z'),
+          expiresAt: data.expiresAt,
+        });
       }),
       updateMany: vi.fn().mockResolvedValue({ count: 1 }),
     },
@@ -126,6 +134,16 @@ describe('AdminUsersService (FR-140, FR-141)', () => {
       amountMinor: 0n,
       reason: 'support request',
       actorAdminId: 'admin-1',
+    });
+    // Section 9.8, written in the same transaction.
+    const [emitted] = test.db.outboxJob.create.mock.calls[0] as [
+      { data: { name: string; payload: { type: string; data: Record<string, unknown> } } },
+    ];
+    expect(emitted.data.name).toBe('webhooks.dispatch');
+    expect(emitted.data.payload.type).toBe('subscription.activated');
+    expect(emitted.data.payload.data).toMatchObject({
+      subscriptionId: 'sub-1',
+      expiresAt: '2099-02-11T00:00:00.000Z',
     });
   });
 
