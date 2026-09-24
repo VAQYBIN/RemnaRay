@@ -307,7 +307,7 @@ export class LavaProvider implements PaymentProvider {
       sum: Number(amount(p.amountMinor)),
       orderId: p.invoiceId,
       shopId: cfg.shopId,
-      hookUrl: `${p.returnUrl}/webhooks/lava`,
+      hookUrl: p.webhookUrl,
       successUrl: p.returnUrl,
       failUrl: p.failUrl,
     };

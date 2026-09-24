@@ -33,8 +33,11 @@ export type CreateInvoiceParams = {
   currency: 'RUB';
   description: string;
   user: { id: string; telegramId: bigint; email?: string | undefined; language: string };
+  /** Where the provider sends the payer back: `/pay/<id>` (FR-134). */
   returnUrl: string;
   failUrl: string;
+  /** `https://<domain>/webhooks/<provider>` (section 9.7), for providers told it per invoice. */
+  webhookUrl: string;
   expiresAt: Date;
   receipt?: ReceiptData;
   /** The plan's list price and `price_overrides`, for providers pricing in their own currency. */

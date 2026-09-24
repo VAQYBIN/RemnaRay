@@ -82,6 +82,7 @@ export class PaymentsService {
     const fiscalEmail = this.settings
       ? String(await this.settings.get('fiscal.fallback_email'))
       : '';
+    const origin = `https://${process.env.RR_DOMAIN ?? 'localhost'}`;
     const params = {
       invoiceId: input.idempotencyKey,
       shopInvoiceId,
@@ -94,8 +95,9 @@ export class PaymentsService {
         email: user.email ?? undefined,
         language: user.language,
       },
-      returnUrl: `https://${process.env.RR_DOMAIN ?? 'localhost'}/pay/success`,
-      failUrl: `https://${process.env.RR_DOMAIN ?? 'localhost'}/pay/fail`,
+      returnUrl: `${origin}/pay/${shopInvoiceId}`,
+      failUrl: `${origin}/pay/${shopInvoiceId}`,
+      webhookUrl: `${origin}/webhooks/${input.provider}`,
       expiresAt,
       ...(listPrice ? { plan: listPrice } : {}),
       ...(fiscalMode === 'receipt' && provider.capabilities.receipts

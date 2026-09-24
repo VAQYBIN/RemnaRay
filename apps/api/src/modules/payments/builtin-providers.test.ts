@@ -101,6 +101,41 @@ describe('status polling (sections 7.3, 11.3)', () => {
   );
 });
 
+describe('Lava invoice (section 11.3.3)', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it('points hookUrl at the shop webhook, not below the return page', async () => {
+    const bodies: Array<Record<string, unknown>> = [];
+    vi.stubGlobal('fetch', (_url: string, init: RequestInit) => {
+      bodies.push(JSON.parse(init.body as string) as Record<string, unknown>);
+      return Promise.resolve(Response.json({ url: 'https://pay.lava.ru/x' }));
+    });
+
+    await new LavaProvider().createInvoice(
+      {
+        invoiceId: 'client-key',
+        shopInvoiceId: '0199aaaa-bbbb-7ccc-8ddd-eeeeeeeeeeee',
+        amountMinor: 29900n,
+        currency: 'RUB',
+        description: 'Premium',
+        user: { id: 'u', telegramId: 1n, language: 'ru' },
+        returnUrl: 'https://shop.test/pay/0199aaaa-bbbb-7ccc-8ddd-eeeeeeeeeeee',
+        failUrl: 'https://shop.test/pay/0199aaaa-bbbb-7ccc-8ddd-eeeeeeeeeeee',
+        webhookUrl: 'https://shop.test/webhooks/lava',
+        expiresAt: new Date(Date.now() + 3_600_000),
+      },
+      { shopId: 'shop', secretKey: 'secret', baseUrl: 'http://lava.test' },
+    );
+
+    expect(bodies[0]).toMatchObject({
+      hookUrl: 'https://shop.test/webhooks/lava',
+      successUrl: 'https://shop.test/pay/0199aaaa-bbbb-7ccc-8ddd-eeeeeeeeeeee',
+    });
+  });
+});
+
 describe('CryptoBot invoice (section 11.3.5)', () => {
   afterEach(() => {
     vi.unstubAllGlobals();
@@ -125,6 +160,7 @@ describe('CryptoBot invoice (section 11.3.5)', () => {
         user: { id: 'u', telegramId: 1n, language: 'ru' },
         returnUrl: 'https://shop.test/pay/success',
         failUrl: 'https://shop.test/pay/fail',
+        webhookUrl: 'https://shop.test/webhooks/x',
         expiresAt: new Date(Date.now() + 3_600_000),
       },
       { token: 'token', baseUrl: 'http://cryptobot.test/api' },
@@ -181,6 +217,7 @@ describe('Telegram Stars pricing and invoice link (section 11.3.6)', () => {
         user: { id: 'u', telegramId: 1n, language: 'ru' },
         returnUrl: 'https://shop.test/pay/success',
         failUrl: 'https://shop.test/pay/fail',
+        webhookUrl: 'https://shop.test/webhooks/x',
         expiresAt,
         plan: { priceMinor: 29900n, priceOverrides: {} },
       },
@@ -216,6 +253,7 @@ describe('Telegram Stars pricing and invoice link (section 11.3.6)', () => {
         user: { id: 'u', telegramId: 1n, language: 'ru' },
         returnUrl: '',
         failUrl: '',
+        webhookUrl: 'https://shop.test/webhooks/x',
         expiresAt: new Date(),
       },
       { starsPerRub: 0.75, botToken: 't', apiBase: 'http://telegram.test' },
@@ -233,6 +271,7 @@ describe('Telegram Stars pricing and invoice link (section 11.3.6)', () => {
       user: { id: 'u', telegramId: 1n, language: 'ru' },
       returnUrl: '',
       failUrl: '',
+      webhookUrl: 'https://shop.test/webhooks/x',
       expiresAt: new Date(),
     };
     await expect(new StarsProvider().createInvoice(params, { botToken: 't' })).rejects.toThrow(

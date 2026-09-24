@@ -191,3 +191,57 @@ describe('PaymentsService.recheck (section 7.3 status polling)', () => {
     expect(repository.applyEvent).toHaveBeenCalledWith('event-1');
   });
 });
+
+describe('PaymentsService.createInvoice URLs handed to the provider', () => {
+  afterEach(() => vi.unstubAllEnvs());
+
+  it('returns the payer to /pay/<id> and names the provider webhook path', async () => {
+    vi.stubEnv('RR_DOMAIN', 'shop.example');
+    const id = '0199aaaa-bbbb-7ccc-8ddd-eeeeeeeeeeee';
+    const registry = createPaymentProviderRegistry({ RR_PAYMENTS_MOCK: 'true' });
+    const create = vi.spyOn(registry.get('mock'), 'createInvoice');
+    const db = {
+      paymentProvider: { findUnique: vi.fn().mockResolvedValue(null) },
+      user: {
+        findUniqueOrThrow: vi
+          .fn()
+          .mockResolvedValue({ id: 'user-1', telegramId: 42n, email: null, language: 'ru' }),
+      },
+      $queryRaw: vi.fn().mockResolvedValue([{ id }]),
+      outboxJob: { create: vi.fn() },
+    };
+    const repository = {
+      findByIdempotencyKey: vi.fn().mockResolvedValue(null),
+      createInvoice: vi
+        .fn()
+        .mockImplementation((input: Record<string, unknown>) =>
+          Promise.resolve({ ...input, status: 'pending' }),
+        ),
+      findInvoice: vi.fn().mockResolvedValue({ id }),
+    };
+    const service = new PaymentsService(
+      { db } as unknown as Infrastructure,
+      repository as unknown as PaymentsRepository,
+      registry,
+    );
+
+    await service.createInvoice({
+      userId: 'user-1',
+      kind: 'topup',
+      provider: 'mock',
+      amountMinor: 10000n,
+      idempotencyKey: 'key-1',
+    });
+
+    // FR-134: `/pay/<id>` is the page that shows the invoice; `/pay/success`
+    // was read as an invoice named "success".
+    expect(create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        returnUrl: `https://shop.example/pay/${id}`,
+        failUrl: `https://shop.example/pay/${id}`,
+        webhookUrl: 'https://shop.example/webhooks/mock',
+      }),
+      expect.anything(),
+    );
+  });
+});

@@ -219,6 +219,20 @@ AMOUNT_MISMATCH`); the precheckout body adds `totalAmount`/`currency`
      `underpaid`; the invoice stayed `pending` on the previous build).
      Verified: lint, typecheck, format, API 195, `test:m2` 2/2, `test:m4` 4/4.
      Robokassa's poll still answers `pending` without asking (6c).
+   - **6b. Done 2026-09-25 — Lava `hookUrl` and the return URLs.** Lava was
+     told `hookUrl = <returnUrl>/webhooks/lava`, i.e.
+     `https://<domain>/pay/success/webhooks/lava`, which does not exist, so
+     no Lava webhook ever arrived. Found with it: every provider sent the
+     payer back to `/pay/success` or `/pay/fail`, which the site reads as an
+     invoice named `success` (FR-134 has only `/pay/[invoiceId]`; 11.3.4
+     says the return is `/pay/<id>`). `CreateInvoiceParams` now carries
+     `webhookUrl = https://<domain>/webhooks/<provider>` (section 9.7), and
+     `returnUrl`/`failUrl` are `/pay/<id>` of the pre-allocated invoice id.
+     These are the shop's own URLs; the rest of the Lava contract (11.3.3
+     `[verify]` fields, the `Authorization` vs `Signature` header, the
+     `additionalKey`) is untouched and still NOT VERIFIED. Regressions in
+     `builtin-providers.test.ts` and `payments.service.test.ts`. Verified:
+     lint, typecheck, format, API 197, `test:m2` 2/2.
 7. Refund/balance defects: refunds accepted for top-ups, balance plan change
    adds time twice, `settleBalance` ignores held rewards, `expire()` keeps
    promo reservations, global `Idempotency-Key`, unauthenticated events take
