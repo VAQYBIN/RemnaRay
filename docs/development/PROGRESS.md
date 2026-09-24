@@ -352,6 +352,17 @@ rewards)`; `LedgerRepository.available` honoured it, `settleBalance`
      `m2.payment.integration.test.mjs` (forged pending under `real-event`,
      then the signed paid event → invoice paid; stayed `pending` before).
      Verified: lint, typecheck, format, API 212, `test:m2` 2/2, `test:m4` 4/4.
+   - **7g. Done 2026-09-25 — a failing inline apply lost the event.**
+     `receiveWebhook` applied a new event inline and only then queued
+     `payments.apply-event`; a failure answered 500 without a queued job, and
+     the provider's redelivery was a duplicate that nothing applied. `recheck`
+     likewise applied only new poll events. The job is now queued first and a
+     failed inline apply is logged and left to it (5 attempts, item 5); a
+     redelivered event still unprocessed is applied, and its failure goes
+     back to the provider for another delivery; `recheck` always applies
+     (`applyEvent` ignores processed events). Regressions in
+     `payments.service.test.ts`. Verified: lint, typecheck, format, API 214,
+     `test:m2` 2/2, `test:m4` 4/4.
    - **7h. Queued (found under 7d):** `MeService.cancelInvoice` checks
      `pending` and then updates without a condition, so a payment applied in
      between leaves a paid invoice marked `canceled`.

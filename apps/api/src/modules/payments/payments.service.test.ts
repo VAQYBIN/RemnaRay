@@ -1,4 +1,4 @@
-import { randomBytes } from 'node:crypto';
+import { createHmac, randomBytes } from 'node:crypto';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import type { Infrastructure } from '../../infra/infra.module';
@@ -317,5 +317,65 @@ describe('PaymentsService.createInvoice Idempotency-Key (sections 9.2, 9.3)', ()
     await expect(
       service.createInvoice(request({ kind: 'topup', planId: undefined, amountMinor: 20000n })),
     ).rejects.toMatchObject({ code: 'IDEMPOTENCY_KEY_REUSED' });
+  });
+});
+
+describe('PaymentsService event delivery when the inline apply fails', () => {
+  function signed(body: string) {
+    return {
+      raw: Buffer.from(body),
+      headers: {
+        'x-mock-signature': createHmac('sha256', 'mock-secret').update(body).digest('hex'),
+      },
+    };
+  }
+  function harness() {
+    const db = {
+      paymentProvider: { findUnique: vi.fn().mockResolvedValue(null) },
+      invoice: { findFirst: vi.fn().mockResolvedValue({ id: 'invoice-1' }) },
+      outboxJob: { create: vi.fn().mockResolvedValue({}) },
+    };
+    const repository = {
+      insertEvent: vi.fn().mockResolvedValue({ id: 'event-1', duplicate: false }),
+      applyEvent: vi.fn().mockRejectedValue(new Error('deadlock detected')),
+    };
+    const service = new PaymentsService(
+      { db } as unknown as Infrastructure,
+      repository as unknown as PaymentsRepository,
+      createPaymentProviderRegistry({ RR_PAYMENTS_MOCK: 'true' }),
+    );
+    return { db, repository, service };
+  }
+  const body = JSON.stringify({
+    eventId: 'evt-1',
+    providerInvoiceId: 'p-1',
+    type: 'paid',
+    paidAmountMinorRub: '100',
+  });
+
+  it('queues payments.apply-event before trying, so a failed try is retried', async () => {
+    const { db, service } = harness();
+    const { raw, headers } = signed(body);
+
+    await expect(service.receiveWebhook('mock', raw, headers, '127.0.0.1')).resolves.toMatchObject({
+      status: 200,
+    });
+    expect(db.outboxJob.create).toHaveBeenCalledWith({
+      data: expect.objectContaining({
+        name: 'payments.apply-event',
+        jobId: 'evt:event-1',
+      }) as object,
+    });
+  });
+
+  it('applies a redelivered event that is still unprocessed, and asks for another try if it fails', async () => {
+    const { repository, service } = harness();
+    repository.insertEvent.mockResolvedValue({ id: 'event-1', duplicate: true });
+    const { raw, headers } = signed(body);
+
+    await expect(service.receiveWebhook('mock', raw, headers, '127.0.0.1')).rejects.toThrow(
+      'deadlock detected',
+    );
+    expect(repository.applyEvent).toHaveBeenCalledWith('event-1');
   });
 });

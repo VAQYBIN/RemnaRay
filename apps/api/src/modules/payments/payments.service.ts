@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
 import { createHash } from 'node:crypto';
 import { Prisma } from '@remnaray/db';
 import { paymentsEventsTotal } from '@remnaray/metrics';
@@ -13,6 +13,7 @@ import type { ProviderEvent } from './payments.types';
 
 @Injectable()
 export class PaymentsService {
+  private readonly logger = new Logger(PaymentsService.name);
   private readonly recheckAt = new Map<string, number>();
   constructor(
     private readonly infra: Infrastructure,
@@ -234,8 +235,12 @@ export class PaymentsService {
         'WEBHOOK_INVALID_SIGNATURE',
         verification.reason ?? 'Invalid webhook signature',
       );
-    if (!stored.duplicate) await this.repository.applyEvent(stored.id);
-    if (!stored.duplicate)
+    // Section 9.7: the event is queued before anything else happens to it,
+    // so the retried `payments.apply-event` job finishes a failed inline
+    // apply. A redelivery of an event still unprocessed (its first delivery
+    // failed before the job was queued) is applied here, and a failure is
+    // answered with an error so the provider delivers it again.
+    if (!stored.duplicate) {
       await this.infra.db.outboxJob.create({
         data: {
           queue: 'payments',
@@ -244,6 +249,12 @@ export class PaymentsService {
           jobId: `evt:${stored.id}`,
         },
       });
+      await this.repository.applyEvent(stored.id).catch((error: unknown) => {
+        this.logger.warn(`payment event ${stored.id} left to its queued retry: ${String(error)}`);
+      });
+    } else {
+      await this.repository.applyEvent(stored.id);
+    }
     return provider.ackResponse(event);
   }
 
@@ -282,7 +293,9 @@ export class PaymentsService {
       headers: { source: 'poll' },
       signatureOk: true,
     });
-    if (!stored.duplicate) await this.repository.applyEvent(stored.id);
+    // `applyEvent` does nothing to an event already processed; one stored by
+    // an earlier poll whose apply failed is applied now.
+    await this.repository.applyEvent(stored.id);
     return this.repository.findInvoice(invoiceId);
   }
 
