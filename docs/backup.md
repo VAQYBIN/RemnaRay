@@ -74,3 +74,5 @@ A fresh database is not dumped: there is nothing in it yet.
 
 `maintenance.backup-check` reads `.last-status` and raises the `backup.failed`
 alert when the newest backup is older than 26 hours or the last run failed.
+Like `tls-check` it runs at worker start and daily, and a reading the API
+refused (during the setup wizard, for one) is taken again five minutes later.

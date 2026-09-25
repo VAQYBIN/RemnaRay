@@ -71,7 +71,9 @@ would be served — and reports the expiry to
 `POST /api/internal/v1/system/tls-result`. Fewer than fourteen days left, or a
 host that does not answer at all, raises the `tls.expiring` alert, and
 `GET /api/admin/v1/system` carries the last reading as `tls.expiresAt`,
-`tls.daysLeft` and `tls.checkedAt`.
+`tls.daysLeft` and `tls.checkedAt`. A reading the API refuses — as it refuses
+every internal call until the setup wizard finishes — is taken again five
+minutes later; the day counts from the last reading it recorded.
 
 Verification is deliberately not enforced by the check: a certificate that has
 already expired still has to be readable, because that is the case the check

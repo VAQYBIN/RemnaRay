@@ -28,3 +28,22 @@ export function cronJobs(at: Date): CronJob[] {
     { queue: 'panel', name: 'panel.reconcile-all', jobId: `reconcile:${minuteStamp(slot)}` },
   ];
 }
+
+/** How soon a refused daily check is asked again. */
+export const DAILY_CHECK_RETRY_MS = 5 * 60_000;
+const DAY_MS = 24 * 60 * 60_000;
+
+export type DailyCheckState = { recordedAt?: number; queuedAt?: number };
+
+/**
+ * Sections 19.2 and 20.3: `maintenance.tls-check` and `maintenance.backup-check`
+ * run at start and then daily. A day counts from the check the API recorded,
+ * not from the one queued: while the wizard runs every internal call is
+ * `503 SETUP_NOT_COMPLETED` (section 17.4), and a check refused then would
+ * otherwise leave `/admin/system` without a reading for a day. A refused one
+ * is asked again every `DAILY_CHECK_RETRY_MS`.
+ */
+export function dailyCheckDue(now: number, state: DailyCheckState): boolean {
+  if (state.recordedAt !== undefined && now - state.recordedAt < DAY_MS) return false;
+  return state.queuedAt === undefined || now - state.queuedAt >= DAILY_CHECK_RETRY_MS;
+}

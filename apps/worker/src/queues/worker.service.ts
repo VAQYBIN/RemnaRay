@@ -10,11 +10,12 @@ import {
 import { Queue, Worker, type Job } from 'bullmq';
 
 import { backupStatus } from './backup-check';
-import { cronJobs } from './schedule';
+import { cronJobs, dailyCheckDue, type DailyCheckState } from './schedule';
 import { certificateStatus } from './tls-check';
 import { workerValkeyUrl } from './worker-config';
 
 type InternalCall = { path: string; body?: unknown };
+type DailyCheck = 'maintenance.tls-check' | 'maintenance.backup-check';
 
 /** Section 7.3; `webhooks` (9.8) is not in its table. */
 export const CONCURRENCY: Record<QueueName, number> = {
@@ -193,23 +194,30 @@ export class WorkerService implements OnModuleInit, OnModuleDestroy {
     queueCron();
     this.timers.push(setInterval(queueCron, 60_000));
     // Section 19.2: the certificate is checked at start and once a day.
-    // Section 20.3: the same daily cadence for the backup status.
+    // Section 20.3: the same daily cadence for the backup status. A check the
+    // API refused, as it refuses everything while the wizard runs, is asked
+    // again within minutes rather than a day later.
     const queueDaily = () => {
-      const stamp = String(Date.now());
-      void maintenance.add(
-        'maintenance.tls-check',
-        {},
-        { jobId: toJobId(`maintenance:tls-check:${stamp}`) },
-      );
-      void maintenance.add(
-        'maintenance.backup-check',
-        {},
-        { jobId: toJobId(`maintenance:backup-check:${stamp}`) },
-      );
+      const now = Date.now();
+      for (const [name, state] of Object.entries(this.dailyChecks)) {
+        if (!dailyCheckDue(now, state)) continue;
+        state.queuedAt = now;
+        void maintenance
+          .add(name, {}, { jobId: toJobId(`${name.replace('.', ':')}:${String(now)}`) })
+          .catch((error: unknown) => {
+            this.logger.warn(`${name} was not queued: ${String(error)}`);
+          });
+      }
     };
     queueDaily();
-    this.timers.push(setInterval(queueDaily, 24 * 60 * 60_000));
+    this.timers.push(setInterval(queueDaily, 60_000));
   }
+
+  /** When each daily check was last queued and last recorded by the API. */
+  private readonly dailyChecks: Record<DailyCheck, DailyCheckState> = {
+    'maintenance.tls-check': {},
+    'maintenance.backup-check': {},
+  };
 
   /**
    * The only maintenance job the worker performs itself: section 19.2 wants the
@@ -218,19 +226,30 @@ export class WorkerService implements OnModuleInit, OnModuleDestroy {
    */
   private async tlsCheck(): Promise<unknown> {
     const domain = process.env.RR_DOMAIN ?? '';
-    if (!domain) return { skipped: 'RR_DOMAIN is not set' };
+    if (!domain) {
+      this.recorded('maintenance.tls-check');
+      return { skipped: 'RR_DOMAIN is not set' };
+    }
     const [host, port] = domain.split(':');
     const status = await certificateStatus(host ?? domain, port ? Number(port) : 443);
     recordTlsExpiry(status.expiresAt);
-    return this.call({ path: '/api/internal/v1/system/tls-result', body: status });
+    const result = await this.call({ path: '/api/internal/v1/system/tls-result', body: status });
+    this.recorded('maintenance.tls-check');
+    return result;
   }
 
   /** Section 20.3: `.last-status` is written by the `backup` container. */
   private async backupCheck(): Promise<unknown> {
-    return this.call({
+    const result = await this.call({
       path: '/api/internal/v1/system/backup-result',
       body: backupStatus(process.env.RR_BACKUP_DIR ?? '/backups'),
     });
+    this.recorded('maintenance.backup-check');
+    return result;
+  }
+
+  private recorded(name: DailyCheck): void {
+    this.dailyChecks[name].recordedAt = Date.now();
   }
 
   async onModuleDestroy() {

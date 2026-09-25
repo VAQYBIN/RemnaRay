@@ -784,11 +784,22 @@ uploads:…` resolves to the project volume — checked on a scratch
      on the old script. Verified: `test:m5` 6/6, `pnpm test` 45, lint,
      format. **Not verified:** on the VPS.
 
+   - **9q TLS and backup checks after setup.** The worker queued
+     `maintenance.tls-check` and `maintenance.backup-check` at start and then
+     every 24 h, with no retry. Until the wizard finishes the API answers
+     every internal call `503 SETUP_NOT_COMPLETED` (17.4), so on a fresh
+     install both readings were refused and `/admin/system` had none for up
+     to a day; a restarting API lost a day the same way. The worker now
+     counts the day from the reading the API recorded and asks a refused one
+     again every five minutes (`dailyCheckDue` in `schedule.ts`, checked on
+     the minute tick). Regression: `daily-checks.test.ts` runs
+     `WorkerService` with BullMQ and `fetch` stubbed and fake timers — a 503
+     at start, again after five minutes, then nothing for a day; it fails on
+     the old worker. Verified: worker lint, typecheck, 18 tests, build,
+     `m1.worker-cron` integration. **Not verified:** on the VPS.
+
    Still open — the rest of the 2026-09-24 deployment review, which item 9
    had summarised only partly:
-   - the TLS and backup checks are queued at worker start and daily with no
-     retry, so a check refused during setup leaves `/admin/system` empty for
-     up to 24 h (20.3);
    - `proxy-reloader.ts` never checks the status of its result call, so a
      `proxy-reload-result` refused during setup is dropped silently (21.6);
    - a manual `rebuild.yml` run for an older version republishes the major
