@@ -39,6 +39,19 @@ sixty. Then open `https://<your domain>/setup` and follow the eight steps —
 When the wizard finishes, `/setup` answers 404 and `RR_SETUP_TOKEN` can be
 removed from `.env`.
 
+## Verifying the images
+
+Every published image is signed with [cosign](https://docs.sigstore.dev/)
+by the release (or weekly rebuild) workflow of this repository, keyless, and
+carries an SBOM and a build provenance attestation. To check one before you
+run it:
+
+```sh
+cosign verify ghcr.io/remnaray/app:1 \
+  --certificate-identity-regexp '^https://github\.com/VAQYBIN/remnaray-astra/\.github/workflows/(release|rebuild)\.yml@' \
+  --certificate-oidc-issuer https://token.actions.githubusercontent.com
+```
+
 ## Running from a source checkout
 
 `compose.yaml` names published images rather than build contexts, so a

@@ -1,5 +1,6 @@
-# Section 24.4. A tag `vX.Y.Z` publishes the five images, an SBOM and a signed
-# attestation, and opens a GitHub Release with the changelog. A pre-release
+# Section 24.4. A tag `vX.Y.Z` publishes the five images, each with an SBOM, a
+# cosign signature and a provenance attestation, and opens a GitHub Release
+# with the changelog. A pre-release
 # `vX.Y.Z-rc.N` publishes under `rc` and never moves the floating major tag,
 # so an owner following `RR_VERSION=1` is not upgraded onto a candidate.
 name: release
@@ -109,8 +110,24 @@ jobs:
           cache-from: type=gha,scope=release-${{ matrix.image }}
           cache-to: type=gha,mode=max,scope=release-${{ matrix.image }}
 
-      # Signs the image with the workflow's own identity; `cosign verify`
-      # checks it against this repository and this workflow file.
+      # Section 24.4 p. 3: a `cosign` signature, keyless, bound to this
+      # workflow's GitHub identity and recorded in the Sigstore transparency
+      # log. By digest, which every tag of this image points at.
+      - name: Install cosign
+        uses: sigstore/cosign-installer@v4.1.2
+
+      - name: Sign the image with cosign
+        env:
+          IMAGE: ${{ env.REGISTRY }}/${{ steps.ns.outputs.owner }}/${{ matrix.image }}
+          DIGEST: ${{ steps.push.outputs.digest }}
+        run: |
+          cosign sign --yes "${IMAGE}@${DIGEST}"
+          cosign verify "${IMAGE}@${DIGEST}" \
+            --certificate-identity-regexp '^https://github\.com/${{ github.repository }}/\.github/workflows/release\.yml@' \
+            --certificate-oidc-issuer https://token.actions.githubusercontent.com > /dev/null
+
+      # A build provenance attestation besides the signature (`gh attestation
+      # verify`); it is not the cosign signature section 24.4 asks for.
       - name: Attest the provenance
         uses: actions/attest-build-provenance@v2
         with:

@@ -118,6 +118,22 @@ jobs:
           exit-code: '1'
           ignore-unfixed: true
 
+      # Section 24.4 p. 3: a `cosign` signature, keyless, bound to this
+      # workflow's GitHub identity and recorded in the Sigstore transparency
+      # log. By digest, once the scan is clean; the tags below must name it.
+      - name: Install cosign
+        uses: sigstore/cosign-installer@v4.1.2
+
+      - name: Sign the image with cosign
+        env:
+          IMAGE: ${{ env.REGISTRY }}/${{ steps.ns.outputs.owner }}/${{ matrix.image }}
+          DIGEST: ${{ steps.push.outputs.digest }}
+        run: |
+          cosign sign --yes "${IMAGE}@${DIGEST}"
+          cosign verify "${IMAGE}@${DIGEST}" \
+            --certificate-identity-regexp '^https://github\.com/${{ github.repository }}/\.github/workflows/rebuild\.yml@' \
+            --certificate-oidc-issuer https://token.actions.githubusercontent.com > /dev/null
+
       # Only once the scan is clean: a rebuild that made things worse must not
       # become what `RR_VERSION=1` resolves to.
       - name: Publish the dated and floating tags
@@ -126,6 +142,7 @@ jobs:
           VERSION: ${{ steps.release.outputs.result }}
           MOVE_MINOR: ${{ steps.floating.outputs.minor }}
           MOVE_MAJOR: ${{ steps.floating.outputs.major }}
+          DIGEST: ${{ steps.push.outputs.digest }}
         run: |
           tags="${VERSION}-$(date -u '+%Y%m%d')"
           if [ "$MOVE_MINOR" = true ]; then tags="$tags ${VERSION%.*}"; fi
@@ -133,6 +150,13 @@ jobs:
           source="${IMAGE}:${VERSION}-${{ github.run_id }}"
           for tag in $tags; do
             docker buildx imagetools create --tag "${IMAGE}:${tag}" "$source"
+            # The signature covers one digest; a tag naming another would
+            # be published unsigned.
+            published=$(docker buildx imagetools inspect "${IMAGE}:${tag}" --format '{{json .Manifest.Digest}}' | tr -d '"')
+            if [ "$published" != "$DIGEST" ]; then
+              echo "${IMAGE}:${tag} is ${published}, not the signed ${DIGEST}" >&2
+              exit 1
+            fi
           done
 
       - name: Attest the provenance

@@ -955,10 +955,26 @@ uploads:…` resolves to the project volume — checked on a scratch
      unchanged), API 283, worker 26, web 45, bot 28, `pnpm test` 49,
      `m1.worker-cron`, E2E 30 passed / 1 skipped.
 
+   - **9z cosign signatures.** Sections 22.x, 24.4 p. 3 and 26 want the
+     images signed with `cosign`; the workflows only ran
+     `actions/attest-build-provenance`, under a comment claiming `cosign
+verify` would check it. `release.yml` and `rebuild.yml` now install
+     `sigstore/cosign-installer@v4.1.2` (latest tag, checked through the
+     GitHub API; v4 is what installs cosign 3) and run `cosign sign --yes
+<image>@<digest>` keyless with the workflow's OIDC token, then `cosign
+verify` against `github.com/<repo>/.github/workflows/<file>.yml@` and
+     `token.actions.githubusercontent.com` (Context7 `/sigstore/docs`
+     CI quickstart, `/sigstore/cosign` `sign` by digest). The provenance
+     attestation stays, described as what it is. A rebuild signs after the
+     Trivy gate, and since the signature covers one digest, each dated or
+     floating tag it publishes must resolve to that digest or the job fails
+     (`imagetools inspect --format '{{json .Manifest.Digest}}'`, checked on
+     buildx 0.37.1). `docs/install.md` shows how to verify. Regression in
+     `tooling.test.mjs` (fails on the old workflows); both workflows parse.
+     **Not verified:** a real signing run on GitHub.
+
    Still open — the rest of the 2026-09-24 deployment review, which item 9
    had summarised only partly:
-   - specification gap: releases attested with `attest-build-provenance` rather than a `cosign`
-     signature and a comment in `release.yml` claiming otherwise (24.4 p. 3);
    - unpinned or floating: `certbot/certbot:latest`, the `caddy-ratelimit`
      module without a version, the Caddy base pinned to `2.11.4` against
      6.1's `caddy:2-alpine`, Grafana's admin password defaulting to `admin`,

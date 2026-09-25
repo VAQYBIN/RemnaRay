@@ -516,3 +516,42 @@ test('the app image knows its release, and releases mark security fixes', async 
   assert.match(release, /generate_release_notes: true/u);
   assert.match(notes, /- title: Security\n\s+labels:\n\s+- security\n/u);
 });
+
+// Section 24.4 p. 3 and 26: the published images are signed with cosign. A
+// provenance attestation alone is not that signature, whatever a comment says.
+test('the release and rebuild workflows sign every image with cosign', async () => {
+  const release = await readFile('.github/workflows/release.yml', 'utf8');
+  const rebuild = await readFile('.github/workflows/rebuild.yml', 'utf8');
+
+  for (const [name, workflow] of [
+    ['release', release],
+    ['rebuild', rebuild],
+  ]) {
+    // Keyless signing takes the workflow's OIDC token.
+    assert.match(workflow, /^ {2}id-token: write$/mu);
+    // v4 of the installer is what installs cosign 3; the tag exists.
+    assert.match(workflow, /uses: sigstore\/cosign-installer@v4\.1\.2\n/u);
+    // By digest, never by tag.
+    assert.match(workflow, /cosign sign --yes "\$\{IMAGE\}@\$\{DIGEST\}"/u);
+    assert.match(workflow, /DIGEST: \$\{\{ steps\.push\.outputs\.digest \}\}/u);
+    assert.match(
+      workflow,
+      new RegExp(`certificate-identity-regexp '.*/\\\\.github/workflows/${name}\\\\.yml@'`, 'u'),
+    );
+    assert.match(
+      workflow,
+      /--certificate-oidc-issuer https:\/\/token\.actions\.githubusercontent\.com/u,
+    );
+  }
+  // A rebuild signs only after the scan, and publishes no tag the signature
+  // does not cover.
+  assert.ok(
+    rebuild.indexOf('Sign the image with cosign') > rebuild.indexOf('Scan the rebuilt image'),
+  );
+  assert.ok(
+    rebuild.indexOf('Sign the image with cosign') <
+      rebuild.indexOf('Publish the dated and floating tags'),
+  );
+  assert.match(rebuild, /if \[ "\$published" != "\$DIGEST" \]; then/u);
+  assert.doesNotMatch(release, /Signs the image with the workflow's own identity/u);
+});
