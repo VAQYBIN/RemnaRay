@@ -993,12 +993,17 @@ verify` against `github.com/<repo>/.github/workflows/<file>.yml@` and
      Verified: `pnpm lint`, `pnpm test` 50, the two integration files.
      **Not verified:** on the VPS; an existing Grafana keeps its password.
 
+   - **9ab nightly Trivy for `backup`.** `nightly.yml` scanned four images;
+     `backup`, which every profile starts and which holds the database
+     password, was never scanned. Added to the matrix (same Dockerfile and
+     context as the release). Regression in `tooling.test.mjs` (fails
+     without it). **Not verified:** a real nightly run.
+
    Still open — the rest of the 2026-09-24 deployment review, which item 9
    had summarised only partly:
    - unpinned or floating: `certbot/certbot:latest`, the `caddy-ratelimit`
      module without a version, the Caddy base pinned to `2.11.4` against
-     6.1's `caddy:2-alpine`,
-     the nightly Trivy not scanning the `backup` image;
+     6.1's `caddy:2-alpine`;
    - suspected, to be tested: a TLS-mode switch within one profile may not
      reach nginx; a loose
      `release.yml` tag filter; unvalidated `images.yml` tag input.

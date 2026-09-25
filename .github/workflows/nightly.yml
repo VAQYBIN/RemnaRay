@@ -49,6 +49,9 @@ jobs:
             file: deploy/proxy/nginx/Dockerfile
           - image: caddy
             file: deploy/proxy/caddy/Dockerfile
+          # Every profile starts it, and it holds the database password.
+          - image: backup
+            file: deploy/backup/Dockerfile
     steps:
       - name: Checkout
         uses: actions/checkout@v7

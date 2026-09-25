@@ -555,3 +555,13 @@ test('the release and rebuild workflows sign every image with cosign', async () 
   assert.match(rebuild, /if \[ "\$published" != "\$DIGEST" \]; then/u);
   assert.doesNotMatch(release, /Signs the image with the workflow's own identity/u);
 });
+
+// Section 22.x `nightly.yml`: trivy over every image a deployment runs. The
+// release and rebuild publish five, and `backup` runs in every profile.
+test('the nightly scan covers every published image', async () => {
+  const nightly = await readFile('.github/workflows/nightly.yml', 'utf8');
+  const trivy = /\n {2}trivy:\n([\s\S]*?)\n {2}\w[\w-]*:\n/u.exec(nightly)?.[1] ?? '';
+  for (const image of ['app', 'web', 'nginx', 'caddy', 'backup'])
+    assert.match(trivy, new RegExp(`^ {10}- image: ${image}$`, 'mu'), `${image} is never scanned`);
+  assert.match(trivy, /^ {12}file: deploy\/backup\/Dockerfile$/mu);
+});
