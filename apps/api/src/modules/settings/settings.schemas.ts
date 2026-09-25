@@ -452,6 +452,13 @@ export const settingRegistry: SettingDefinition[] = [
       defaultValue: [],
       description: 'Optional admin IP allowlist.',
     },
+    // Section 20.3 `maintenance.disk-check`: `disk.low` below this share of
+    // the database volume free (FR-163).
+    disk_alert_pct: {
+      schema: z.number().int().min(1).max(99),
+      defaultValue: 10,
+      description: 'Free space on the database volume, in percent, below which disk.low is raised.',
+    },
     check_updates: {
       schema: z.boolean(),
       defaultValue: true,

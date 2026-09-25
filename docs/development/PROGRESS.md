@@ -902,9 +902,30 @@ uploads:…` resolves to the project volume — checked on a scratch
      `docker compose config` resolves them. Regression in `tooling.test.mjs`
      (fails without them). Verified: `pnpm test` 48, lint.
 
+   - **9x `maintenance.disk-check`.** Section 20.3 and FR-163 want `disk.low`
+     when less than `admin.disk_alert_pct` (27.3, default 10)
+     of the database volume is free; neither the job nor the setting
+     existed. PostgreSQL reports its own size (`pg_database_size`) but not
+     the filesystem's, so the worker mounts `pgdata:/pgdata:ro` and calls
+     `statfs` — checked on this host as uid 1000 against a live
+     `postgres:18-alpine` volume: the figures match `df -B1` (total
+     `blocks×bsize`, free `bavail×bsize`) and the data directory stays
+     `EACCES`. It posts `{available,totalBytes,freeBytes}` to
+     `/api/internal/v1/system/disk-result`, which adds
+     `pg_database_size`, keeps it at `rr:disk:status`, alerts below the
+     setting (an unmounted volume is recorded, not alerted), and
+     `/admin/system` shows "Free on the database volume". Cadence: start and
+     hourly (20.3 names none; the retry-after-refusal of 9q applies,
+     `checkDue` now takes the period). Tests: `disk-check.test.ts` (2),
+     `disk-result.test.ts` (4), `schedule.test.ts` and `daily-checks.test.ts`
+     (hourly), compose mount in `tooling.test.mjs`. Verified: `pnpm lint`,
+     `pnpm typecheck`, i18n-check, build (OpenAPI unchanged), API 277,
+     worker 22, web 45, `pnpm test` 48, `m1.worker-cron`, E2E 30 passed /
+     1 skipped. **Not verified:** on the VPS.
+
    Still open — the rest of the 2026-09-24 deployment review, which item 9
    had summarised only partly:
-   - specification gaps: no `maintenance.disk-check` (20.3), no daily update
+   - specification gaps: no daily update
      check (24.6),
      releases attested with `attest-build-provenance` rather than a `cosign`
      signature and a comment in `release.yml` claiming otherwise (24.4 p. 3);

@@ -76,3 +76,12 @@ A fresh database is not dumped: there is nothing in it yet.
 alert when the newest backup is older than 26 hours or the last run failed.
 Like `tls-check` it runs at worker start and daily, and a reading the API
 refused (during the setup wizard, for one) is taken again five minutes later.
+
+## Disk space
+
+`maintenance.disk-check` asks the filesystem of the `pgdata` volume, which the
+worker mounts read-only at `/pgdata` (the database files themselves stay
+unreadable to it), how much space is left. Below `admin.disk_alert_pct` of the
+volume free — 10 % unless changed in the console settings — it raises the
+`disk.low` alert. It runs at worker start and hourly, and `/admin/system`
+shows the last reading next to the database size.

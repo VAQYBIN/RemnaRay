@@ -12,7 +12,7 @@ import { RemnawaveService } from '../remnawave/remnawave.service';
 import { SettingsService } from '../settings/settings.service';
 import { caddyHasRateLimit } from '../../tools/proxy-render';
 import { ForwardedObserver } from './forwarded.interceptor';
-import { BACKUP_STATUS_KEY, TLS_STATUS_KEY } from './proxy.controller';
+import { BACKUP_STATUS_KEY, DISK_STATUS_KEY, TLS_STATUS_KEY } from './proxy.controller';
 
 function appVersion(): string {
   if (process.env.RR_APP_VERSION) return process.env.RR_APP_VERSION;
@@ -66,6 +66,27 @@ export class SystemService {
     };
   }
 
+  /** The last `maintenance.disk-check` reading of the database volume (20.3). */
+  private async diskStatus(): Promise<{
+    totalBytes: number | null;
+    freeBytes: number | null;
+    freePct: number | null;
+    alertPct: number | null;
+    checkedAt: string | null;
+  }> {
+    const raw = await this.infra.redis.get(DISK_STATUS_KEY).catch(() => null);
+    const parsed = raw ? (JSON.parse(raw) as Record<string, unknown>) : {};
+    const number = (key: string) => (typeof parsed[key] === 'number' ? parsed[key] : null);
+    const mounted = parsed['available'] === true;
+    return {
+      totalBytes: mounted ? number('totalBytes') : null,
+      freeBytes: mounted ? number('freeBytes') : null,
+      freePct: number('freePct'),
+      alertPct: number('alertPct'),
+      checkedAt: typeof parsed['checkedAt'] === 'string' ? parsed['checkedAt'] : null,
+    };
+  }
+
   async overview() {
     const [panelSync, botMode, botUsername, outboxPending, tlsExpiresAt, dbSize] =
       await Promise.all([
@@ -96,7 +117,7 @@ export class SystemService {
       },
       bot: { mode: botMode, username: botUsername },
       outboxPending,
-      database: { sizeBytes: Number(dbSize[0]?.size ?? 0n) },
+      database: { sizeBytes: Number(dbSize[0]?.size ?? 0n), volume: await this.diskStatus() },
       tls: { domain: String(tlsExpiresAt), ...(await this.tlsStatus()) },
       proxy: {
         profile: process.env.RR_PROXY_PROFILE ?? 'nginx',

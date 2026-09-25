@@ -23,7 +23,12 @@ const overviewSchema = z.object({
   panel: z.object({ lastSyncedAt: z.string().nullable(), baseUrl: z.string() }),
   bot: z.object({ mode: z.unknown(), username: z.unknown() }),
   outboxPending: z.number(),
-  database: z.object({ sizeBytes: z.number() }),
+  database: z.object({
+    sizeBytes: z.number(),
+    volume: z
+      .object({ freeBytes: z.number().nullable(), freePct: z.number().nullable() })
+      .optional(),
+  }),
   tls: z.object({ domain: z.string(), expiresAt: z.string().nullable() }),
   backups: z.object({ lastRunAt: z.string().nullable() }),
   healthUrl: z.string(),
@@ -109,6 +114,15 @@ export default function SystemClient() {
                     <Stat
                       label={t('system.dbSize')}
                       value={bytes(data.overview.database.sizeBytes)}
+                    />
+                    <Stat
+                      label={t('system.diskFree')}
+                      value={
+                        data.overview.database.volume?.freeBytes != null &&
+                        data.overview.database.volume.freePct != null
+                          ? `${bytes(data.overview.database.volume.freeBytes)} (${data.overview.database.volume.freePct.toFixed(1)} %)`
+                          : t('system.diskUnknown')
+                      }
                     />
                     <Stat label={t('bot.mode')} value={String(data.overview.bot.mode)} />
                     <Stat

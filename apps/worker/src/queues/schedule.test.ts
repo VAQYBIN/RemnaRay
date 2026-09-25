@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { cronJobs, DAILY_CHECK_RETRY_MS, dailyCheckDue, minuteStamp } from './schedule';
+import { CHECK_RETRY_MS, checkDue, cronJobs, DAY_MS, HOUR_MS, minuteStamp } from './schedule';
 
 describe('section 7.3 cron jobs', () => {
   it('stamps a minute as yyyymmddHHMM in UTC', () => {
@@ -32,7 +32,9 @@ describe('section 7.3 cron jobs', () => {
   });
 });
 
-describe('the section 19.2 and 20.3 daily checks', () => {
+describe('the section 19.2 and 20.3 checks', () => {
+  const dailyCheckDue = (now: number, state: Parameters<typeof checkDue>[1]) =>
+    checkDue(now, state, DAY_MS);
   const start = Date.parse('2026-09-25T07:00:00Z');
   const minutes = (count: number) => start + count * 60_000;
 
@@ -45,7 +47,7 @@ describe('the section 19.2 and 20.3 daily checks', () => {
     const refused = { queuedAt: start };
     expect(dailyCheckDue(minutes(4), refused)).toBe(false);
     expect(dailyCheckDue(minutes(5), refused)).toBe(true);
-    expect(DAILY_CHECK_RETRY_MS).toBe(5 * 60_000);
+    expect(CHECK_RETRY_MS).toBe(5 * 60_000);
   });
 
   it('waits a day after the check the API recorded', () => {
@@ -53,5 +55,11 @@ describe('the section 19.2 and 20.3 daily checks', () => {
     expect(dailyCheckDue(minutes(60), recorded)).toBe(false);
     expect(dailyCheckDue(minutes(24 * 60), recorded)).toBe(false);
     expect(dailyCheckDue(minutes(24 * 60 + 1), recorded)).toBe(true);
+  });
+
+  it('runs the disk check hourly after a recorded one', () => {
+    const recorded = { queuedAt: start, recordedAt: start };
+    expect(checkDue(minutes(59), recorded, HOUR_MS)).toBe(false);
+    expect(checkDue(minutes(60), recorded, HOUR_MS)).toBe(true);
   });
 });

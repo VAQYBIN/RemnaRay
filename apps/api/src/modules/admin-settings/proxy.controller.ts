@@ -14,6 +14,7 @@ import { z } from 'zod';
 import { Infrastructure } from '../../infra/infra.module';
 import { InternalTokenGuard } from '../auth/auth.guards';
 import { NotifyService } from '../notify/notify.service';
+import { SettingsService } from '../settings/settings.service';
 
 const reloadResultSchema = z.object({
   ok: z.boolean(),
@@ -39,9 +40,18 @@ const backupResultSchema = z.object({
   ageHours: z.number().nullable(),
 });
 
+/** Section 20.3: what `maintenance.disk-check` saw of the database volume. */
+const diskResultSchema = z.object({
+  available: z.boolean(),
+  totalBytes: z.number().int().min(0),
+  freeBytes: z.number().int().min(0),
+  error: z.string().max(200).optional(),
+});
+
 export const TLS_ALERT_DAYS = 14;
 export const TLS_STATUS_KEY = 'rr:tls:status';
 export const BACKUP_STATUS_KEY = 'rr:backup:status';
+export const DISK_STATUS_KEY = 'rr:disk:status';
 
 /**
  * Section 21.6: `proxy-reloader` reports every apply here, so the outcome is
@@ -53,6 +63,7 @@ export class InternalProxyController {
   constructor(
     private readonly infra: Infrastructure,
     private readonly notify: NotifyService,
+    private readonly settings: SettingsService,
   ) {}
 
   @Post('proxy-reload-result')
@@ -117,6 +128,53 @@ export class InternalProxyController {
       });
     return { recorded: true, alerted: !input.ok };
   }
+
+  /**
+   * Section 20.3 and FR-163: `disk.low` when less than
+   * `admin.disk_alert_pct` of the database volume is free. The worker reads
+   * the filesystem; the database's own share of it is
+   * `pg_database_size`, which only the API can ask.
+   */
+  @Post('disk-result')
+  @HttpCode(200)
+  async diskResult(@Body() body: unknown) {
+    const input = diskResultSchema.parse(body);
+    const [threshold, size] = await Promise.all([
+      this.settings.get('admin.disk_alert_pct'),
+      this.infra.db.$queryRaw<
+        { size: bigint }[]
+      >`SELECT pg_database_size(current_database())::bigint AS size`,
+    ]);
+    const alertPct = Number(threshold);
+    const freePct =
+      input.available && input.totalBytes > 0 ? (input.freeBytes / input.totalBytes) * 100 : null;
+    await this.infra.redis
+      .set(
+        DISK_STATUS_KEY,
+        JSON.stringify({
+          ...input,
+          freePct,
+          alertPct,
+          databaseBytes: Number(size[0]?.size ?? 0n),
+          checkedAt: new Date().toISOString(),
+        }),
+      )
+      .catch(() => null);
+
+    // An unmounted volume is a deployment to fix, not a full disk: it shows
+    // on `/admin/system` and raises nothing.
+    const low = freePct !== null && freePct < alertPct;
+    if (low)
+      await this.notify.alert({
+        type: 'disk.low',
+        details: `${gib(input.freeBytes)} GiB free of ${gib(input.totalBytes)} GiB (${freePct.toFixed(1)} %)`,
+      });
+    return { recorded: true, alerted: low };
+  }
+}
+
+function gib(bytes: number): string {
+  return (bytes / 1024 ** 3).toFixed(1);
 }
 
 /**

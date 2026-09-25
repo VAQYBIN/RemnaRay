@@ -264,6 +264,8 @@
   "admin.system.panelSync": "Последняя сверка с панелью",
   "admin.system.outbox": "Неопубликованные задачи",
   "admin.system.dbSize": "Размер базы",
+  "admin.system.diskFree": "Свободно на томе базы",
+  "admin.system.diskUnknown": "ещё не проверено",
   "admin.system.queues": "Очереди",
   "admin.system.retryFailed": "Повторить failed",
   "admin.system.health": "Health-эндпоинт",

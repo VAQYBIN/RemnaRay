@@ -10,12 +10,20 @@ import {
 import { Queue, Worker, type Job } from 'bullmq';
 
 import { backupStatus } from './backup-check';
-import { cronJobs, dailyCheckDue, type DailyCheckState } from './schedule';
+import { checkDue, cronJobs, DAY_MS, HOUR_MS, type CheckState } from './schedule';
+import { diskStatus } from './disk-check';
 import { certificateStatus } from './tls-check';
 import { workerValkeyUrl } from './worker-config';
 
 type InternalCall = { path: string; body?: unknown };
-type DailyCheck = 'maintenance.tls-check' | 'maintenance.backup-check';
+type Check = 'maintenance.tls-check' | 'maintenance.backup-check' | 'maintenance.disk-check';
+
+/** How often each of the worker's own checks runs once recorded. */
+const CHECK_PERIODS: Record<Check, number> = {
+  'maintenance.tls-check': DAY_MS,
+  'maintenance.backup-check': DAY_MS,
+  'maintenance.disk-check': HOUR_MS,
+};
 
 /** Section 7.3; `webhooks` (9.8) is not in its table. */
 export const CONCURRENCY: Record<QueueName, number> = {
@@ -103,7 +111,9 @@ export class WorkerService implements OnModuleInit, OnModuleDestroy {
             ? await this.tlsCheck()
             : job.name === 'maintenance.backup-check'
               ? await this.backupCheck()
-              : await this.call(maintenanceCall(job)),
+              : job.name === 'maintenance.disk-check'
+                ? await this.diskCheck()
+                : await this.call(maintenanceCall(job)),
         { ...options, concurrency: CONCURRENCY.maintenance },
       ),
     );
@@ -194,13 +204,13 @@ export class WorkerService implements OnModuleInit, OnModuleDestroy {
     queueCron();
     this.timers.push(setInterval(queueCron, 60_000));
     // Section 19.2: the certificate is checked at start and once a day.
-    // Section 20.3: the same daily cadence for the backup status. A check the
-    // API refused, as it refuses everything while the wizard runs, is asked
-    // again within minutes rather than a day later.
-    const queueDaily = () => {
+    // Section 20.3: the same daily cadence for the backup status, and the
+    // database volume hourly. A check the API refused, as it refuses
+    // everything while the wizard runs, is asked again within minutes.
+    const queueChecks = () => {
       const now = Date.now();
-      for (const [name, state] of Object.entries(this.dailyChecks)) {
-        if (!dailyCheckDue(now, state)) continue;
+      for (const [name, state] of Object.entries(this.checks) as [Check, CheckState][]) {
+        if (!checkDue(now, state, CHECK_PERIODS[name])) continue;
         state.queuedAt = now;
         void maintenance
           .add(name, {}, { jobId: toJobId(`${name.replace('.', ':')}:${String(now)}`) })
@@ -209,14 +219,15 @@ export class WorkerService implements OnModuleInit, OnModuleDestroy {
           });
       }
     };
-    queueDaily();
-    this.timers.push(setInterval(queueDaily, 60_000));
+    queueChecks();
+    this.timers.push(setInterval(queueChecks, 60_000));
   }
 
-  /** When each daily check was last queued and last recorded by the API. */
-  private readonly dailyChecks: Record<DailyCheck, DailyCheckState> = {
+  /** When each check was last queued and last recorded by the API. */
+  private readonly checks: Record<Check, CheckState> = {
     'maintenance.tls-check': {},
     'maintenance.backup-check': {},
+    'maintenance.disk-check': {},
   };
 
   /**
@@ -248,8 +259,18 @@ export class WorkerService implements OnModuleInit, OnModuleDestroy {
     return result;
   }
 
-  private recorded(name: DailyCheck): void {
-    this.dailyChecks[name].recordedAt = Date.now();
+  /** Section 20.3: the database volume, mounted read-only at `RR_PGDATA_DIR`. */
+  private async diskCheck(): Promise<unknown> {
+    const result = await this.call({
+      path: '/api/internal/v1/system/disk-result',
+      body: diskStatus(process.env.RR_PGDATA_DIR ?? '/pgdata'),
+    });
+    this.recorded('maintenance.disk-check');
+    return result;
+  }
+
+  private recorded(name: Check): void {
+    this.checks[name].recordedAt = Date.now();
   }
 
   async onModuleDestroy() {

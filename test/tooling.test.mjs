@@ -403,6 +403,8 @@ test('the worker reads the backup status the backup service writes (section 20.3
   // `maintenance.backup-check` reads `RR_BACKUP_DIR` (default /backups).
   assert.match(backup, /- \.\/backups:\/backups\n/u);
   assert.match(worker, /- \.\/backups:\/backups:ro\n/u, 'the worker never sees .last-status');
+  // `maintenance.disk-check` statfs's the database volume (section 20.3).
+  assert.match(worker, /- pgdata:\/pgdata:ro\n/u, 'the worker cannot see the database volume');
   // Its own list replaces the common one, so the common mounts must be there.
   for (const mount of ['./themes:/themes:ro', './locales:/locales:ro', 'uploads:/uploads'])
     assert.ok(worker.includes(`- ${mount}\n`), `the worker lost ${mount}`);

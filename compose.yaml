@@ -117,13 +117,16 @@ services:
     command: [node, dist/apps/worker/main.js]
     expose: ['3003']
     # `maintenance.backup-check` reads `.last-status`, which the `backup`
-    # service writes there (section 20.3). A merge key does not merge lists,
-    # so the common mounts are repeated.
+    # service writes there, and `maintenance.disk-check` asks the filesystem
+    # of the database volume for its free space (section 20.3); the database
+    # files stay the `postgres` user's and unreadable here. A merge key does
+    # not merge lists, so the common mounts are repeated.
     volumes:
       - ./themes:/themes:ro
       - ./locales:/locales:ro
       - uploads:/uploads
       - ./backups:/backups:ro
+      - pgdata:/pgdata:ro
     depends_on: { api: { condition: service_healthy } }
     healthcheck:
       test: [CMD, wget, -qO-, http://127.0.0.1:3003/health]

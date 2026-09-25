@@ -57,6 +57,7 @@ describe('the section 19.2 and 20.3 daily checks in the worker', () => {
   const previous = { ...process.env };
   let answers: number[];
   const posted: string[] = [];
+  const disk: Record<string, unknown>[] = [];
 
   beforeEach(() => {
     vi.useFakeTimers({ toFake: ['setInterval', 'clearInterval', 'Date'] });
@@ -64,13 +65,16 @@ describe('the section 19.2 and 20.3 daily checks in the worker', () => {
     bull.processors.clear();
     bull.added.length = 0;
     posted.length = 0;
+    disk.length = 0;
     process.env.VALKEY_URL = 'redis://127.0.0.1:6379/0';
     process.env.RR_BACKUP_DIR = mkdtempSync(join(tmpdir(), 'rr-backups-'));
     delete process.env.RR_DOMAIN;
     vi.stubGlobal(
       'fetch',
-      vi.fn((url: string) => {
+      vi.fn((url: string, init?: RequestInit) => {
         if (url.endsWith('/system/backup-result')) posted.push(url);
+        if (url.endsWith('/system/disk-result'))
+          disk.push(JSON.parse(init?.body as string) as Record<string, unknown>);
         const status = answers.shift() ?? 200;
         return Promise.resolve(
           new Response(status === 200 ? '{}' : '{"error":{"code":"SETUP_NOT_COMPLETED"}}', {
@@ -111,6 +115,24 @@ describe('the section 19.2 and 20.3 daily checks in the worker', () => {
     expect(backupChecks()).toHaveLength(2);
     await vi.advanceTimersByTimeAsync(60 * 60_000);
     expect(backupChecks()).toHaveLength(3);
+    await worker.onModuleDestroy();
+  });
+
+  it('reads the database volume at start and then hourly', async () => {
+    answers = [];
+    process.env.RR_PGDATA_DIR = process.env.RR_BACKUP_DIR;
+    const worker = new WorkerService();
+    await worker.onModuleInit();
+    await settle();
+    const diskChecks = () => bull.added.filter((job) => job.name === 'maintenance.disk-check');
+    expect(diskChecks()).toHaveLength(1);
+    expect(disk[0]).toMatchObject({ available: true });
+    expect((disk[0]?.['totalBytes'] as number) > 0).toBe(true);
+
+    await vi.advanceTimersByTimeAsync(59 * 60_000);
+    expect(diskChecks()).toHaveLength(1);
+    await vi.advanceTimersByTimeAsync(60_000);
+    expect(diskChecks()).toHaveLength(2);
     await worker.onModuleDestroy();
   });
 });
