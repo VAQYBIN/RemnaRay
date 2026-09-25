@@ -5,9 +5,13 @@
 # so an owner following `RR_VERSION=1` is not upgraded onto a candidate.
 name: release
 
+# Only the two forms 24.4 names; `v*` also let `v1.2`, `v1.2.3-beta` and
+# `v1.2.3+build` through, to half-publish or to publish under `rc`.
 on:
   push:
-    tags: ['v*']
+    tags:
+      - 'v[0-9]+.[0-9]+.[0-9]+'
+      - 'v[0-9]+.[0-9]+.[0-9]+-rc.[0-9]+'
 
 permissions:
   contents: write
@@ -47,13 +51,21 @@ jobs:
         with:
           fetch-depth: 0
 
+      # The filter above is a glob; this is the exact rule, and the version
+      # that later steps put in a shell and in image tags is checked here.
       - name: Read the tag
         id: version
         run: |
+          number='(0|[1-9][0-9]*)'
+          if ! printf '%s\n' "$GITHUB_REF_NAME" \
+            | grep -Eqx "v${number}\.${number}\.${number}(-rc\.${number})?"; then
+            echo "Not a release tag (vX.Y.Z or vX.Y.Z-rc.N): $GITHUB_REF_NAME" >&2
+            exit 1
+          fi
           version="${GITHUB_REF_NAME#v}"
           echo "version=$version" >> "$GITHUB_OUTPUT"
           case "$version" in
-            *-*) echo 'prerelease=true' >> "$GITHUB_OUTPUT" ;;
+            *-rc.*) echo 'prerelease=true' >> "$GITHUB_OUTPUT" ;;
             *) echo 'prerelease=false' >> "$GITHUB_OUTPUT" ;;
           esac
 

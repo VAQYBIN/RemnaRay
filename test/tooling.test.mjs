@@ -1,8 +1,10 @@
 import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
+import { readFileSync } from 'node:fs';
 import { glob, mkdtemp, readFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
+import process from 'node:process';
 import test from 'node:test';
 
 const packageManifest = JSON.parse(await readFile('package.json', 'utf8'));
@@ -483,6 +485,64 @@ test('the release and rebuild workflows move the floating tags by that rule', as
     /if \[ "\$MOVE_MAJOR" = true \]; then tags="\$tags \$\{VERSION%%\.\*\}"; fi/u,
   );
   assert.doesNotMatch(rebuild, /for tag in "\$dated" "\$minor" "\$major"/u);
+});
+
+// Section 24.4 p. 1 and 5: a release is `vX.Y.Z`, a candidate `vX.Y.Z-rc.N`.
+// `v*` also started the workflow on `v1.2` (no image tag, a failed run),
+// `v1.2.3-beta.1` (published under `rc`) and `v1.2.3+build` (a final
+// GitHub Release that the weekly rebuild then took as the latest and could
+// not tag), with the tag handed to a shell unchecked.
+test('the release workflow starts only on the two release tag forms', async () => {
+  const release = await readFile('.github/workflows/release.yml', 'utf8');
+  const filters = /on:\n {2}push:\n {4}tags:\n((?: {6}- .*\n)+)/u
+    .exec(release)?.[1]
+    .split('\n')
+    .filter(Boolean)
+    .map((line) => line.replace(/^ {6}- '(.*)'$/u, '$1'));
+  assert.deepEqual(filters, ['v[0-9]+.[0-9]+.[0-9]+', 'v[0-9]+.[0-9]+.[0-9]+-rc.[0-9]+']);
+  // GitHub's filter syntax as its cheat sheet gives it: `[]` a range, `+` one
+  // or more of the preceding character, anything else itself.
+  const glob = (pattern) => new RegExp(`^${pattern.replace(/\./gu, '\\.')}$`, 'u');
+  const starts = (tag) => filters.some((filter) => glob(filter).test(tag));
+
+  // The step that reads the tag, run as the workflow runs it.
+  const step = /- name: Read the tag\n {8}id: version\n {8}run: \|\n((?: {10}.*\n)+)/u
+    .exec(release)?.[1]
+    .replace(/^ {10}/gmu, '');
+  assert.ok(step);
+  const directory = await mkdtemp(join(tmpdir(), 'rr-release-tag-'));
+  const read = (tag) => {
+    const output = join(directory, `${String(Math.random()).slice(2)}.out`);
+    try {
+      execFileSync('sh', ['-c', step], {
+        env: { PATH: process.env.PATH, GITHUB_REF_NAME: tag, GITHUB_OUTPUT: output },
+        stdio: ['ignore', 'ignore', 'ignore'],
+      });
+    } catch {
+      return 'refused';
+    }
+    return readFileSync(output, 'utf8');
+  };
+  try {
+    for (const [tag, outputs] of [
+      ['v1.2.3', 'version=1.2.3\nprerelease=false\n'],
+      ['v10.0.12', 'version=10.0.12\nprerelease=false\n'],
+      ['v0.9.0-rc.1', 'version=0.9.0-rc.1\nprerelease=true\n'],
+    ]) {
+      assert.ok(starts(tag), tag);
+      assert.equal(read(tag), outputs, tag);
+    }
+    for (const tag of ['v1.2', 'vfoo', 'v1.2.3-beta.1', 'v1.2.3+build', 'v1.2.3.4', 'v1.2.3-rc']) {
+      assert.ok(!starts(tag), tag);
+      assert.equal(read(tag), 'refused', tag);
+    }
+    // The glob admits leading zeros; the step does not.
+    assert.ok(starts('v01.2.3'));
+    assert.equal(read('v01.2.3'), 'refused');
+    assert.equal(read("v1.2.3';id;'"), 'refused');
+  } finally {
+    await rm(directory, { recursive: true, force: true });
+  }
 });
 
 // Section 20.3 and the 7.1 compose: failures while the API boots (Prisma,

@@ -1031,10 +1031,24 @@ verify` against `github.com/<repo>/.github/workflows/<file>.yml@` and
      Regression in `test/rr.test.mjs` (fails on the old script). shellcheck
      clean. **Not verified:** on the VPS.
 
+   - **9ae `release.yml` starts only on `vX.Y.Z` and `vX.Y.Z-rc.N`.**
+     Confirmed from the docker/metadata-action source (Context7): with
+     `tags: ['v*']`, `v1.2` or `vfoo` is not semver, gets no image tag and the
+     run fails; `v1.2.3-beta.1` or `v1.2.3-hotfix` was published under `rc`,
+     which 24.4 p. 5 reserves for `-rc.N`; `v1.2.3+build` became a final
+     GitHub Release, which `rebuild.yml` then takes as the latest and cannot
+     turn into a Docker tag. The tag also reached a shell unchecked. The
+     filter is now `v[0-9]+.[0-9]+.[0-9]+` and `...-rc.[0-9]+` (the syntax of
+     GitHub's cheat sheet, whose own example is `v[12].[0-9]+.[0-9]+`), and
+     "Read the tag" refuses anything but those forms without leading zeros,
+     before any later step uses the version. Regression in
+     `tooling.test.mjs` runs that step from the workflow on good and bad
+     tags (fails on the old workflow); `docs.test.mjs` updated; actionlint
+     1.7.12 clean. **Not verified:** a real tag push on GitHub.
+
    Still open — the rest of the 2026-09-24 deployment review, which item 9
    had summarised only partly:
-   - suspected, to be tested: a loose `release.yml` tag filter; unvalidated
-     `images.yml` tag input.
+   - suspected, to be tested: unvalidated `images.yml` tag input.
      Remaining review items (`rebuild.yml` Trivy tag `0.28.0`, worker `/backups` mount, restore script
      user/themes) and the M5-004 gates recorded below.
 

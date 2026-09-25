@@ -142,7 +142,7 @@ test('the release workflows exist and publish on a version tag', async () => {
   const rebuild = await readFile('.github/workflows/rebuild.yml', 'utf8');
 
   // The acceptance: a tag `v0.9.0-rc.1` publishes images.
-  assert.match(release, /tags: \['v\*'\]/u);
+  assert.match(release, /^ {6}- 'v\[0-9\]\+\.\[0-9\]\+\.\[0-9\]\+-rc\.\[0-9\]\+'$/mu);
   assert.match(release, /push: true/u);
   for (const image of ['app', 'web', 'nginx', 'caddy'])
     assert.match(release, new RegExp(`- image: ${image}\\n`, 'u'), `${image} is never published`);
