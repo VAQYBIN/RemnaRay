@@ -12,6 +12,13 @@ rather than producing a proxy that silently never gets a certificate.
 | `custom`      | yes     | yes     | no         | the owner's files in `deploy/proxy/certs/` |
 | `none`        | no      | no      | yes        | RemnaRay terminates no TLS                 |
 
+To switch modes within one profile, change `RR_TLS_MODE` in `.env` and run
+`./rr up`. Compose recreates `proxy-config` with the new mode but keeps the
+running proxy, whose definition does not depend on it; `./rr up` notices that
+and has `proxy-reloader` validate and apply the new configuration before it
+checks HTTPS. A plain `docker compose up` does not, and leaves the proxy on the
+previous mode until `./rr proxy:reload`.
+
 ## `acme` — the default
 
 nginx loads `nginx-module-acme`, which answers HTTP-01 on port 80 for the same

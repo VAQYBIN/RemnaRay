@@ -186,6 +186,10 @@ sync_certbot() {
 start_deployment() {
   cleanup_stale_proxy
   if [ "$tls_mode" = certbot ]; then sync_certbot; fi
+  if [ "$profile" != external ]; then
+    renderer_before=$(compose ps -aq proxy-config)
+    proxy_before=$(compose ps -aq "proxy-$profile")
+  fi
   wait_for_ready
   if [ "$tls_mode" = certbot ]; then
     sync_certbot
@@ -193,6 +197,14 @@ start_deployment() {
     if ! compose exec -T proxy-nginx test -f "/etc/letsencrypt/live/$RR_DOMAIN/fullchain.pem"; then
       echo 'HTTP bootstrap ready; run ./scripts/rr tls:issue for the initial certificate.'
       return
+    fi
+  elif [ "$profile" != external ]; then
+    # A changed RR_TLS_MODE recreates `proxy-config`, whose first render asks
+    # for no reload, but not the proxy, whose definition does not name it: the
+    # running proxy would keep serving the previous mode's configuration.
+    if [ -n "$proxy_before" ] && [ "$(compose ps -aq "proxy-$profile")" = "$proxy_before" ] \
+      && [ "$(compose ps -aq proxy-config)" != "$renderer_before" ]; then
+      render_proxy
     fi
   fi
   if [ "$profile" != external ]; then wait_for_https; fi

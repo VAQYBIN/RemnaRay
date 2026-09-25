@@ -31,6 +31,16 @@ fs.appendFileSync(process.env.RR_TEST_LOG, JSON.stringify(args) + '\\n');
 if (process.env.RR_TEST_FAILURE && args.includes(process.env.RR_TEST_FAILURE)) process.exit(1);
 if (args[0] === 'ps' && process.env.RR_TEST_STALE_ID) console.log(process.env.RR_TEST_STALE_ID);
 if (args.includes('config') && args.includes('--services')) console.log('proxy-caddy\\nproxy-nginx\\nedge\\ncertbot\\nproxy-config\\nproxy-reloader');
+// RR_TEST_IDS: {service: [container id before \`up\`, after it]}, answered in turn.
+if (args.includes('ps') && args.includes('-aq')) {
+  const service = args.at(-1);
+  const ids = JSON.parse(process.env.RR_TEST_IDS || '{}')[service] || [];
+  const counter = process.env.RR_TEST_LOG + '.' + service;
+  const seen = fs.existsSync(counter) ? Number(fs.readFileSync(counter, 'utf8')) : 0;
+  fs.writeFileSync(counter, String(seen + 1));
+  const id = ids[Math.min(seen, ids.length - 1)];
+  if (id) console.log(id);
+}
 `,
       { mode: 0o755 },
     );
@@ -206,4 +216,33 @@ test('initial issuance waits for rendering before reload and restarts renewal on
   assert.ok(failed.calls.some((args) => args.includes('start') && args.at(-1) === 'certbot'));
   assert.ok(!failed.calls.some((args) => args.includes('--reload')));
   assert.ok(run(['down', '-v']).calls.some((args) => args.at(-1) === '-v'));
+});
+
+test('up reloads a proxy it kept when the renderer was recreated with another TLS mode', () => {
+  const up = (ids, mode = 'custom', profile = 'nginx') =>
+    run(['up'], { RR_PROXY_PROFILE: profile, RR_TLS_MODE: mode }, '', {
+      RR_TEST_IDS: JSON.stringify(ids),
+    }).calls;
+  const reloaded = (calls) => {
+    const ready = calls.findIndex((args) => args.includes('--wait'));
+    const render = calls.findIndex((args) => args.includes('dist/tools/render-proxy.js'));
+    const reload = calls.findIndex((args) => args.includes('--reload'));
+    if (reload < 0) return false;
+    assert.ok(ready >= 0 && render > ready && reload > render);
+    return true;
+  };
+
+  // acme → custom: Compose recreates proxy-config and keeps the proxy.
+  for (const profile of ['nginx', 'caddy'])
+    assert.ok(
+      reloaded(
+        up({ 'proxy-config': ['old', 'new'], [`proxy-${profile}`]: ['kept'] }, 'custom', profile),
+      ),
+      profile,
+    );
+  // A proxy created by this `up` read the new render when it started.
+  assert.ok(!reloaded(up({ 'proxy-config': ['old', 'new'], 'proxy-nginx': ['old', 'new'] })));
+  assert.ok(!reloaded(up({ 'proxy-config': ['', 'new'], 'proxy-nginx': ['', 'new'] })));
+  // Nothing recreated: nothing to apply.
+  assert.ok(!reloaded(up({ 'proxy-config': ['same'], 'proxy-nginx': ['same'] }, 'acme')));
 });

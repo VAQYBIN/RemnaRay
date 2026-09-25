@@ -1014,11 +1014,27 @@ verify` against `github.com/<repo>/.github/workflows/<file>.yml@` and
      Renovate/M0-003-style check, not this review). Regression in
      `tooling.test.mjs` (fails on the old Dockerfile).
 
+   - **9ad a TLS-mode switch within one profile reaches the proxy.**
+     Confirmed first: `docker compose config --hash` gives `proxy-config` a
+     new hash for another `RR_TLS_MODE` and `proxy-nginx` the same one, and
+     the renderer's first render publishes no reload. On a local stack
+     (current `app`/`web`/`nginx` images) acme → custom with the old
+     `./rr up` recreated `proxy-config`, kept `proxy-nginx` and never served
+     HTTPS (`tlsv1 alert internal error`). `./rr up` now notes both
+     containers before `up` and, when the renderer was recreated and the
+     proxy kept, runs `render_proxy` (render, then `proxy-reloader --reload`)
+     before the HTTPS check; `certbot` already did. Same stack with the fix:
+     `manual: reloaded`, HTTPS ready with the `rr.test` certificate, proxy
+     container unchanged; a second `./rr up` reloads nothing. Before the
+     wizard the reload is not recorded in `audit_log` (503, printed). A plain
+     `docker compose up` still needs `./rr proxy:reload` (`docs/tls.md`).
+     Regression in `test/rr.test.mjs` (fails on the old script). shellcheck
+     clean. **Not verified:** on the VPS.
+
    Still open — the rest of the 2026-09-24 deployment review, which item 9
    had summarised only partly:
-   - suspected, to be tested: a TLS-mode switch within one profile may not
-     reach nginx; a loose
-     `release.yml` tag filter; unvalidated `images.yml` tag input.
+   - suspected, to be tested: a loose `release.yml` tag filter; unvalidated
+     `images.yml` tag input.
      Remaining review items (`rebuild.yml` Trivy tag `0.28.0`, worker `/backups` mount, restore script
      user/themes) and the M5-004 gates recorded below.
 
