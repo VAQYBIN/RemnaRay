@@ -653,9 +653,27 @@ style-src 'unsafe-inline'; sandbox` and `nosniff`, which makes any theme
      format, `pnpm -r test` (API 259, worker 14), `pnpm test` 43, `test:m1`
      3/3, `test:m2` 3/3, `test:m4` 6/6, `pnpm test:e2e` 28 passed / 1 skipped.
 
+   - **9j. Done 2026-09-25 — `settings.fiscal.mode` used its own
+     vocabulary.** FR-062 and section 18 define `none | provider_receipt`;
+     the settings, the wizard's schema and client, and the payment service
+     used `none | receipt | manual`. Now `provider_receipt` throughout.
+     Migration `0007_fiscal_mode_provider_receipt` maps stored values —
+     `receipt` → `provider_receipt`, `manual` → `none` (the specification
+     has no manual mode, and "no receipt through the provider" is `none`) —
+     in `settings` and in the wizard's saved payments step; without it the
+     new schema would refuse `receipt` and the settings would fall back to
+     `none`, switching receipts off silently. Regressions:
+     `test/m1.fiscal-mode-migration.integration.test.mjs` (real PostgreSQL:
+     the old value refused, mapped in both places, accepted, rerun
+     harmless) and two receipt cases in `payments.service.test.ts` (Robokassa
+     link carries `Receipt` only for `provider_receipt`; fails on the old
+     comparison). Verified: lint, typecheck, typecheck:e2e, format,
+     `pnpm -r test` (API 259), `pnpm test` 43, `test:m1` 4/4, `test:m2` 3/3,
+     `pnpm test:e2e` 28 passed / 1 skipped. **VPS action:** none; the
+     migration runs with the image.
+
    Still open:
-   Robokassa SuccessURL/FailURL landing and the `settings.fiscal.mode`
-   vocabulary (found under 6c). Showing the available balance and held
+   Robokassa SuccessURL/FailURL landing (found under 6c). Showing the available balance and held
    rewards to the customer (found under 7c). The Valkey `Idempotent-Replay`
    response store of section 9.2 (found under 7e).
    Remaining review items (`rebuild.yml` Trivy tag `0.28.0`, worker `/backups` mount, restore script

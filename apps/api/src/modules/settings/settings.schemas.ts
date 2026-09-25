@@ -284,7 +284,9 @@ export const settingRegistry: SettingDefinition[] = [
   }),
   ...definitions('fiscal', {
     mode: {
-      schema: z.enum(['none', 'receipt', 'manual']),
+      // FR-062: `provider_receipt` sends the receipt through a provider
+      // that supports it (YooKassa, Robokassa); `none` sends none.
+      schema: z.enum(['none', 'provider_receipt']),
       defaultValue: 'none',
       description: 'Fiscalization mode.',
     },

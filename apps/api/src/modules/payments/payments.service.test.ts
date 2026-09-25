@@ -379,3 +379,77 @@ describe('PaymentsService event delivery when the inline apply fails', () => {
     expect(repository.applyEvent).toHaveBeenCalledWith('event-1');
   });
 });
+
+describe('PaymentsService receipts (FR-062)', () => {
+  const appKey = randomBytes(32).toString('base64');
+  afterEach(() => {
+    vi.unstubAllEnvs();
+  });
+
+  async function robokassaLink(mode: string): Promise<string> {
+    vi.stubEnv('RR_APP_KEY', appKey);
+    const db = {
+      paymentProvider: {
+        findUnique: vi.fn().mockResolvedValue({
+          code: 'robokassa',
+          enabled: true,
+          configEnc: encryptSetting(
+            { merchantLogin: 'shop', password1: 'p1', password2: 'p2' },
+            appKey,
+          ).enc,
+        }),
+      },
+      user: {
+        findUniqueOrThrow: vi.fn().mockResolvedValue({
+          id: 'user-1',
+          telegramId: 42n,
+          email: 'buyer@example.test',
+          language: 'ru',
+        }),
+      },
+      $queryRaw: vi
+        .fn()
+        .mockResolvedValue([{ id: '0199aaaa-bbbb-7ccc-8ddd-eeeeeeeeeeee', numericId: 7n }]),
+      outboxJob: { create: vi.fn() },
+    };
+    const repository = {
+      findByIdempotencyKey: vi.fn().mockResolvedValue(null),
+      createInvoice: vi
+        .fn()
+        .mockImplementation((input: Record<string, unknown>) =>
+          Promise.resolve({ ...input, status: 'pending' }),
+        ),
+      findInvoice: vi.fn().mockResolvedValue({ id: 'found' }),
+    };
+    const settings: Record<string, unknown> = {
+      'fiscal.mode': mode,
+      'fiscal.vat_code': 1,
+      'fiscal.fallback_email': '',
+    };
+    const service = new PaymentsService(
+      { db } as unknown as Infrastructure,
+      repository as unknown as PaymentsRepository,
+      createPaymentProviderRegistry({}),
+      { get: (key: string) => Promise.resolve(settings[key]) } as never,
+    );
+    await service.createInvoice({
+      userId: 'user-1',
+      kind: 'topup',
+      provider: 'robokassa',
+      amountMinor: 29900n,
+      idempotencyKey: `receipt-${mode}`,
+    });
+    const [created] = repository.createInvoice.mock.calls[0] as [{ paymentUrl: string }];
+    return created.paymentUrl;
+  }
+
+  it('sends the receipt through the provider in provider_receipt mode', async () => {
+    expect(new URL(await robokassaLink('provider_receipt')).searchParams.get('Receipt')).toContain(
+      'full_payment',
+    );
+  });
+
+  it('sends no receipt in none mode', async () => {
+    expect(new URL(await robokassaLink('none')).searchParams.has('Receipt')).toBe(false);
+  });
+});

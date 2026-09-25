@@ -107,7 +107,7 @@ export class PaymentsService {
       webhookUrl: `${origin}/webhooks/${input.provider}`,
       expiresAt,
       ...(listPrice ? { plan: listPrice } : {}),
-      ...(fiscalMode === 'receipt' && provider.capabilities.receipts
+      ...(fiscalMode === 'provider_receipt' && provider.capabilities.receipts
         ? {
             receipt: {
               customer: {

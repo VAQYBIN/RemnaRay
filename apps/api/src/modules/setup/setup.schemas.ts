@@ -115,7 +115,7 @@ export const setupPaymentsSchema = z.object({
     .default([]),
   fiscal: z
     .object({
-      mode: z.enum(['none', 'receipt', 'manual']).default('none'),
+      mode: z.enum(['none', 'provider_receipt']).default('none'),
       self_employed: z.boolean().default(false),
       vat_code: z.number().int().min(1).max(10).default(1),
       sno: z.string().min(1).max(20).default('npd'),

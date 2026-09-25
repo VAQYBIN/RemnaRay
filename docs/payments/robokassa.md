@@ -24,7 +24,7 @@ invoice.
 - The payment link is built without an API call. `InvId` is the invoice's
   `numeric_id` (Robokassa takes an integer up to 2³¹ − 1) and `Shp_inv` its
   id. `SignatureValue = MD5(MerchantLogin:OutSum:InvId[:Receipt]:Password#1:Shp_inv=<id>)`.
-- With receipts on (`settings.fiscal.mode`), `Receipt` is
+- With `settings.fiscal.mode = provider_receipt` (FR-062), `Receipt` is
   `{ sno, items: [{ name, quantity: 1, sum, payment_method: "full_payment",
 payment_object: "service", tax }] }`, URL-encoded once; that encoded text is
   both signed and sent.

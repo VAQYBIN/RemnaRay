@@ -962,7 +962,7 @@ function PaymentsStep({ pending, state, run, refresh, setStep }: StepProps) {
 
   const providers = state.providers ?? [];
   const fiscal = {
-    mode: status === 'self_employed' ? ('receipt' as const) : ('none' as const),
+    mode: status === 'self_employed' ? ('provider_receipt' as const) : ('none' as const),
     self_employed: status === 'self_employed',
     vat_code: 1,
     sno: status === 'self_employed' ? 'npd' : 'usn_income',
