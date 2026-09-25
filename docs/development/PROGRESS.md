@@ -598,12 +598,37 @@ style-src 'unsafe-inline'; sandbox` and `nosniff`, which makes any theme
      `test:m4` 6/6, `pnpm test:e2e` 28 passed / 1 skipped. **Not verified:**
      a live panel.
 
-   Still open:
+   - **9g. Done 2026-09-25 — a resumed broadcast sent nothing.** `resume`
+     called `start`, which kept `started_at` on a paused broadcast, so the
+     new chunks were `broadcast:<id>:<index>:<startedAt>` — the ids of the
+     first run's chunks, which BullMQ keeps after they complete and while it
+     does ignores a job added under them. AC-161's pause/resume passed only
+     because `m4.broadcast` read the outbox, not the queue. Also: a chunk
+     stopped by a pause returned before adding what it had sent to the
+     counters; `start`/`resume` accepted any status, so a canceled
+     broadcast could be restarted and message its remaining recipients; and
+     pause/cancel changed any status. Now every run names its chunks
+     `broadcast:<id>:<run>:<index>` with a fresh run stamp, written in one
+     transaction with the conditional status change; `start` is for `draft`
+     and `scheduled`, `resume` (its own method) for `paused`, `pause` for
+     `running`, `cancel` for anything unfinished, each 409 otherwise; a
+     stopped chunk counts what it sent; the console disables start and
+     cancel for `done`, `canceled` and `failed`. Regressions in
+     `m4.broadcast.integration.test.mjs` (the resume's job id differs from the
+     first run's — fails on the old code; the 409s; 52 recipients paused at
+     the tenth message stop at the 50-message check with `sent_count` 50).
+     Verified: lint, typecheck, format, `pnpm -r test` (API 257, web 38),
+     `pnpm test` 43, `test:m4` 6/6, `pnpm test:e2e` 28 passed / 1 skipped.
+     **Found, not repaired:** section 16.x answers a Telegram 429 with
+     `sleep(retry_after)`; `sendChunk` waits one second and marks the
+     recipient `failed`.
+
+   Still open: the broadcast 429 handling (found under 9g).
    Robokassa SuccessURL/FailURL landing and the `settings.fiscal.mode`
    vocabulary (found under 6c). Showing the available balance and held
    rewards to the customer (found under 7c). The Valkey `Idempotent-Replay`
    response store of section 9.2 (found under 7e).
-   Remaining review items (broadcast resume, panel worker concurrency 2,
+   Remaining review items (panel worker concurrency 2,
    `rebuild.yml` Trivy tag `0.28.0`, worker `/backups` mount, restore script
    user/themes) and the M5-004 gates recorded below.
 

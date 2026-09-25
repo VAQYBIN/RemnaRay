@@ -146,9 +146,18 @@ export class BroadcastsService {
    * A resumed run reuses the same deliveries, so nobody is messaged twice.
    */
   async start(id: string) {
+    return this.run(id, ['draft', 'scheduled']);
+  }
+
+  /** Section 16.x: `resume` queues a new run that skips the delivered. */
+  async resume(id: string) {
+    return this.run(id, ['paused']);
+  }
+
+  private async run(id: string, from: ('draft' | 'scheduled' | 'paused')[]) {
     const broadcast = await this.require(id);
-    if (broadcast.status === 'running')
-      throw new ApiError('CONFLICT', HttpStatus.CONFLICT, 'Already running.');
+    if (!(from as string[]).includes(broadcast.status))
+      throw new ApiError('CONFLICT', HttpStatus.CONFLICT, `The broadcast is ${broadcast.status}.`);
     const resuming = broadcast.status === 'paused';
     const ids = resuming
       ? (
@@ -159,34 +168,45 @@ export class BroadcastsService {
         ).map((row) => row.userId)
       : await this.materialize(id, broadcast.segment);
 
-    const after = await this.infra.db.broadcast.update({
-      where: { id },
-      data: {
-        status: 'running',
-        ...(resuming ? {} : { totalCount: ids.length, startedAt: new Date() }),
-      },
-    });
-    for (let index = 0; index < ids.length; index += CHUNK_SIZE) {
-      const slice = ids.slice(index, index + CHUNK_SIZE);
-      await this.infra.db.outboxJob.create({
+    // Every run names its chunks afresh. A resumed run used to reuse the
+    // first run's ids, and BullMQ ignores an id it still keeps, so the
+    // resume queued nothing.
+    const run = Date.now().toString(36);
+    await this.infra.db.$transaction(async (tx) => {
+      const { count } = await tx.broadcast.updateMany({
+        where: { id, status: broadcast.status },
         data: {
-          queue: 'broadcast',
-          name: 'broadcast.chunk',
-          payload: { broadcastId: id, userIds: slice },
-          jobId: `broadcast:${id}:${String(index)}:${String(after.startedAt?.getTime() ?? 0)}`,
+          status: 'running',
+          ...(resuming ? {} : { totalCount: ids.length, startedAt: new Date() }),
         },
       });
-    }
+      if (count === 0)
+        throw new ApiError('CONFLICT', HttpStatus.CONFLICT, 'The broadcast changed meanwhile.');
+      for (let index = 0; index < ids.length; index += CHUNK_SIZE)
+        await tx.outboxJob.create({
+          data: {
+            queue: 'broadcast',
+            name: 'broadcast.chunk',
+            payload: { broadcastId: id, userIds: ids.slice(index, index + CHUNK_SIZE) },
+            jobId: `broadcast:${id}:${run}:${String(index)}`,
+          },
+        });
+    });
     return new Audited({ status: broadcast.status }, { status: 'running', queued: ids.length });
   }
 
-  async setStatus(id: string, status: 'paused' | 'canceled' | 'running') {
+  /** Pause only what runs; cancel anything not yet finished. */
+  async setStatus(id: string, status: 'paused' | 'canceled') {
     const before = await this.require(id);
-    const after = await this.infra.db.broadcast.update({
-      where: { id },
+    const from: ('draft' | 'scheduled' | 'running' | 'paused')[] =
+      status === 'paused' ? ['running'] : ['draft', 'scheduled', 'running', 'paused'];
+    const { count } = await this.infra.db.broadcast.updateMany({
+      where: { id, status: { in: from } },
       data: { status, ...(status === 'canceled' ? { finishedAt: new Date() } : {}) },
     });
-    return new Audited({ status: before.status }, { status: after.status });
+    if (count === 0)
+      throw new ApiError('CONFLICT', HttpStatus.CONFLICT, `The broadcast is ${before.status}.`);
+    return new Audited({ status: before.status }, { status });
   }
 
   async report(id: string) {
@@ -259,7 +279,11 @@ export class BroadcastsService {
           where: { id: input.broadcastId },
           select: { status: true },
         });
-        if (current?.status !== 'running') return { sent, blocked, failed, stopped: true };
+        if (current?.status !== 'running') {
+          // What was sent before the pause is counted like the rest.
+          await this.count(input.broadcastId, sent, blocked, failed);
+          return { sent, blocked, failed, stopped: true };
+        }
       }
       processed += 1;
 
@@ -296,14 +320,7 @@ export class BroadcastsService {
       await new Promise((resolve) => setTimeout(resolve, 1000 / MESSAGES_PER_SECOND));
     }
 
-    await this.infra.db.broadcast.update({
-      where: { id: input.broadcastId },
-      data: {
-        sentCount: { increment: sent },
-        blockedCount: { increment: blocked },
-        failedCount: { increment: failed },
-      },
-    });
+    await this.count(input.broadcastId, sent, blocked, failed);
     const remaining = await this.infra.db.broadcastDelivery.count({
       where: { broadcastId: input.broadcastId, status: 'pending' },
     });
@@ -313,6 +330,17 @@ export class BroadcastsService {
         data: { status: 'done', finishedAt: new Date() },
       });
     return { sent, blocked, failed, stopped: false };
+  }
+
+  private async count(id: string, sent: number, blocked: number, failed: number) {
+    await this.infra.db.broadcast.update({
+      where: { id },
+      data: {
+        sentCount: { increment: sent },
+        blockedCount: { increment: blocked },
+        failedCount: { increment: failed },
+      },
+    });
   }
 
   private async mark(

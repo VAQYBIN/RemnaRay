@@ -45,6 +45,9 @@ const previewSchema = z.object({
 
 const PRESETS = Object.keys(segmentPresets);
 
+/** Statuses the API no longer lets start, resume or cancel. */
+const FINISHED = new Set(['done', 'canceled', 'failed']);
+
 export default function BroadcastsClient() {
   const t = useTranslations('admin');
   const { toast } = useToast();
@@ -201,7 +204,7 @@ export default function BroadcastsClient() {
                                 </Button>
                               ) : (
                                 <Button
-                                  disabled={pending || row.status === 'done'}
+                                  disabled={pending || FINISHED.has(row.status)}
                                   size="sm"
                                   onClick={() => {
                                     act(row.id, row.status === 'paused' ? 'resume' : 'start');
@@ -213,7 +216,7 @@ export default function BroadcastsClient() {
                                 </Button>
                               )}
                               <Button
-                                disabled={pending || row.status === 'done'}
+                                disabled={pending || FINISHED.has(row.status)}
                                 size="sm"
                                 variant="danger"
                                 onClick={() => {

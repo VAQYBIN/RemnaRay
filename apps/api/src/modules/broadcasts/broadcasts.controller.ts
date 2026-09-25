@@ -91,7 +91,7 @@ export class AdminBroadcastsController {
   @Permissions('broadcasts.write')
   @Audit('broadcasts.resume', 'broadcast', 'id')
   resume(@Param('id') id: string) {
-    return this.broadcasts.start(id);
+    return this.broadcasts.resume(id);
   }
 
   @Post(':id/cancel')

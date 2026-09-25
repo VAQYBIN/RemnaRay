@@ -17,13 +17,16 @@ test(
     const previousFetch = globalThis.fetch;
     const sent = [];
     let blockedChatId = null;
+    /** Runs before a delivery is answered, to change state mid-chunk. */
+    let beforeAnswer = null;
 
     globalThis.fetch = (input, init) => {
       const body = JSON.parse(init?.body ?? '{}');
       if (body.chat_id === blockedChatId)
         return Promise.resolve(new globalThis.Response('{"ok":false}', { status: 403 }));
       sent.push(body);
-      return Promise.resolve(new globalThis.Response('{"ok":true}', { status: 200 }));
+      const ok = () => new globalThis.Response('{"ok":true}', { status: 200 });
+      return beforeAnswer ? beforeAnswer(sent.length).then(ok) : Promise.resolve(ok());
     };
 
     try {
@@ -108,14 +111,20 @@ test(
       assert.equal(paused.stopped, true, 'a paused broadcast sends nothing');
       assert.equal(paused.sent, 0);
 
+      // A paused broadcast is resumed, not started again.
+      await assert.rejects(broadcasts.start(id), { status: 409 });
+
       // Resume: only the untouched recipients are queued again.
-      await broadcasts.start(id);
+      await broadcasts.resume(id);
       const resumeJobs = await prisma.outboxJob.findMany({
         where: { queue: 'broadcast' },
         orderBy: { createdAt: 'asc' },
       });
       const resumed = resumeJobs.at(-1).payload.userIds;
       assert.equal(resumed.length, 2, 'only the pending deliveries are re-queued');
+      // BullMQ ignores an id it still keeps: the first run's chunk, kept after
+      // it completed, used to swallow the resume.
+      assert.notEqual(resumeJobs.at(-1).jobId, jobs[0].jobId);
 
       const second = await broadcasts.sendChunk({ broadcastId: id, userIds: resumed });
       assert.equal(second.sent + second.blocked, 2);
@@ -136,6 +145,54 @@ test(
       // The 403 recipient is marked blocked for later runs.
       const reblocked = await prisma.user.findUnique({ where: { id: audience[3].id } });
       assert.ok(reblocked.botBlockedAt);
+
+      // A finished broadcast cannot be paused, resumed or canceled.
+      await assert.rejects(broadcasts.setStatus(id, 'paused'), { status: 409 });
+      await assert.rejects(broadcasts.resume(id), { status: 409 });
+      await assert.rejects(broadcasts.setStatus(id, 'canceled'), { status: 409 });
+
+      // --- paused mid-chunk: what was sent is counted, a cancel is final ---
+      for (let index = 0; index < 52; index += 1)
+        await prisma.user.create({
+          data: {
+            telegramId: BigInt(997100000 + index),
+            firstName: `En${String(index)}`,
+            language: 'en',
+            referralCode: `BCEN${String(index).padStart(4, '0')}`,
+          },
+        });
+      const large = (
+        await broadcasts.create(
+          {
+            title: 'Large',
+            content: { text: { en: 'Hello' }, buttons: [], photo: null },
+            segment: { all: [{ field: 'user.language', op: 'eq', value: 'en' }] },
+          },
+          admin.id,
+        )
+      ).after.id;
+      await broadcasts.start(large);
+      const [chunk] = await prisma.outboxJob.findMany({
+        where: { queue: 'broadcast', payload: { path: ['broadcastId'], equals: large } },
+      });
+      const before = sent.length;
+      beforeAnswer = async (count) => {
+        if (count === before + 10)
+          await prisma.broadcast.update({ where: { id: large }, data: { status: 'paused' } });
+      };
+      const stopped = await broadcasts.sendChunk({
+        broadcastId: large,
+        userIds: chunk.payload.userIds,
+      });
+      beforeAnswer = null;
+      // The status is read every 50 messages.
+      assert.equal(stopped.stopped, true);
+      assert.equal(stopped.sent, 50);
+      const counted = await prisma.broadcast.findUniqueOrThrow({ where: { id: large } });
+      assert.equal(counted.sentCount, 50, 'the messages sent before the pause are counted');
+      await broadcasts.setStatus(large, 'canceled');
+      await assert.rejects(broadcasts.resume(large), { status: 409 });
+      await assert.rejects(broadcasts.start(large), { status: 409 });
 
       await prisma.$disconnect();
     } finally {
