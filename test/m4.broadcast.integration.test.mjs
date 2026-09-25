@@ -19,11 +19,30 @@ test(
     let blockedChatId = null;
     /** Runs before a delivery is answered, to change state mid-chunk. */
     let beforeAnswer = null;
+    /** Chats answering 429 `left` more times (-1: always). */
+    const floods = new Map();
 
     globalThis.fetch = (input, init) => {
       const body = JSON.parse(init?.body ?? '{}');
       if (body.chat_id === blockedChatId)
         return Promise.resolve(new globalThis.Response('{"ok":false}', { status: 403 }));
+      // Bot API flood control: 429 with `parameters.retry_after` seconds.
+      const flood = floods.get(body.chat_id);
+      if (flood && flood.left !== 0) {
+        flood.left -= 1;
+        flood.calls += 1;
+        return Promise.resolve(
+          new globalThis.Response(
+            JSON.stringify({
+              ok: false,
+              error_code: 429,
+              description: 'Too Many Requests: retry after 1',
+              parameters: { retry_after: flood.retryAfter },
+            }),
+            { status: 429 },
+          ),
+        );
+      }
       sent.push(body);
       const ok = () => new globalThis.Response('{"ok":true}', { status: 200 });
       return beforeAnswer ? beforeAnswer(sent.length).then(ok) : Promise.resolve(ok());
@@ -193,6 +212,40 @@ test(
       await broadcasts.setStatus(large, 'canceled');
       await assert.rejects(broadcasts.resume(large), { status: 409 });
       await assert.rejects(broadcasts.start(large), { status: 409 });
+
+      // --- a 429 waits `retry_after` and sends again (section 16.x) ---
+      const flooded = await prisma.user.create({
+        data: { telegramId: 997200001n, language: 'de', referralCode: 'BCFLOOD1' },
+      });
+      const stuck = await prisma.user.create({
+        data: { telegramId: 997200002n, language: 'de', referralCode: 'BCFLOOD2' },
+      });
+      floods.set('997200001', { left: 1, calls: 0, retryAfter: 1 });
+      floods.set('997200002', { left: -1, calls: 0, retryAfter: 0 });
+      const flood = (
+        await broadcasts.create(
+          {
+            title: 'Flood',
+            content: { text: { ru: 'Снова' }, buttons: [], photo: null },
+            segment: { all: [{ field: 'user.language', op: 'eq', value: 'de' }] },
+          },
+          admin.id,
+        )
+      ).after.id;
+      await broadcasts.start(flood);
+      const startedAt = Date.now();
+      const result = await broadcasts.sendChunk({
+        broadcastId: flood,
+        userIds: [flooded.id, stuck.id],
+      });
+      assert.deepEqual(result, { sent: 1, blocked: 0, failed: 1, stopped: false });
+      assert.ok(Date.now() - startedAt >= 1_000, 'waited retry_after before sending again');
+      assert.equal(sent.filter((message) => message.chat_id === '997200001').length, 1);
+      // Five waits, then the recipient that is still flooded fails.
+      assert.equal(floods.get('997200002').calls, 6);
+      const floodReport = await broadcasts.report(flood);
+      assert.equal(floodReport.counts.sent, 1);
+      assert.equal(floodReport.counts.failed, 1);
 
       await prisma.$disconnect();
     } finally {

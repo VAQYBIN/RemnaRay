@@ -17,6 +17,8 @@ import {
 const CHUNK_SIZE = 500;
 const PAUSE_CHECK_EVERY = 50;
 const MESSAGES_PER_SECOND = 25;
+/** How many 429 waits one recipient gets before it is marked failed. */
+const FLOOD_RETRIES = 5;
 
 const chunkSchema = z.object({
   broadcastId: z.uuid(),
@@ -291,7 +293,7 @@ export class BroadcastsService {
         ? (user.language as Locale)
         : 'ru';
       try {
-        await this.deliver(
+        await this.deliverWaiting(
           user.telegramId,
           this.render(content, locale, placeholders(user, {})),
           await this.keyboard(content, locale),
@@ -308,10 +310,6 @@ export class BroadcastsService {
           });
           await this.mark(input.broadcastId, user.id, 'blocked', String(error));
           blocked += 1;
-        } else if (status === 429) {
-          await new Promise((resolve) => setTimeout(resolve, 1000));
-          await this.mark(input.broadcastId, user.id, 'failed', String(error));
-          failed += 1;
         } else {
           await this.mark(input.broadcastId, user.id, 'failed', String(error));
           failed += 1;
@@ -470,6 +468,25 @@ export class BroadcastsService {
     }));
   }
 
+  /**
+   * Section 16.x: a 429 waits Telegram's `retry_after` and sends the same
+   * message again. It gives up after `FLOOD_RETRIES` waits, so a chat that
+   * keeps answering 429 cannot hold the chunk for ever; that recipient is
+   * then `failed`.
+   */
+  private async deliverWaiting(...args: Parameters<BroadcastsService['deliver']>): Promise<void> {
+    for (let waits = 0; ; waits += 1) {
+      try {
+        await this.deliver(...args);
+        return;
+      } catch (error) {
+        if (!(error instanceof BroadcastDeliveryError) || error.status !== 429) throw error;
+        if (waits >= FLOOD_RETRIES) throw error;
+        await new Promise((resolve) => setTimeout(resolve, (error.retryAfter ?? 1) * 1000));
+      }
+    }
+  }
+
   private async deliver(
     telegramId: bigint,
     text: string,
@@ -570,11 +587,26 @@ function maskName(value: string): string {
 }
 
 export class BroadcastDeliveryError extends Error {
+  /** Telegram's `parameters.retry_after` (seconds) on a 429, when it gave one. */
+  readonly retryAfter: number | undefined;
+
   constructor(
     readonly status: number,
     message: string,
   ) {
     super(`telegram ${String(status)}: ${message.slice(0, 200)}`);
     this.name = 'BroadcastDeliveryError';
+    this.retryAfter = retryAfter(message);
+  }
+}
+
+/** Bot API `ResponseParameters.retry_after`: seconds before the request may be repeated. */
+function retryAfter(body: string): number | undefined {
+  try {
+    const value = (JSON.parse(body) as { parameters?: { retry_after?: unknown } }).parameters
+      ?.retry_after;
+    return typeof value === 'number' && Number.isInteger(value) && value >= 0 ? value : undefined;
+  } catch {
+    return undefined;
   }
 }

@@ -623,7 +623,20 @@ style-src 'unsafe-inline'; sandbox` and `nosniff`, which makes any theme
      `sleep(retry_after)`; `sendChunk` waits one second and marks the
      recipient `failed`.
 
-   Still open: the broadcast 429 handling (found under 9g).
+   - **9h. Done 2026-09-25 — a Telegram 429 failed the recipient.**
+     Section 16.x answers a 429 with `sleep(retry_after)`; `sendChunk` slept
+     one second and marked the recipient `failed`. It now waits the Bot API's
+     `parameters.retry_after` seconds (`ResponseParameters.retry_after`,
+     core.telegram.org/bots/api via Context7; 1 s when absent) and sends the
+     same message again. **Decision:** at most five waits per recipient, then
+     `failed`, so a chat that keeps answering 429 cannot hold its chunk for
+     ever (the specification sets no bound). Regression in
+     `m4.broadcast.integration.test.mjs`: one 429 with `retry_after: 1` then
+     delivered once after ≥ 1 s; an always-429 chat tried six times and
+     `failed` (fails on the old code). Verified: lint, typecheck, format,
+     `pnpm -r test` (API 257), `pnpm test` 43, `test:m4` 6/6.
+
+   Still open:
    Robokassa SuccessURL/FailURL landing and the `settings.fiscal.mode`
    vocabulary (found under 6c). Showing the available balance and held
    rewards to the customer (found under 7c). The Valkey `Idempotent-Replay`
