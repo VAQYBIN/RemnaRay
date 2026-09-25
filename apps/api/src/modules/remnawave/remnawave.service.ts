@@ -213,15 +213,23 @@ export class RemnawaveService {
   }
 
   /**
-   * Queue consumer for `panel.reset-traffic`, the console's "reset traffic"
-   * (FR-141, `POST /api/users/{userId}/actions/reset-traffic`, ADR-010). A
+   * Queue consumer for `panel.reset-traffic` (`POST /api/users/{userId}/
+   * actions/reset-traffic`, ADR-010): the console's "reset traffic" (FR-141),
+   * a renewal of the same plan (10.4), and a downgrade (FR-023). A downgrade
+   * passes the new limit as `ifUsedAboveBytes`, and the traffic is reset only
+   * when the panel reports more used than that, read when the job runs. A
    * user the panel does not know yet has no traffic to reset.
    */
-  async resetTraffic(userId: string): Promise<{ reset: boolean }> {
+  async resetTraffic(userId: string, ifUsedAboveBytes?: bigint): Promise<{ reset: boolean }> {
     const row = await this.infra.db.panelUser.findUnique({ where: { userId } });
     if (!row || row.panelUserId === null) return { reset: false };
     const client = await this.client();
     try {
+      if (ifUsedAboveBytes !== undefined) {
+        const current = await client.users.getById(row.panelUserId);
+        if (!current || BigInt(current.userTraffic.usedTrafficBytes) <= ifUsedAboveBytes)
+          return { reset: false };
+      }
       const updated = await client.users.resetTraffic(row.panelUserId);
       await this.saveSnapshot(userId, updated, false);
       return { reset: true };

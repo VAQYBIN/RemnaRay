@@ -23,7 +23,7 @@ afterEach(async () => {
 });
 
 /** A panel answering `status` with a v3.4.4 user and recording each request. */
-async function panel(status = 200) {
+async function panel(status = 200, usedTrafficBytes = 0) {
   const requests: string[] = [];
   server = createServer((request, response) => {
     requests.push(`${request.method ?? ''} ${request.url ?? ''}`);
@@ -51,7 +51,7 @@ async function panel(status = 200) {
             vlessUuid: '0199a0b0-0000-7000-8000-0000000000aa',
             subscriptionUrl: 'https://panel.test/sub/short42',
             activeInternalSquads: [],
-            userTraffic: { usedTrafficBytes: 0, lifetimeUsedTrafficBytes: 900 },
+            userTraffic: { usedTrafficBytes, lifetimeUsedTrafficBytes: 900 },
           },
         }),
       );
@@ -95,6 +95,26 @@ describe('panel.reset-traffic (FR-141)', () => {
         update: expect.objectContaining({ usedTrafficBytes: 0n }) as unknown,
       }),
     );
+  });
+
+  it('resets on a downgrade when the panel reports more used than the new limit (FR-023)', async () => {
+    const target = await panel(200, 5_000);
+    const { panel: remnawave } = service(target.baseUrl, { panelUserId: 42 });
+
+    await expect(remnawave.resetTraffic(USER_ID, 1_000n)).resolves.toEqual({ reset: true });
+    expect(target.requests).toEqual([
+      'GET /api/users/42',
+      'POST /api/users/42/actions/reset-traffic',
+    ]);
+  });
+
+  it('keeps the traffic when the new limit still covers what is used (FR-023)', async () => {
+    const target = await panel(200, 1_000);
+    const { panel: remnawave, panelUser } = service(target.baseUrl, { panelUserId: 42 });
+
+    await expect(remnawave.resetTraffic(USER_ID, 1_000n)).resolves.toEqual({ reset: false });
+    expect(target.requests).toEqual(['GET /api/users/42']);
+    expect(panelUser.upsert).not.toHaveBeenCalled();
   });
 
   it('has nothing to reset for a user the panel does not know yet', async () => {

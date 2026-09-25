@@ -7,8 +7,10 @@ and verifies panel webhooks with the configured HMAC secret and five-minute
 timestamp window.
 
 Every panel write runs from the `panel` queue: `panel.sync-user`,
-`panel.reconcile-all`, `panel.reset-traffic` (the console's "reset traffic",
-`POST /api/users/{userId}/actions/reset-traffic`) and `panel.delete-user`
+`panel.reconcile-all`, `panel.reset-traffic` (the console's "reset traffic";
+a paid renewal of the same plan, section 10.4; a paid plan change, FR-023,
+which carries the new limit as `ifUsedAboveBytes` and resets only when the
+panel reports more used; `POST /api/users/{userId}/actions/reset-traffic`) and `panel.delete-user`
 (section 19.5 anonymization, `DELETE /api/users/{userId}`; a 404 counts as
 deleted, and the `panel_users` row goes with it). The worker fails a panel job
 it does not know rather than reconciling.

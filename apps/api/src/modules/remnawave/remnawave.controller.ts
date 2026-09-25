@@ -12,6 +12,9 @@ import { z } from 'zod';
 import { RemnawaveService } from './remnawave.service';
 
 const userSchema = z.object({ userId: z.uuid() });
+const resetTrafficSchema = userSchema.extend({
+  ifUsedAboveBytes: z.string().regex(/^\d+$/u).optional(),
+});
 const syncUserSchema = z.object({ userId: z.uuid(), reason: z.string().max(64).default('queue') });
 
 @Controller('api/internal/v1/remnawave')
@@ -31,13 +34,16 @@ export class RemnawaveInternalController {
     }
   }
 
-  /** Queue consumer for `panel.reset-traffic` (FR-141). */
+  /** Queue consumer for `panel.reset-traffic` (FR-141, FR-023, 10.4). */
   @Post('reset-traffic')
   @HttpCode(200)
   async resetTraffic(@Body() body: unknown) {
-    const { userId } = userSchema.parse(body);
+    const input = resetTrafficSchema.parse(body);
     try {
-      return await this.panel.resetTraffic(userId);
+      return await this.panel.resetTraffic(
+        input.userId,
+        input.ifUsedAboveBytes === undefined ? undefined : BigInt(input.ifUsedAboveBytes),
+      );
     } catch (error) {
       throw new BadRequestException(`PANEL_UNAVAILABLE: ${String(error)}`);
     }

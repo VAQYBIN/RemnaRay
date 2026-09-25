@@ -740,9 +740,36 @@ export class PaymentsRepository {
       squads: plan.squads,
       trafficResetStrategy: plan.trafficResetStrategy,
     };
+    // FR-022 renews in `grace` and `expired` too, so the plan renewed is the
+    // latest subscription's, live or not.
+    const previous =
+      live ??
+      (await tx.subscription.findFirst({ where: { userId }, orderBy: { expiresAt: 'desc' } }));
     const subscription = live
       ? await tx.subscription.update({ where: { id: live.id }, data })
       : await tx.subscription.create({ data: { userId, ...data } });
+    // Section 10.4: renewing the same plan resets the panel's traffic. FR-023:
+    // a plan change resets it only when the new limit is below what is used,
+    // which the job reads from the panel when it runs. A job of its own, not a
+    // `reason` on `panel.sync-user`: syncs of one user are deduplicated, and a
+    // reason would be dropped with the job that carried it. Written before the
+    // callers' sync, so the relay publishes it first.
+    const reset = planChange
+      ? plan.trafficLimitBytes > 0n
+        ? { ifUsedAboveBytes: plan.trafficLimitBytes.toString() }
+        : null
+      : previous?.planId === plan.id
+        ? {}
+        : null;
+    if (previous && reset)
+      await tx.outboxJob.create({
+        data: {
+          queue: 'panel',
+          name: 'panel.reset-traffic',
+          payload: { userId, ...reset },
+          jobId: `panel:traffic:${subscription.id}:${String(subscription.expiresAt.getTime())}`,
+        },
+      });
     await queueNotification(
       tx,
       'sub.activated',

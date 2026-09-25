@@ -495,7 +495,31 @@ style-src 'unsafe-inline'; sandbox` and `nosniff`, which makes any theme
      `resetTraffic` before `update`) and on a downgrade below the used traffic
      (FR-023) are not implemented; every paid sync is `reason: 'paid'`.
 
-   Still open: the traffic resets on renewal and downgrade (found under 9b).
+   - **9c. Done 2026-09-25 — no traffic reset on renewal or downgrade**
+     (found under 9b). Section 10.4 resets the panel traffic when the same
+     plan is renewed and FR-023 when a plan change sets a limit below the
+     traffic used; neither happened. The specification carries this as
+     `reason='renew'` on `panel.sync-user`, but syncs of one user are
+     deduplicated in `keepLastIfActive` mode, which ignores a sync added
+     while another waits and keeps only the latest data while one runs
+     (docs.bullmq.io "Deduplication", via Context7), so the reason could be
+     lost. **Decision:** `activateSubscription` (every paid activation,
+     provider or balance) writes a `panel.reset-traffic` of its own in the
+     payment transaction, ahead of the callers' sync: `{userId}` when the
+     latest subscription, live or not (FR-022 renews in `grace` and
+     `expired`), had the same plan; `{userId, ifUsedAboveBytes: <new limit>}`
+     on a plan change to a limited plan, which the job resets only if the
+     panel reports more used when it runs. A first purchase or another plan
+     resets nothing. The console's set-plan is left to the panel sync
+     coverage item: it queues no sync at all yet.
+     Regressions: `test/m2.traffic-reset.integration.test.mjs` (real
+     PostgreSQL; fails without the change) and the conditional cases in
+     `remnawave.service.test.ts`. Verified: lint, typecheck, format,
+     `pnpm -r test` (API 255), `pnpm test` 43, `test:m2` 3/3, `test:m4` 5/5.
+     **Not verified:** against a live panel, including whether its reset of
+     a `LIMITED` user makes it `ACTIVE` again.
+
+   Still open:
    Robokassa SuccessURL/FailURL landing and the `settings.fiscal.mode`
    vocabulary (found under 6c). Showing the available balance and held
    rewards to the customer (found under 7c). The Valkey `Idempotent-Replay`
