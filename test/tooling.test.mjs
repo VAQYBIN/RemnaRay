@@ -476,3 +476,21 @@ test('the release and rebuild workflows move the floating tags by that rule', as
   );
   assert.doesNotMatch(rebuild, /for tag in "\$dated" "\$minor" "\$major"/u);
 });
+
+// Section 20.3 and the 7.1 compose: failures while the API boots (Prisma,
+// Nest, the first Valkey connection) do not count toward its retries for
+// 30 s, nor the web's for 20 s; without it a slow first start marks the API
+// unhealthy and `up` refuses the bot, the worker and the web behind it.
+test('the api and web healthchecks give the process time to start', async () => {
+  const compose = await readFile('compose.yaml', 'utf8');
+  const block = (service) =>
+    new RegExp(`\\n {2}${service}:\\n([\\s\\S]*?)\\n {2}\\w[\\w-]*:\\n`, 'u').exec(compose)?.[1] ??
+    '';
+  const healthcheck = (service) =>
+    /\n {4}healthcheck:\n((?: {6}.*\n)+)/u.exec(`${block(service)}\n`)?.[1] ?? '';
+
+  assert.match(healthcheck('api'), /^ {6}interval: 10s$/mu);
+  assert.match(healthcheck('api'), /^ {6}start_period: 30s$/mu);
+  assert.match(healthcheck('web'), /^ {6}interval: 10s$/mu);
+  assert.match(healthcheck('web'), /^ {6}start_period: 20s$/mu);
+});

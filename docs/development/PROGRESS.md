@@ -894,10 +894,18 @@ uploads:…` resolves to the project volume — checked on a scratch
      `pnpm typecheck`, API 273, `pnpm test` 47. **Not verified:** in the
      runtime image on the VPS.
 
+   - **9w healthcheck start periods.** Section 20.3 gives the `api`
+     healthcheck `start_period` 30 s and the 7.1 compose gives `web` 20 s;
+     `compose.yaml` had neither, so failures while the API boots counted
+     toward its six retries and a slow first start could mark it unhealthy,
+     after which `up` refuses the bot, worker and web behind it. Added both;
+     `docker compose config` resolves them. Regression in `tooling.test.mjs`
+     (fails without them). Verified: `pnpm test` 48, lint.
+
    Still open — the rest of the 2026-09-24 deployment review, which item 9
    had summarised only partly:
    - specification gaps: no `maintenance.disk-check` (20.3), no daily update
-     check (24.6), no `start_period: 30s` on the api healthcheck (20.3),
+     check (24.6),
      releases attested with `attest-build-provenance` rather than a `cosign`
      signature and a comment in `release.yml` claiming otherwise (24.4 p. 3);
    - unpinned or floating: `certbot/certbot:latest`, the `caddy-ratelimit`

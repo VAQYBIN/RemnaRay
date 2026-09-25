@@ -99,6 +99,7 @@ services:
       interval: 10s
       timeout: 5s
       retries: 6
+      start_period: 30s
 
   bot:
     <<: *app-common
@@ -147,6 +148,7 @@ services:
       interval: 10s
       timeout: 5s
       retries: 6
+      start_period: 20s
     read_only: true
     tmpfs: [/tmp, /app/apps/web/.next/cache]
     volumes:
