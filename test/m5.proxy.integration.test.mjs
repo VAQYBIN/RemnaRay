@@ -142,12 +142,22 @@ test(
       // --- reload within fifteen seconds of a domain change (section 21.6) ---
       const output = roots.get('acme');
       const reports = [];
+      let attempts = 0;
+      // The first report meets the 503 the API answers while the setup wizard
+      // runs (section 17.4) — the wizard's domain step is what reloads.
       const stub = createServer((request, response) => {
         const chunks = [];
         request.on('data', (chunk) => chunks.push(chunk));
         request.on('end', () => {
+          attempts += 1;
+          response.setHeader('content-type', 'application/json');
+          if (attempts === 1) {
+            response.writeHead(503);
+            response.end('{"error":{"code":"SETUP_NOT_COMPLETED"}}');
+            return;
+          }
           reports.push(JSON.parse(Buffer.concat(chunks).toString('utf8')));
-          response.writeHead(200, { 'content-type': 'application/json' });
+          response.writeHead(200);
           response.end('{"recorded":true}');
         });
       });
@@ -199,31 +209,40 @@ test(
 
         const { createPrismaClient } = await import('../packages/db/dist/index.js');
         const prisma = createPrismaClient(databaseUrl);
-        await prisma.setting.upsert({
-          where: { key: 'domain.main' },
-          create: { key: 'domain.main', value: 'second.example.test', isSecret: false },
-          update: { value: 'second.example.test' },
-        });
-        await prisma.$disconnect();
+        const changeDomain = async (domain) => {
+          await prisma.setting.upsert({
+            where: { key: 'domain.main' },
+            create: { key: 'domain.main', value: domain, isSecret: false },
+            update: { value: domain },
+          });
+          await valkey.exec([
+            'valkey-cli',
+            'publish',
+            'rr:settings.changed',
+            '{"keys":["domain.main"]}',
+          ]);
+        };
 
         const started = Date.now();
-        await valkey.exec([
-          'valkey-cli',
-          'publish',
-          'rr:settings.changed',
-          '{"keys":["domain.main"]}',
-        ]);
+        await changeDomain('second.example.test');
         await waitFor(
           () =>
             readFileSync(join(output, 'site.conf'), 'utf8').includes(
               'server_name second.example.test;',
-            ) && reports.length > 0,
+            ) && attempts > 0,
           15_000,
         );
         const elapsed = Date.now() - started;
         assert.ok(elapsed <= 15_000, `reload took ${String(elapsed)} ms`);
-        assert.deepEqual(reports.at(-1), { ok: true }, reloaderLog.join(''));
         process.stdout.write(`proxy reload after a domain change: ${String(elapsed)} ms\n`);
+        assert.deepEqual(reports, [], 'the refused report is not recorded');
+
+        // The refused report is kept, and goes before the next one.
+        await changeDomain('third.example.test');
+        await waitFor(() => reports.length >= 2, 15_000);
+        await prisma.$disconnect();
+        assert.deepEqual(reports, [{ ok: true }, { ok: true }], reloaderLog.join(''));
+        assert.match(reloaderLog.join(''), /not recorded yet: 503/u);
       } finally {
         reloader.kill('SIGTERM');
         watcher.child?.kill('SIGTERM');

@@ -1,7 +1,8 @@
 /**
  * Section 21.6: the only container with the docker socket. It applies a
  * rendered configuration when `rr:proxy.reload` arrives and when certbot drops
- * its deploy flag, and reports the outcome so it lands in `audit_log`.
+ * its deploy flag, and reports the outcome so it lands in `audit_log`
+ * (`reload-report.ts` keeps a report the API refused until it is recorded).
  *
  * nginx is validated first: a configuration that fails `nginx -t` is never
  * applied, the previous one keeps serving and an alert is raised.
@@ -11,6 +12,7 @@ import process from 'node:process';
 import Redis from 'ioredis';
 
 import { dockerAgent, dockerExec, type ExecResult } from './docker-exec';
+import { REPORT_RETRY_MS, ReloadReports, reportSender } from './reload-report';
 
 const RELOAD_CHANNEL = 'rr:proxy.reload';
 const CERTBOT_FLAG_DIRECTORY = '/run/remnaray/certbot';
@@ -30,23 +32,6 @@ export function reloadCommands(profile: string): string[][] {
       ];
 }
 
-async function report(ok: boolean, error: string | undefined): Promise<void> {
-  const base = process.env.RR_API_URL ?? process.env.INTERNAL_API_URL ?? 'http://api:3000';
-  try {
-    await fetch(`${base}/api/internal/v1/system/proxy-reload-result`, {
-      method: 'POST',
-      headers: {
-        'content-type': 'application/json',
-        'x-internal-token': process.env.RR_INTERNAL_TOKEN ?? '',
-      },
-      body: JSON.stringify({ ok, ...(error ? { error: error.slice(0, 500) } : {}) }),
-      signal: AbortSignal.timeout(10_000),
-    });
-  } catch (cause) {
-    process.stderr.write(`Proxy reload result not recorded: ${String(cause)}\n`);
-  }
-}
-
 async function main(): Promise<void> {
   if (!process.argv.includes('--reload')) rmSync('/tmp/proxy-reloader-ready', { force: true });
   const profile = flag('profile', process.env.RR_PROXY_PROFILE ?? 'nginx');
@@ -54,6 +39,13 @@ async function main(): Promise<void> {
     process.env.RR_PROXY_CONTAINER ??
     (profile === 'caddy' ? 'remnaray-proxy-caddy-1' : 'remnaray-proxy-nginx-1');
   const agent = dockerAgent(process.env.DOCKER_SOCKET ?? '/var/run/docker.sock');
+  const reports = new ReloadReports(
+    reportSender(
+      process.env.RR_API_URL ?? process.env.INTERNAL_API_URL ?? 'http://api:3000',
+      process.env.RR_INTERNAL_TOKEN ?? '',
+    ),
+    (line) => process.stderr.write(line),
+  );
   let running = false;
 
   const reload = async (reason: string): Promise<void> => {
@@ -67,11 +59,11 @@ async function main(): Promise<void> {
       }
       const ok = last.exitCode === 0;
       process.stdout.write(`${reason}: ${ok ? 'reloaded' : 'refused'} ${last.output}\n`);
-      await report(ok, ok ? undefined : last.output);
+      await reports.add(ok, ok ? undefined : last.output);
       if (!ok && process.argv.includes('--reload')) process.exitCode = 1;
     } catch (error) {
       process.stderr.write(`Proxy reload failed: ${String(error)}\n`);
-      await report(false, String(error));
+      await reports.add(false, String(error));
       if (process.argv.includes('--reload')) process.exitCode = 1;
     } finally {
       running = false;
@@ -80,9 +72,15 @@ async function main(): Promise<void> {
 
   if (process.argv.includes('--reload')) {
     await reload('manual');
+    // A one-off run cannot wait for the API; the operator sees the outcome here.
+    if (reports.waiting > 0) process.stderr.write('The result was not recorded in audit_log.\n');
     await agent.destroy();
     return;
   }
+
+  // A result the API refused (the setup wizard, a restart) is sent again
+  // until it is recorded.
+  setInterval(() => void reports.flush(), REPORT_RETRY_MS);
 
   const subscriber = new Redis(process.env.VALKEY_URL ?? 'redis://valkey:6379/0', {
     maxRetriesPerRequest: null,

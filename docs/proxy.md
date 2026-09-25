@@ -23,7 +23,10 @@ settings.admin.ip_allowlist ─┼─► proxy-config ──► proxy-conf volum
   reloads only if that passes, so a broken render never takes the site down.
   Every outcome is reported to `POST /api/internal/v1/system/proxy-reload-result`,
   which writes `audit_log(action=proxy.reload)` and raises the
-  `proxy.config_invalid` alert on a refusal.
+  `proxy.config_invalid` alert on a refusal. A report the API refuses — it
+  answers `503` to every internal call until the setup wizard finishes, and
+  the wizard's domain step is what reloads — is kept and sent again every 30 s
+  and before the next one, until recorded.
 - certbot's `--deploy-hook` updates the root-owned certificate list in the
   separate `certbot-state` volume and touches `/run/remnaray/certbot/.renewed`;
   the reloader watches that marker and reloads gracefully after a renewal.

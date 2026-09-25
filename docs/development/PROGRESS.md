@@ -798,10 +798,23 @@ uploads:…` resolves to the project volume — checked on a scratch
      the old worker. Verified: worker lint, typecheck, 18 tests, build,
      `m1.worker-cron` integration. **Not verified:** on the VPS.
 
+   - **9r proxy reload results refused by the API.** `proxy-reloader`
+     posted each outcome once and never read the status. The wizard's domain
+     step publishes `rr:proxy.reload` while the API answers every internal
+     call `503 SETUP_NOT_COMPLETED` (17.4), so exactly the reload most likely
+     to fail at install had its `audit_log` row and `proxy.config_invalid`
+     alert dropped silently. `reload-report.ts` now keeps a refused or
+     unreachable report (at most 50, the dropped count logged) and sends the
+     waiting ones in order every 30 s and before each new one; a one-off
+     `--reload` says on stderr when its result was not recorded.
+     Regression: `reload-report.test.ts` (4) and `m5.proxy` — the stub API
+     refuses the first report with 503, and after the next domain change
+     both are recorded in order; it times out on the old reloader.
+     Verified: API lint, typecheck, 273 tests, `test:m5` 6/6 (proxy 4,
+     backup 2). **Not verified:** on the VPS.
+
    Still open — the rest of the 2026-09-24 deployment review, which item 9
    had summarised only partly:
-   - `proxy-reloader.ts` never checks the status of its result call, so a
-     `proxy-reload-result` refused during setup is dropped silently (21.6);
    - a manual `rebuild.yml` run for an older version republishes the major
      tag `X`, moving it backwards (24.4 p. 4);
    - special characters in the PostgreSQL password break the `DATABASE_URL`
