@@ -94,6 +94,13 @@ database. `.env` carries only secrets and infrastructure:
 | `RR_INTERNAL_TOKEN` | how the bot and the worker authenticate to the API           |
 | `POSTGRES_PASSWORD` | the database password                                        |
 
+`init-env.sh` writes `POSTGRES_PASSWORD` single-quoted, so any character but
+a single quote is safe in it, and generates one if you type none. Edit it by
+hand the same way: without the quotes compose drops a `$name` from the value
+and cuts it at ` #`. The application builds its connection URL from the
+`POSTGRES_*` variables itself; set `DATABASE_URL` only to point it elsewhere,
+percent-encoding the password.
+
 `.env.example` documents the optional ones with comments.
 
 ## Choosing a proxy profile

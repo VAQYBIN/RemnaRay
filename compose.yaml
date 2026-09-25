@@ -13,7 +13,10 @@ x-app-common: &app-common
     RR_THEMES_DIR: /themes
     RR_LOCALES_DIR: /locales
     RR_API_URL: http://api:3000
-    DATABASE_URL: ${DATABASE_URL:-postgresql://${POSTGRES_USER:-remnaray}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-remnaray}}
+    # Built by the application from the `POSTGRES_*` of `.env`, which percent-
+    # encodes the password; a URL assembled here would break on `@`, `/` or
+    # `#` in it. An explicit DATABASE_URL still wins.
+    DATABASE_URL: ${DATABASE_URL:-}
     VALKEY_URL: ${VALKEY_URL:-redis://valkey:6379/0}
   networks: [rr_net]
   restart: unless-stopped

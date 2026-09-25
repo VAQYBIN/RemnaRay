@@ -846,10 +846,39 @@ uploads:…` resolves to the project volume — checked on a scratch
      first try). Verified: `pnpm test` 47, lint, format. **Not verified:** a
      real run on GitHub; `actionlint` is not installed here.
 
+   - **9u special characters in the PostgreSQL password.** Compose pasted
+     `POSTGRES_PASSWORD` raw into `DATABASE_URL`, and `init-env.sh` wrote it
+     unquoted: with `p@ss:w/rd#x$y"z%2F ?&=\ #end` the stack got
+     `p@ss:w/rd#x"z%2F ?&=\` (compose expands `$y`, cuts at ` #`) inside a
+     URL whose `@`, `/`, `#` break it. `@remnaray/db` now has
+     `resolveDatabaseUrl()` — `DATABASE_URL` when set, else built from
+     `POSTGRES_USER/PASSWORD/DB/HOST/PORT` with `encodeURIComponent` —
+     used by `createPrismaClient()` and by `migrate` for the Prisma CLI;
+     compose passes `DATABASE_URL: ${DATABASE_URL:-}`. `init-env.sh` writes
+     the password single-quoted, refuses a `'`, keeps edge spaces
+     (`IFS= read`), generates `openssl rand -hex 24` on an empty answer
+     (19.1 says generated, 26.4 A1 says typed — both now
+     hold), and no longer dies on `stty` without a terminal. Contracts:
+     compose v5.5.1 reads single-quoted `.env` values literally for both
+     `env_file` and interpolation and expands `$y`/cuts ` #` unquoted
+     (checked on this host); `pg-connection-string` 2.14.0 decodes user
+     and password with `decodeURIComponent` (its source); Prisma 7 requires
+     percent-encoding (Context7 `/prisma/web`, connection URLs). Regression
+     `test/m1.database-url.integration.test.mjs` (in `test:m1`, now 7/7):
+     `init-env.sh` with that password → `docker compose config` of a
+     deployment directory gives postgres and api the password unchanged and
+     no assembled URL → PostgreSQL with that password accepts the Prisma
+     client and `prisma migrate deploy`; plus the generated and refused
+     cases. Red: with the old `compose.yaml` the URL assertion fails; the
+     old pair mangles the password as above. Verified: `pnpm lint`,
+     `pnpm typecheck`, `pnpm -r test` (API 273, web 45, bot 28, worker 18),
+     `pnpm test` 47, `test:m5` 7/7. Found meanwhile, next: the pre-migrate
+     `pg_dump` in `migrate.ts` runs without `PGPASSWORD`. **Not verified:**
+     on the VPS; an existing `.env` with an unquoted password is read as
+     before.
+
    Still open — the rest of the 2026-09-24 deployment review, which item 9
    had summarised only partly:
-   - special characters in the PostgreSQL password break the `DATABASE_URL`
-     compose builds (`init-env.sh` takes the password from input);
    - specification gaps: no `maintenance.disk-check` (20.3), no daily update
      check (24.6), no `start_period: 30s` on the api healthcheck (20.3),
      releases attested with `attest-build-provenance` rather than a `cosign`

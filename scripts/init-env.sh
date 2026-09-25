@@ -13,11 +13,24 @@ printf 'Domain: '
 read -r domain
 printf 'ACME email: '
 read -r acme_email
-printf 'PostgreSQL password: '
-stty -echo
-read -r postgres_password
-stty echo
+printf 'PostgreSQL password (empty to generate one): '
+# Not a terminal when the answers are piped in; there is nothing to hide then.
+stty -echo 2>/dev/null || true
+IFS= read -r postgres_password || true
+stty echo 2>/dev/null || true
 printf '\n'
+if [ -z "$postgres_password" ]; then
+  postgres_password=$(openssl rand -hex 24)
+  printf 'Generated a PostgreSQL password.\n'
+fi
+# Written single-quoted, which compose reads literally: `$` is not expanded
+# and ` #` does not start a comment. A single quote cannot be written inside.
+case "$postgres_password" in
+  *\'*)
+    printf 'The PostgreSQL password cannot contain a single quote.\n' >&2
+    exit 1
+    ;;
+esac
 
 app_key=$(openssl rand -base64 32 | tr -d '\n')
 internal_token=$(openssl rand -base64 32 | tr -d '\n')
@@ -31,7 +44,7 @@ RR_TLS_MODE=acme
 RR_APP_KEY=$app_key
 RR_SETUP_TOKEN=$setup_token
 RR_INTERNAL_TOKEN=$internal_token
-POSTGRES_PASSWORD=$postgres_password
+POSTGRES_PASSWORD='$postgres_password'
 POSTGRES_USER=remnaray
 POSTGRES_DB=remnaray
 VALKEY_URL=redis://valkey:6379/0

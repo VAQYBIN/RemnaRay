@@ -8,7 +8,7 @@ import { spawnSync } from 'node:child_process';
 import { existsSync, mkdirSync, readFileSync, readdirSync } from 'node:fs';
 import { resolve } from 'node:path';
 import process from 'node:process';
-import { createPrismaClient } from '@remnaray/db';
+import { createPrismaClient, resolveDatabaseUrl } from '@remnaray/db';
 
 const MIGRATIONS_DIRECTORY =
   process.env.RR_MIGRATIONS_DIR ?? resolve(process.cwd(), 'prisma/migrations');
@@ -102,6 +102,9 @@ async function main(): Promise<void> {
   )
     preMigrateBackup(process.env.RR_VERSION ?? 'latest');
 
+  // `prisma.config.ts` reads DATABASE_URL, which compose no longer assembles.
+  const url = resolveDatabaseUrl();
+  if (url) process.env.DATABASE_URL = url;
   run(prismaCli(), ['migrate', 'deploy']);
   process.stdout.write('migrate: done\n');
 }
