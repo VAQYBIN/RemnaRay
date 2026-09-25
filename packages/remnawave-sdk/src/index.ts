@@ -233,7 +233,10 @@ export class RemnawaveClientImpl implements RemnawaveClient {
           dispatcher: this.pool,
           headers: {
             authorization: `Bearer ${this.config.apiToken}`,
-            'content-type': 'application/json',
+            // Only with a body: the action routes take none, and a JSON
+            // content type with an empty body is refused by a Fastify server
+            // (FST_ERR_CTP_EMPTY_JSON_BODY), the panel mock among them.
+            ...(body === undefined ? {} : { 'content-type': 'application/json' }),
             'x-forwarded-for': '127.0.0.1',
             'x-forwarded-proto': 'https',
             ...this.config.extraHeaders,

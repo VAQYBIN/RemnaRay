@@ -1,3 +1,4 @@
+import { queuePanelSync } from '../remnawave/panel-jobs';
 import { emitWebhook, minor, subscriptionData } from '../webhooks/outgoing';
 import type { ReferralConfig, SourceTransaction, TrialLimits, Tx } from './rewards.types';
 
@@ -300,6 +301,7 @@ export async function grantInviteeBonus(
       data: { expiresAt: new Date(base.getTime() + days * 86_400_000) },
     });
     await emitWebhook(tx, 'subscription.activated', userId, subscriptionData(extended));
+    await queuePanelSync(tx, userId, 'referral:invitee-bonus');
     return;
   }
   const created = await tx.subscription.create({
@@ -316,4 +318,5 @@ export async function grantInviteeBonus(
     },
   });
   await emitWebhook(tx, 'subscription.activated', userId, subscriptionData(created));
+  await queuePanelSync(tx, userId, 'referral:invitee-bonus');
 }

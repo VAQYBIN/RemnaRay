@@ -9,11 +9,13 @@ type Answer = { status: number; body?: string };
 
 let server: Server | undefined;
 let lastPath: string | undefined;
+let lastContentType: string | undefined;
 
 /** A panel that answers every request the same way, on a free port. */
 async function panel(answer: Answer): Promise<string> {
   server = createServer((request, response) => {
     lastPath = request.url;
+    lastContentType = request.headers['content-type'];
     response.writeHead(answer.status, { 'content-type': 'application/json' });
     response.end(answer.body ?? '');
   });
@@ -36,6 +38,22 @@ afterEach(async () => {
 });
 
 describe('RemnawaveClient', () => {
+  it('declares a JSON body only when it sends one', async () => {
+    // The action routes take no body; a Fastify server, the panel mock among
+    // them, refuses `application/json` with an empty body.
+    const baseUrl = await panel({ status: 200, body: JSON.stringify({ response: {} }) });
+    const client = createRemnawaveClient({ baseUrl, apiToken: 'token' });
+
+    await client.users.resetTraffic(42);
+    expect(lastPath).toBe('/api/users/42/actions/reset-traffic');
+    expect(lastContentType).toBeUndefined();
+    await client.users.disable(42);
+    expect(lastContentType).toBeUndefined();
+    await client.users.revokeSubscription(42);
+    expect(lastContentType).toBe('application/json');
+    await client.close();
+  });
+
   it('uses a bounded client and exposes panel errors', async () => {
     const client = createRemnawaveClient({
       baseUrl: 'http://127.0.0.1:1',

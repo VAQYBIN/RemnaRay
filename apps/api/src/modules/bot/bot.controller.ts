@@ -17,6 +17,7 @@ import { InternalTokenGuard, equalToken } from '../auth/auth.guards';
 import { SettingsService } from '../settings/settings.service';
 import { I18nService } from '../public/i18n.service';
 import { emitWebhook, subscriptionData } from '../webhooks/outgoing';
+import { queuePanelSync } from '../remnawave/panel-jobs';
 
 const appendUpdate = `
 if redis.call('EXISTS', KEYS[2]) == 1 then return 0 end
@@ -269,6 +270,7 @@ export class BotAdminController {
         data: { expiresAt: afterDate },
       });
       await emitWebhook(transaction, 'subscription.activated', user.id, subscriptionData(extended));
+      await queuePanelSync(transaction, user.id, 'bot-admin');
       await transaction.transaction.create({
         data: {
           userId: user.id,

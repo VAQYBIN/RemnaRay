@@ -10,6 +10,7 @@ import { PaymentError } from '../payments/payments.errors';
 import { PaymentsService } from '../payments/payments.service';
 import { SettingsService } from '../settings/settings.service';
 import { emitWebhook, subscriptionData } from '../webhooks/outgoing';
+import { queuePanelSync } from '../remnawave/panel-jobs';
 import { bulkExtendSchema, refundSchema } from './admin-users.schemas';
 
 export type ActingAdmin = { id: string; role: AdminRole };
@@ -281,6 +282,7 @@ export class AdminPaymentsService {
           data: { expiresAt, status: 'active' },
         });
         await emitWebhook(tx, 'subscription.activated', row.userId, subscriptionData(updated));
+        await queuePanelSync(tx, row.userId, 'admin:bulk-extend');
         await tx.transaction.create({
           data: {
             userId: row.userId,

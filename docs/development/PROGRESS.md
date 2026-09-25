@@ -553,12 +553,38 @@ style-src 'unsafe-inline'; sandbox` and `nosniff`, which makes any theme
      3/3, `test:m2` 3/3, `test:m4` 5/5. **Not verified:** a live panel; E2E
      not rerun (no browser flow takes a trial).
 
-   Still open: panel sync after the console's and the bot's extensions,
-   the console's set-plan (with the FR-023 reset), bulk extension and the
-   invitee bonus days; a ban must disable the panel user (FR-141), but a
-   sync with no live subscription changes nothing, and ban/unban are not
-   one transaction; the panel `tag` must match `/^[A-Z0-9_]{1,16}$/`
-   (verified against remnawave/backend `create-user.command.ts` and
+   - **9e. Done 2026-09-25 — console, bot and bonus changes never reached
+     the panel.** Section 10.6 makes the store the source of truth for
+     expiry, limits and enabled state, but the console's extension, set-plan
+     and bulk extension, the bot's `/admin_extend` and the invitee's bonus
+     days queued no `panel.sync-user`; reconciliation catches expiry and
+     limit drift at the next quarter hour at best, and a set-plan never got
+     the FR-023 reset. A ban queued a sync, but `syncUser` does nothing
+     without a live subscription, so the panel user stayed enabled (FR-141
+     requires `disable`); and ban/unban wrote the user, the subscriptions
+     and the sync in three statements. Now each of those writes
+     `panel.sync-user` in its own transaction (`queuePanelSync`,
+     `apps/api/src/modules/remnawave/panel-jobs.ts`); set-plan queues the
+     conditional FR-023 reset ahead of it; ban and unban are one
+     transaction each; and a sync for a banned user, or one whose latest
+     subscription is revoked, disables the panel user. **Found while
+     testing:** the SDK sent `content-type: application/json` on the
+     body-less action routes (reset-traffic, enable, disable); the Fastify
+     panel mock refuses that with 400, which no test had exercised. It is
+     sent only with a body now. Whether the live panel refuses it too was
+     not checked; either way the header was wrong.
+     Regressions: `test/m4.panel-sync.integration.test.mjs` (real PostgreSQL
+     and the panel mock: extension, set-plan with the reset of 2 GB used
+     against 1 GB, ban → `DISABLED`, unban, bulk extension → `ACTIVE`, each
+     synced into the mock; the invitee bonus creating and then extending a
+     subscription; fails on the old code), the bot controller test and the
+     SDK header test (fails on the old SDK). Verified: lint, typecheck,
+     format, `pnpm -r test` (API 255, SDK 8), `pnpm test` 43, `test:m1` 3/3,
+     `test:m2` 3/3, `test:m4` 6/6, `pnpm test:e2e` 28 passed / 1 skipped.
+     **Not verified:** a live panel.
+
+   Still open: the panel `tag` must match `/^[A-Z0-9_]{1,16}$/` (verified
+   against remnawave/backend `create-user.command.ts` and
    `update-user.command.ts`) and is always `TRIAL` instead of the plan's
    slug (10.3).
    Robokassa SuccessURL/FailURL landing and the `settings.fiscal.mode`

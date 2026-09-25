@@ -8,6 +8,7 @@ import { ApiError } from '../me/me.errors';
 import { RemnawaveService } from '../remnawave/remnawave.service';
 import { SettingsService } from '../settings/settings.service';
 import { emitWebhook, subscriptionData } from '../webhooks/outgoing';
+import { queueDowngradeReset, queuePanelSync } from '../remnawave/panel-jobs';
 import {
   balanceSchema,
   extendSchema,
@@ -199,6 +200,7 @@ export class AdminUsersService {
         data: { expiresAt, status: 'active' },
       });
       await emitWebhook(tx, 'subscription.activated', id, subscriptionData(updated));
+      await queuePanelSync(tx, id, 'admin:extend');
       await tx.transaction.create({
         data: {
           userId: id,
@@ -241,6 +243,13 @@ export class AdminUsersService {
         },
       });
       await emitWebhook(tx, 'subscription.activated', id, subscriptionData(updated));
+      await queueDowngradeReset(
+        tx,
+        id,
+        plan.trafficLimitBytes,
+        `set-plan:${subscription.id}:${Date.now().toString(36)}`,
+      );
+      await queuePanelSync(tx, id, 'admin:set-plan');
       await tx.transaction.create({
         data: {
           userId: id,
@@ -306,21 +315,15 @@ export class AdminUsersService {
   async ban(id: string, body: unknown) {
     reasonSchema.parse(body);
     const before = await this.require(id);
-    const updated = await this.infra.db.user.update({
-      where: { id },
-      data: { isBanned: true },
-    });
-    await this.infra.db.subscription.updateMany({
-      where: { userId: id, status: { in: ['provisioning', 'active', 'grace'] } },
-      data: { status: 'revoked' },
-    });
-    await this.infra.db.outboxJob.create({
-      data: {
-        queue: 'panel',
-        name: 'panel.sync-user',
-        payload: { userId: id, reason: 'admin:ban' },
-        jobId: `sync:${id}`,
-      },
+    // One transaction: a ban whose sync is lost leaves the panel user enabled.
+    const updated = await this.infra.db.$transaction(async (tx) => {
+      const banned = await tx.user.update({ where: { id }, data: { isBanned: true } });
+      await tx.subscription.updateMany({
+        where: { userId: id, status: { in: ['provisioning', 'active', 'grace'] } },
+        data: { status: 'revoked' },
+      });
+      await queuePanelSync(tx, id, 'admin:ban');
+      return banned;
     });
     return new Audited({ isBanned: before.isBanned }, { isBanned: updated.isBanned });
   }
@@ -328,14 +331,10 @@ export class AdminUsersService {
   async unban(id: string, body: unknown) {
     reasonSchema.parse(body);
     const before = await this.require(id);
-    const updated = await this.infra.db.user.update({ where: { id }, data: { isBanned: false } });
-    await this.infra.db.outboxJob.create({
-      data: {
-        queue: 'panel',
-        name: 'panel.sync-user',
-        payload: { userId: id, reason: 'admin:unban' },
-        jobId: `sync:${id}`,
-      },
+    const updated = await this.infra.db.$transaction(async (tx) => {
+      const unbanned = await tx.user.update({ where: { id }, data: { isBanned: false } });
+      await queuePanelSync(tx, id, 'admin:unban');
+      return unbanned;
     });
     return new Audited({ isBanned: before.isBanned }, { isBanned: updated.isBanned });
   }

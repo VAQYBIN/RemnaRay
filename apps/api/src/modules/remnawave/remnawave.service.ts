@@ -67,6 +67,10 @@ export class RemnawaveService {
         current = await client.users.update(desired);
         if (current.status === 'DISABLED' && subscription.status === 'active')
           current = await client.users.enable(current.id);
+      } else if (current.status !== 'DISABLED' && (await this.revoked(userId, user.isBanned))) {
+        // FR-141: a ban revokes the subscription and disables the panel user.
+        // With no live subscription there is nothing else to write.
+        current = await client.users.disable(current.id);
       }
       await this.saveSnapshot(userId, current, false);
       if (subscription?.status === 'provisioning') await this.activate(subscription);
@@ -82,6 +86,17 @@ export class RemnawaveService {
     } finally {
       await client.close();
     }
+  }
+
+  /** A banned user, or one whose latest subscription was revoked. */
+  private async revoked(userId: string, isBanned: boolean): Promise<boolean> {
+    if (isBanned) return true;
+    const latest = await this.infra.db.subscription.findFirst({
+      where: { userId },
+      orderBy: { expiresAt: 'desc' },
+      select: { status: true },
+    });
+    return latest?.status === 'revoked';
   }
 
   /**

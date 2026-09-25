@@ -90,8 +90,12 @@ describe('bot ingress boundary', () => {
             },
             user: { findUnique: () => Promise.resolve({ telegramId: 456n }) },
             outboxJob: {
-              create: ({ data }: { data: { name: string; payload: { type: string } } }) => {
-                emitted.push(`${data.name} ${data.payload.type}`);
+              create: ({
+                data,
+              }: {
+                data: { name: string; payload: { type?: string; reason?: string } };
+              }) => {
+                emitted.push(`${data.name} ${data.payload.type ?? data.payload.reason ?? ''}`);
                 return Promise.resolve();
               },
             },
@@ -107,7 +111,11 @@ describe('bot ingress boundary', () => {
     } as never);
     await controller.extend('123', { telegramId: '456', days: 7 });
     expect(audited).toBe(true);
-    // Section 9.8, in the transaction that extends the subscription.
-    expect(emitted).toEqual(['webhooks.dispatch subscription.activated']);
+    // Section 9.8 and the panel sync (10.6), in the transaction that extends
+    // the subscription.
+    expect(emitted).toEqual([
+      'webhooks.dispatch subscription.activated',
+      'panel.sync-user bot-admin',
+    ]);
   });
 });
