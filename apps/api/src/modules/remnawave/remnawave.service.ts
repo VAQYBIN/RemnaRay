@@ -42,6 +42,13 @@ export class RemnawaveService {
       where: { userId, status: { in: ['provisioning', 'active', 'grace'] } },
       orderBy: { expiresAt: 'desc' },
     });
+    const plan = subscription?.planId
+      ? await this.infra.db.plan.findUnique({
+          where: { id: subscription.planId },
+          select: { slug: true },
+        })
+      : null;
+    const tag = panelTag(plan?.slug ?? null);
     const client = await this.client();
     try {
       let panelUser = await this.infra.db.panelUser.findUnique({ where: { userId } });
@@ -56,14 +63,14 @@ export class RemnawaveService {
         current = chooseDuplicate(found);
         if (!current && subscription) {
           current = await client.users.create(
-            desiredCreate(user, subscription, String(await this.settings.get('brand.name'))),
+            desiredCreate(user, subscription, String(await this.settings.get('brand.name')), tag),
           );
         }
         if (!current) return null;
         panelUser = await this.saveSnapshot(userId, current, false);
       }
       if (subscription) {
-        const desired = desiredUpdate(subscription, user.telegramId, user.email, current.id);
+        const desired = desiredUpdate(subscription, user.telegramId, user.email, current.id, tag);
         current = await client.users.update(desired);
         if (current.status === 'DISABLED' && subscription.status === 'active')
           current = await client.users.enable(current.id);
@@ -437,6 +444,20 @@ export class RemnawaveService {
   }
 }
 
+/**
+ * Section 10.3 tags the panel user with the plan's slug, or `trial`. The
+ * panel takes `/^[A-Z0-9_]+$/`, at most 16 characters (remnawave/backend
+ * `create-user.command.ts`, `update-user.command.ts`), and refuses anything
+ * else with 400; a slug is `[a-z0-9][a-z0-9_-]{0,63}`, so it is upper-cased,
+ * `-` becomes `_`, and it is cut to 16.
+ */
+export function panelTag(slug: string | null): string {
+  return (slug ?? 'trial')
+    .toUpperCase()
+    .replace(/[^A-Z0-9_]/gu, '_')
+    .slice(0, 16);
+}
+
 function chooseDuplicate(users: PanelUser[]): PanelUser | null {
   return (
     [...users].sort(
@@ -462,6 +483,7 @@ function desiredCreate(
     squads: string[];
   },
   brand: string,
+  tag: string,
 ) {
   return {
     username: `rr_${user.telegramId.toString()}`,
@@ -473,7 +495,7 @@ function desiredCreate(
     trafficLimitStrategy: subscription.trafficResetStrategy as PanelUser['trafficLimitStrategy'],
     hwidDeviceLimit: subscription.deviceLimit || null,
     activeInternalSquads: subscription.squads,
-    tag: 'TRIAL',
+    tag,
   };
 }
 function desiredUpdate(
@@ -487,9 +509,11 @@ function desiredUpdate(
   telegramId: bigint,
   email: string | null,
   id: number,
+  tag: string,
 ) {
   return {
     id,
+    tag,
     telegramId: Number(telegramId),
     email,
     expireAt: subscription.expiresAt.toISOString(),

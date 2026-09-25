@@ -583,15 +583,27 @@ style-src 'unsafe-inline'; sandbox` and `nosniff`, which makes any theme
      `test:m2` 3/3, `test:m4` 6/6, `pnpm test:e2e` 28 passed / 1 skipped.
      **Not verified:** a live panel.
 
-   Still open: the panel `tag` must match `/^[A-Z0-9_]{1,16}$/` (verified
-   against remnawave/backend `create-user.command.ts` and
-   `update-user.command.ts`) and is always `TRIAL` instead of the plan's
-   slug (10.3).
+   - **9f. Done 2026-09-25 — the panel tag was always `TRIAL`.** Section
+     10.3 tags the panel user with `sub.plan?.slug ?? 'trial'`; the service
+     sent `TRIAL` on create and nothing on update, so a paid user kept the
+     trial tag. The panel accepts `/^[A-Z0-9_]+$/`, at most 16, nullable
+     (remnawave/backend `libs/contract/commands/users/create-user.command.ts`
+     and `update-user.command.ts`, read 2026-09-25), and a slug is
+     `[a-z0-9][a-z0-9_-]{0,63}`, so the literal slug would be refused with 400. `panelTag` upper-cases it, maps `-` to `_` and cuts to 16; both
+     create and update send it. The panel mock now refuses a tag the panel
+     refuses. Regressions: `panelTag` cases in `remnawave.service.test.ts`,
+     the mock's tag test, and `m4.panel-sync` (trial `TRIAL`, `m4-small`
+     `M4_SMALL`; fails on the old code). Verified: lint, typecheck, format,
+     `pnpm -r test` (API 257), `pnpm test` 43, `test:m1` 3/3, `test:m2` 3/3,
+     `test:m4` 6/6, `pnpm test:e2e` 28 passed / 1 skipped. **Not verified:**
+     a live panel.
+
+   Still open:
    Robokassa SuccessURL/FailURL landing and the `settings.fiscal.mode`
    vocabulary (found under 6c). Showing the available balance and held
    rewards to the customer (found under 7c). The Valkey `Idempotent-Replay`
    response store of section 9.2 (found under 7e).
-   Remaining review items (panel sync coverage and tags, broadcast resume,
+   Remaining review items (broadcast resume, panel worker concurrency 2,
    `rebuild.yml` Trivy tag `0.28.0`, worker `/backups` mount, restore script
    user/themes) and the M5-004 gates recorded below.
 

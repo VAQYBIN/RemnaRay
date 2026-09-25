@@ -5,7 +5,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import type { Infrastructure } from '../../infra/infra.module';
 import type { SettingsService } from '../settings/settings.service';
-import { RemnawaveService } from './remnawave.service';
+import { panelTag, RemnawaveService } from './remnawave.service';
 
 const USER_ID = '0199a0b0-0000-7000-8000-000000000001';
 
@@ -167,5 +167,19 @@ describe('panel.delete-user (section 19.5)', () => {
     await expect(remnawave.deleteUser(USER_ID)).resolves.toEqual({ deleted: true });
     expect(target.requests).toEqual([]);
     expect(panelUser.deleteMany).toHaveBeenCalled();
+  });
+});
+
+describe('the panel tag (section 10.3)', () => {
+  it('is the plan slug in the form the panel accepts, or TRIAL', () => {
+    expect(panelTag(null)).toBe('TRIAL');
+    expect(panelTag('month')).toBe('MONTH');
+    expect(panelTag('pro-3m')).toBe('PRO_3M');
+    expect(panelTag('a-very-long-plan-slug-name')).toBe('A_VERY_LONG_PLAN');
+  });
+
+  it('always matches the panel pattern', () => {
+    for (const slug of ['0', 'x_y-z', 'z'.repeat(64)])
+      expect(panelTag(slug)).toMatch(/^[A-Z0-9_]{1,16}$/u);
   });
 });

@@ -69,6 +69,8 @@ test('M4 console changes reach the panel', { timeout: 240_000 }, async () => {
     });
     await remnawave.syncUser(user.id, 'trial');
     const panelUser = () => [...panel.users.values()][0];
+    // Section 10.3: the plan's slug, or `trial`, in the panel's tag format.
+    assert.equal(panelUser().tag, 'TRIAL');
     const expiry = async () =>
       (
         await prisma.subscription.findFirstOrThrow({
@@ -118,6 +120,7 @@ test('M4 console changes reach the panel', { timeout: 240_000 }, async () => {
     ]);
     assert.equal(panelUser().userTraffic.usedTrafficBytes, 0, 'used 2 GB against a 1 GB limit');
     assert.equal(panelUser().trafficLimitBytes, 1024 ** 3);
+    assert.equal(panelUser().tag, 'M4_SMALL');
     assert.equal(panelUser().expireAt, await expiry());
 
     // --- ban disables the panel user (FR-141), unban queues a sync ---

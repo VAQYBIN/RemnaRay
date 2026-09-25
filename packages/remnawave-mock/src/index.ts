@@ -37,6 +37,7 @@ export function createRemnawaveMock(): RemnawaveMock {
     },
   }));
   app.post<{ Body: CreateUserInput }>('/api/users', (request, reply) => {
+    if (!validTag(request.body.tag)) return reply.code(400).send(TAG_ERROR);
     const now = new Date().toISOString();
     const user: PanelUser = {
       id: app.users.size + 1,
@@ -141,6 +142,19 @@ export function createRemnawaveMock(): RemnawaveMock {
   return app;
 }
 
+/**
+ * The panel's tag rule (remnawave/backend `create-user.command.ts` and
+ * `update-user.command.ts`): optional, nullable, `/^[A-Z0-9_]+$/`, at most 16.
+ */
+function validTag(tag: string | null | undefined): boolean {
+  return tag === undefined || tag === null || /^[A-Z0-9_]{1,16}$/u.test(tag);
+}
+
+const TAG_ERROR = {
+  message: 'Tag can only contain uppercase letters, numbers, underscores',
+  errorCode: 'VALIDATION_ERROR',
+};
+
 function updateUser(
   app: RemnawaveMock,
   input: UpdateUserInput,
@@ -151,6 +165,7 @@ function updateUser(
 ) {
   const user = app.users.get(input.id);
   if (!user) return reply.code(404).send({ message: 'not found', errorCode: 'NOT_FOUND' });
+  if (!validTag(input.tag)) return reply.code(400).send(TAG_ERROR);
   const { activeInternalSquads } = input;
   const fields = Object.fromEntries(
     Object.entries(input).filter(([key]) => key !== 'id' && key !== 'activeInternalSquads'),
