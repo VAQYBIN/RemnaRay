@@ -13,6 +13,7 @@ import type { FastifyReply } from 'fastify';
 import { catchError, from, mergeMap, of, type Observable } from 'rxjs';
 
 import { Infrastructure } from '../infra/infra.module';
+import { Audited } from '../modules/admin/audit.interceptor';
 import type { AuthenticatedRequest } from '../modules/auth/auth.guards';
 import { ApiError } from '../modules/me/me.errors';
 
@@ -83,10 +84,13 @@ export class IdempotencyInterceptor implements NestInterceptor {
     }
 
     return next.handle().pipe(
-      mergeMap(async (body: unknown) => {
+      mergeMap(async (result: unknown) => {
+        // A console action answers `Audited`; what the client receives, and
+        // so what a repeat gets back, is its body.
+        const body: unknown = result instanceof Audited ? (result.body as unknown) : result;
         const done: Entry = { state: 'done', fingerprint, body };
         await this.infra.redis.set(storeKey, JSON.stringify(done), 'EX', TTL_SECONDS);
-        return body;
+        return result;
       }),
       catchError((error: unknown) =>
         from(
@@ -98,9 +102,13 @@ export class IdempotencyInterceptor implements NestInterceptor {
     );
   }
 
-  /** The user the key belongs to: signed in, or acting through the bot. */
+  /**
+   * Whose key it is: the signed-in user, the administrator acting in the
+   * console, or the user the bot acts for.
+   */
   private async owner(request: AuthenticatedRequest): Promise<string> {
     if (request.user?.id) return request.user.id;
+    if (request.admin?.id) return request.admin.id;
     const acting = request.headers['x-acting-user'];
     const telegramId = Array.isArray(acting) ? acting[0] : acting;
     if (!telegramId || !/^\d+$/u.test(telegramId))

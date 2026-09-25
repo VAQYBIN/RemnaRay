@@ -120,6 +120,15 @@ later mutations and hides every section the role does not carry. Server-side,
 `@Roles`/`@Permissions` enforce the same matrix, so hiding a control is a
 convenience rather than the boundary.
 
+The console's POSTs that create money or subscriptions — extend, set plan,
+balance, refund and bulk extension — take `Idempotency-Key` like the
+account's (section 9.1): the response is kept 24 h under
+`rr:idem:<adminId>:<key>`, and the same request again is answered from it with
+`Idempotent-Replay: true` and no second audit entry. The console sends one key
+per opened dialog, so confirming again after an answer that never arrived does
+not credit, refund or extend twice; another amount under that key is
+`422 IDEMPOTENCY_KEY_REUSED`. A failed request keeps nothing and may be retried.
+
 ## Dashboard aggregates
 
 Every FR-142 number is a SQL aggregate over `transactions`, `subscriptions`,

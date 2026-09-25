@@ -28,14 +28,19 @@ function fixture() {
     headers: { 'user-agent': 'test' },
     ip: '127.0.0.1',
   };
+  const replyHeaders: Record<string, string> = {};
+  const reply = { getHeader: (name: string) => replyHeaders[name] };
   const run = (response: unknown): Promise<unknown> =>
     lastValueFrom(
       interceptor.intercept(
-        { getHandler: () => ({}), switchToHttp: () => ({ getRequest: () => request }) } as never,
+        {
+          getHandler: () => ({}),
+          switchToHttp: () => ({ getRequest: () => request, getResponse: () => reply }),
+        } as never,
         { handle: () => of(response) },
       ),
     );
-  return { run, audit: () => auditData };
+  return { run, audit: () => auditData, replyHeaders };
 }
 
 describe('admin audit interceptor', () => {
@@ -69,6 +74,16 @@ describe('admin audit interceptor', () => {
     expect(result).toEqual({ token: 'do-not-store', ok: true });
     expect(test.audit()?.before).toBeUndefined();
     expect(test.audit()?.after).toEqual({ token: '***', ok: true });
+  });
+
+  it('records nothing for a repeat answered from the Idempotency-Key store', async () => {
+    const test = fixture();
+    // The idempotency interceptor, inside this one, answered from the store.
+    test.replyHeaders['Idempotent-Replay'] = 'true';
+    const result = await test.run({ balance: { amountMinor: 1234, currency: 'RUB' } });
+
+    expect(result).toEqual({ balance: { amountMinor: 1234, currency: 'RUB' } });
+    expect(test.audit()).toBeUndefined();
   });
 
   it('cuts oversized states down to 16 KB', async () => {

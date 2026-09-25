@@ -4,6 +4,7 @@ import { lastValueFrom, NEVER, of, throwError, type Observable } from 'rxjs';
 import { describe, expect, it, vi } from 'vitest';
 
 import type { Infrastructure } from '../infra/infra.module';
+import { Audited } from '../modules/admin/audit.interceptor';
 import { IdempotencyInterceptor, IdempotencyRequired } from './idempotency.interceptor';
 
 const KEY = '0199aaaa-bbbb-7ccc-8ddd-eeeeeeeeeeee';
@@ -48,6 +49,7 @@ function setup() {
       path?: string;
       handler?: 'required' | 'optional';
       userId?: string;
+      adminId?: string;
       result?: () => Observable<unknown>;
     } = {},
   ) => {
@@ -56,7 +58,9 @@ function setup() {
       url: options.path ?? '/api/v1/me/invoices',
       headers: options.key === undefined ? {} : { 'idempotency-key': options.key },
       body: options.body ?? { kind: 'topup', provider: 'mock', amountMinor: 10000 },
-      user: { id: options.userId ?? 'user-1' },
+      ...(options.adminId
+        ? { admin: { id: options.adminId, csrf: 'c', role: 'admin' } }
+        : { user: { id: options.userId ?? 'user-1' } }),
     };
     const reply = {
       header: (name: string, value: string) => {
@@ -150,6 +154,33 @@ describe('the section 9.2 Idempotency-Key store', () => {
       `rr:idem:user-1:${KEY}`,
       `rr:idem:user-2:${KEY}`,
     ]);
+  });
+
+  it('keeps a console action under the administrator and replays its body, not the audit', async () => {
+    const { redis, call, headers } = setup();
+    const credit = () =>
+      new Audited(
+        { balance: { amountMinor: 0, currency: 'RUB' } },
+        { balance: { amountMinor: 1234, currency: 'RUB' } },
+      );
+    const request = {
+      key: KEY,
+      adminId: 'admin-1',
+      path: '/api/admin/v1/users/user-1/balance',
+      body: { amountMinor: 1234, reason: 'goodwill' },
+    };
+    const first = call({ ...request, result: () => of(credit()) });
+
+    // The audit interceptor outside still receives the `Audited` to record.
+    await expect(first.run()).resolves.toBeInstanceOf(Audited);
+    expect([...redis.keys.keys()]).toEqual([`rr:idem:admin-1:${KEY}`]);
+
+    const again = call({ ...request, result: () => of(credit()) });
+    await expect(again.run()).resolves.toEqual({
+      balance: { amountMinor: 1234, currency: 'RUB' },
+    });
+    expect(again.handle).not.toHaveBeenCalled();
+    expect(headers['Idempotent-Replay']).toBe('true');
   });
 
   it('requires the key where section 9.4 does, and a UUID wherever one is sent', async () => {

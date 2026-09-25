@@ -7,7 +7,7 @@ import {
 } from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
 import { mergeMap } from 'rxjs';
-import type { FastifyRequest } from 'fastify';
+import type { FastifyReply, FastifyRequest } from 'fastify';
 
 import { Infrastructure } from '../../infra/infra.module';
 
@@ -58,8 +58,12 @@ export class AuditInterceptor implements NestInterceptor<unknown, unknown> {
     }
 
     const metadata = this.reflector.get<AuditMetadata | undefined>(AUDIT_KEY, context.getHandler());
+    const reply = context.switchToHttp().getResponse<FastifyReply>();
     return next.handle().pipe(
       mergeMap(async (response) => {
+        // Section 9.1: a repeat answered from the Idempotency-Key store
+        // changed nothing, so there is nothing to record.
+        if (reply.getHeader('Idempotent-Replay') === 'true') return response;
         const audited = response instanceof Audited ? response : undefined;
         const action = metadata?.action ?? `${request.method.toLowerCase()} ${path}`;
         const entity = metadata?.entity ?? 'admin';

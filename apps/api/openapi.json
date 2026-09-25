@@ -1291,7 +1291,15 @@
         "requestBody": {
           "required": true,
           "content": { "application/json": { "schema": { "type": "object" } } }
-        }
+        },
+        "parameters": [
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": false,
+            "schema": { "type": "string", "format": "uuid" }
+          }
+        ]
       }
     },
     "/api/admin/v1/system": {
@@ -1381,6 +1389,12 @@
             "name": "id",
             "in": "path",
             "required": true,
+            "schema": { "type": "string", "format": "uuid" }
+          },
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": false,
             "schema": { "type": "string", "format": "uuid" }
           }
         ],
@@ -1477,6 +1491,12 @@
             "in": "path",
             "required": true,
             "schema": { "type": "string", "format": "uuid" }
+          },
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": false,
+            "schema": { "type": "string", "format": "uuid" }
           }
         ],
         "requestBody": {
@@ -1514,6 +1534,12 @@
             "name": "id",
             "in": "path",
             "required": true,
+            "schema": { "type": "string", "format": "uuid" }
+          },
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": false,
             "schema": { "type": "string", "format": "uuid" }
           }
         ],
@@ -1634,6 +1660,12 @@
             "name": "id",
             "in": "path",
             "required": true,
+            "schema": { "type": "string", "format": "uuid" }
+          },
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": false,
             "schema": { "type": "string", "format": "uuid" }
           }
         ],

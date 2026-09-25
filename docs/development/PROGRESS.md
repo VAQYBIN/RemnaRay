@@ -733,10 +733,10 @@ style-src 'unsafe-inline'; sandbox` and `nosniff`, which makes any theme
      stand's API and Valkey (same id with the header, 422, 400). Verified:
      lint, typecheck, typecheck:e2e, format, `pnpm -r test` (API 269),
      `pnpm test` 43, `test:m4` 6/6, `pnpm test:e2e` 30 passed / 1 skipped.
-     **Found, not repaired:** section 9.1 covers every money-creating POST,
-     the console's among them (balance, refund, extensions); those return
-     `Audited` values the audit interceptor unwraps and the console sends no
-     key, so they are not covered.
+     **Found, not repaired then:** section 9.1 covers every money-creating
+     POST, the console's among them (balance, refund, extensions); those
+     return `Audited` values the audit interceptor unwraps and the console
+     sends no key, so they were not covered. Repaired as 9ag.
 
    - **9n. Done 2026-09-25 — the weekly rebuild scanned with a Trivy
      action tag that does not exist.** `rebuild.yml` used
@@ -1063,11 +1063,38 @@ verify` against `github.com/<repo>/.github/workflows/<file>.yml@` and
      SC2016 infos of the summary's literal Markdown backticks, present before.
      **Not verified:** a real dispatch on GitHub.
 
+   - **9ag the console's money POSTs under the section 9.1 store.**
+     Reproduced first: an E2E request crediting a balance twice with one
+     `Idempotency-Key` credited 2468 instead of 1234. Section 9.1 (spec line
+     1076): every POST creating money, invoices or subscriptions accepts the
+     key and a repeat returns the kept response with `Idempotent-Replay:
+true`. `IdempotencyInterceptor` now serves `users/:id/extend`,
+     `set-plan`, `balance`, `transactions/:id/refund` and
+     `subscriptions/bulk-extend`, keyed `rr:idem:<adminId>:<key>`; it keeps
+     the `Audited` body (what the client receives) while passing the
+     `Audited` on to the audit interceptor, which records nothing for a
+     replay. The key stays optional there (9.4 requires it only on
+     `/me/invoices`). The console sends one key per opened dialog (extend,
+     credit, refund, bulk extension), so confirming again after a lost
+     answer is a replay. The services' own guards are unchanged (the refund
+     remaining-amount check, the account `FOR UPDATE`); a failed request
+     keeps nothing, as for the account API. OpenAPI lists the optional
+     header on the five routes; `docs/admin.md`. Regressions: interceptor
+     unit (administrator owner, `Audited` body), audit unit (replay not
+     recorded), controller metadata (all five routes), E2E API (credited once,
+     replayed body, one audit entry; red on the old API) and E2E UI (the
+     first answer dropped after the API applied it, confirmed again:
+     credited once; red on the old console with 2400). Verified: lint,
+     typecheck, API 286, web 45, `pnpm test` 54, `pnpm test:e2e` 32 passed /
+     1 skipped. **Known order:** the change commits before the audit entry
+     is written (as before this repair), and the store keeps the response
+     before that write; if the write fails the client sees an error and a
+     retry with the key is replayed, not performed or audited again.
+
    The 2026-09-24 deployment review has no item left: the Trivy tag, the
    worker `/backups` mount and the restore script were repaired earlier in
-   this list, the suspected ones as 9ad–9af. Still open: the console's
-   money-creating POSTs are outside the section 9.1 response store (found
-   under 9m), and the M5-004 gates recorded below.
+   this list, the suspected ones as 9ad–9af, and the idempotency gap found
+   under 9m as 9ag. Still open: the M5-004 gates recorded below.
 
 **Pre-existing E2E failure, not caused by the repair above (fixed as 2b):**
 `e2e/specs/account.spec.ts:84` "preserves the selected locale when the bot

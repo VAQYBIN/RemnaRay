@@ -102,6 +102,131 @@ test.describe('administration console', () => {
     expect(status).toBe(403);
   });
 
+  test('a balance credit repeated with its Idempotency-Key is applied once (section 9.1)', async ({
+    page,
+  }) => {
+    const { user } = stackState();
+    const reason = `e2e idempotent credit ${String(Date.now())}`;
+    const outcome = await page.evaluate(
+      async ({ userId, reason }) => {
+        const me = (await (await fetch('/api/admin/v1/auth/me')).json()) as { csrfToken: string };
+        const headers = {
+          'content-type': 'application/json',
+          'x-requested-with': 'RemnaRay',
+          'x-csrf-token': me.csrfToken,
+        };
+        const balance = async () =>
+          (
+            (await (await fetch(`/api/admin/v1/users/${userId}`)).json()) as {
+              balance: { amountMinor: number };
+            }
+          ).balance.amountMinor;
+        const credit = (key: string, amountMinor: number) =>
+          fetch(`/api/admin/v1/users/${userId}/balance`, {
+            method: 'POST',
+            headers: { ...headers, 'idempotency-key': key },
+            body: JSON.stringify({ amountMinor, reason }),
+          });
+
+        const before = await balance();
+        const key = crypto.randomUUID();
+        const first = await credit(key, 1234);
+        const again = await credit(key, 1234);
+        const after = await balance();
+        const audit = (await (await fetch(`/api/admin/v1/users/${userId}/audit`)).json()) as {
+          items: { action: string; reason: string | null }[];
+        };
+        // Put the balance back for the other specs.
+        await credit(crypto.randomUUID(), before - after);
+        return {
+          statuses: [first.status, again.status],
+          bodies: [await first.json(), await again.json()],
+          replay: again.headers.get('idempotent-replay'),
+          credited: after - before,
+          audited: audit.items.filter(
+            (item) => item.action === 'users.balance' && item.reason === reason,
+          ).length,
+        };
+      },
+      { userId: user.id, reason },
+    );
+
+    expect(outcome.statuses).toEqual([200, 200]);
+    expect(outcome.credited).toBe(1234);
+    expect(outcome.replay).toBe('true');
+    expect(outcome.bodies[1]).toEqual(outcome.bodies[0]);
+    expect(outcome.audited).toBe(1);
+  });
+
+  test('confirming a credit again after a lost answer credits once (section 9.1)', async ({
+    page,
+  }) => {
+    const { user } = stackState();
+    const balance = () =>
+      page.evaluate(
+        async (userId) =>
+          (
+            (await (await fetch(`/api/admin/v1/users/${userId}`)).json()) as {
+              balance: { amountMinor: number };
+            }
+          ).balance.amountMinor,
+        user.id,
+      );
+
+    // The first credit reaches the API and is applied, but its answer never
+    // reaches the console, which shows an error and keeps the dialog open.
+    let lost: number | undefined;
+    await page.route(`**/api/admin/v1/users/${user.id}/balance`, async (route) => {
+      if (lost !== undefined) return route.continue();
+      lost = 0;
+      // The same request, sent from the page so the browser adds what the
+      // CSRF check reads (`Sec-Fetch-Site`); this handler lets it through.
+      const request = route.request();
+      const headers = Object.fromEntries(
+        Object.entries(request.headers()).filter(([name]) =>
+          ['content-type', 'x-requested-with', 'x-csrf-token', 'idempotency-key'].includes(name),
+        ),
+      );
+      lost = await page.evaluate(
+        async ({ url, headers, body }) =>
+          (await fetch(url, { method: 'POST', headers, body })).status,
+        { url: request.url(), headers, body: request.postData() },
+      );
+      return route.abort();
+    });
+
+    await page.goto(`/admin/users/${user.id}`);
+    const before = await balance();
+    await page.getByRole('button', { name: 'Начислить' }).click();
+    await page.getByLabel('Сумма').fill('12');
+    await page.getByLabel('Причина').fill('e2e lost answer');
+    await page.getByRole('button', { name: 'Подтвердить' }).click();
+    await expect.poll(() => lost).toBe(200);
+    await expect(page.getByRole('button', { name: 'Подтвердить' })).toBeEnabled();
+    await page.getByRole('button', { name: 'Подтвердить' }).click();
+    await expect(page.getByText('Сохранено').first()).toBeVisible();
+
+    const credited = (await balance()) - before;
+    // Put the balance back for the other specs.
+    await page.evaluate(
+      async ({ userId, amountMinor }) => {
+        const me = (await (await fetch('/api/admin/v1/auth/me')).json()) as { csrfToken: string };
+        await fetch(`/api/admin/v1/users/${userId}/balance`, {
+          method: 'POST',
+          headers: {
+            'content-type': 'application/json',
+            'x-requested-with': 'RemnaRay',
+            'x-csrf-token': me.csrfToken,
+            'idempotency-key': crypto.randomUUID(),
+          },
+          body: JSON.stringify({ amountMinor, reason: 'e2e restore' }),
+        });
+      },
+      { userId: user.id, amountMinor: -credited },
+    );
+    expect(credited).toBe(1200);
+  });
+
   test('the administration surface is never indexed', async ({ page }) => {
     const robots = await page.request.get('/robots.txt');
     expect(await robots.text()).toContain('Disallow: /admin');

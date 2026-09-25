@@ -9,10 +9,12 @@ import {
   Query,
   Req,
   UseGuards,
+  UseInterceptors,
 } from '@nestjs/common';
 
 import type { AdminRole } from '@remnaray/domain/rbac';
 
+import { IdempotencyInterceptor } from '../../common/idempotency.interceptor';
 import { AuthGuard, type AuthenticatedRequest } from '../auth/auth.guards';
 import { Permissions, Roles } from '../admin/admin.rbac';
 import { Audit } from '../admin/audit.interceptor';
@@ -46,6 +48,8 @@ export class AdminDashboardController {
   }
 }
 
+// Section 9.1: the console's POSTs that create money or subscriptions take
+// `Idempotency-Key` too; a repeat with it is answered from the store.
 @Controller('api/admin/v1/users')
 @UseGuards(AuthGuard)
 @Permissions('users.read')
@@ -86,6 +90,7 @@ export class AdminUsersController {
   @HttpCode(200)
   @Permissions('users.mutate')
   @Audit('users.extend', 'user', 'id')
+  @UseInterceptors(IdempotencyInterceptor)
   extend(@Param('id') id: string, @Body() body: unknown, @Req() request: AuthenticatedRequest) {
     return this.users.extend(id, body, acting(request));
   }
@@ -94,6 +99,7 @@ export class AdminUsersController {
   @HttpCode(200)
   @Permissions('users.mutate')
   @Audit('users.set-plan', 'user', 'id')
+  @UseInterceptors(IdempotencyInterceptor)
   setPlan(@Param('id') id: string, @Body() body: unknown, @Req() request: AuthenticatedRequest) {
     return this.users.setPlan(id, body, acting(request));
   }
@@ -102,6 +108,7 @@ export class AdminUsersController {
   @HttpCode(200)
   @Permissions('users.balance.credit')
   @Audit('users.balance', 'user', 'id')
+  @UseInterceptors(IdempotencyInterceptor)
   balance(@Param('id') id: string, @Body() body: unknown, @Req() request: AuthenticatedRequest) {
     return this.users.adjustBalance(id, body, acting(request));
   }
@@ -198,6 +205,7 @@ export class AdminPaymentsController {
   @HttpCode(200)
   @Permissions('payments.refund')
   @Audit('payments.refund', 'transaction', 'id')
+  @UseInterceptors(IdempotencyInterceptor)
   refund(@Param('id') id: string, @Body() body: unknown, @Req() request: AuthenticatedRequest) {
     return this.payments.refund(id, body, acting(request));
   }
@@ -213,6 +221,7 @@ export class AdminPaymentsController {
   @Roles('admin')
   @Permissions('subscriptions.bulk')
   @Audit('subscriptions.bulk-extend', 'subscription')
+  @UseInterceptors(IdempotencyInterceptor)
   bulkExtend(@Body() body: unknown, @Req() request: AuthenticatedRequest) {
     return this.payments.bulkExtend(body, acting(request));
   }

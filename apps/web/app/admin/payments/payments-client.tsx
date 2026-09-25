@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useState } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 import { useTranslations } from 'next-intl';
 import { z } from 'zod';
 
@@ -44,6 +44,8 @@ export default function PaymentsClient() {
   const [openInvoice, setOpenInvoice] = useState<InvoiceDetail | null>(null);
   const [refundTarget, setRefundTarget] = useState<string | null>(null);
   const [refundAmount, setRefundAmount] = useState<bigint | null>(null);
+  // Section 9.1: one key per opened refund, kept while its dialog is open.
+  const refundKey = useMemo(() => (refundTarget ? crypto.randomUUID() : ''), [refundTarget]);
   const [pending, setPending] = useState(false);
 
   const invoices = useResource<Invoices>('admin:invoices', () =>
@@ -283,10 +285,13 @@ export default function PaymentsClient() {
                 if (!refundTarget) return;
                 setPending(true);
                 adminApi()
-                  .send('POST', `api/admin/v1/transactions/${refundTarget}/refund`, z.unknown(), {
-                    amountMinor: Number(refundAmount ?? 0n),
-                    reason,
-                  })
+                  .send(
+                    'POST',
+                    `api/admin/v1/transactions/${refundTarget}/refund`,
+                    z.unknown(),
+                    { amountMinor: Number(refundAmount ?? 0n), reason },
+                    { headers: { 'idempotency-key': refundKey } },
+                  )
                   .then(() => {
                     setRefundTarget(null);
                     invalidate('admin:transactions');

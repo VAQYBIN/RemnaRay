@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useState } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 import { useTranslations } from 'next-intl';
 import { z } from 'zod';
 
@@ -51,6 +51,9 @@ export default function UserDetailClient({ userId }: { userId: string }) {
   const { toast } = useToast();
   const message = useAdminErrorMessage();
   const [action, setAction] = useState<PendingAction>(null);
+  // Section 9.1: one key per opened action, so confirming it again after a
+  // lost answer is answered from the store instead of crediting twice.
+  const idempotencyKey = useMemo(() => (action ? crypto.randomUUID() : ''), [action]);
   const [days, setDays] = useState(30);
   const [amountMinor, setAmountMinor] = useState<bigint | null>(null);
   const [text, setText] = useState('');
@@ -71,10 +74,16 @@ export default function UserDetailClient({ userId }: { userId: string }) {
   );
 
   const run = useCallback(
-    (path: string, body: unknown, method: 'POST' | 'PATCH' = 'POST') => {
+    (path: string, body: unknown, method: 'POST' | 'PATCH' = 'POST', key?: string) => {
       setPending(true);
       adminApi()
-        .send(method, `api/admin/v1/users/${userId}/${path}`, z.unknown(), body)
+        .send(
+          method,
+          `api/admin/v1/users/${userId}/${path}`,
+          z.unknown(),
+          body,
+          key ? { headers: { 'idempotency-key': key } } : undefined,
+        )
         .then(
           () => {
             setAction(null);
@@ -388,9 +397,15 @@ export default function UserDetailClient({ userId }: { userId: string }) {
                     reasonRequired: t('reasonRequired'),
                   }}
                   onConfirm={(reason) => {
-                    if (action?.kind === 'extend') run('extend', { days, reason });
+                    if (action?.kind === 'extend')
+                      run('extend', { days, reason }, 'POST', idempotencyKey);
                     if (action?.kind === 'balance')
-                      run('balance', { amountMinor: Number(amountMinor ?? 0n), reason });
+                      run(
+                        'balance',
+                        { amountMinor: Number(amountMinor ?? 0n), reason },
+                        'POST',
+                        idempotencyKey,
+                      );
                     if (action?.kind === 'ban') run('ban', { reason });
                     if (action?.kind === 'unban') run('unban', { reason });
                     if (action?.kind === 'anonymize') run('anonymize', { reason });

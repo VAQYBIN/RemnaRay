@@ -45,6 +45,8 @@ export default function SubscriptionsClient() {
   const [selected, setSelected] = useState<string[]>([]);
   const [days, setDays] = useState(7);
   const [confirm, setConfirm] = useState(false);
+  // Section 9.1: one key per opened confirmation, kept while it is open.
+  const bulkKey = useMemo(() => (confirm ? crypto.randomUUID() : ''), [confirm]);
   const [pending, setPending] = useState(false);
 
   const query = useMemo(
@@ -192,11 +194,13 @@ export default function SubscriptionsClient() {
               onConfirm={(reason) => {
                 setPending(true);
                 adminApi()
-                  .send('POST', 'api/admin/v1/subscriptions/bulk-extend', z.unknown(), {
-                    subscriptionIds: selected,
-                    days,
-                    reason,
-                  })
+                  .send(
+                    'POST',
+                    'api/admin/v1/subscriptions/bulk-extend',
+                    z.unknown(),
+                    { subscriptionIds: selected, days, reason },
+                    { headers: { 'idempotency-key': bulkKey } },
+                  )
                   .then(
                     () => {
                       setConfirm(false);
