@@ -545,6 +545,64 @@ test('the release workflow starts only on the two release tag forms', async () =
   }
 });
 
+// A step's `run` block, run as the workflow runs it with `env`; true when it exits 0.
+function runStep(workflow, name, env) {
+  const script = new RegExp(
+    `- name: ${name}\\n((?: {8}(?!run:).*\\n)*) {8}run: \\|\\n((?: {10}.*\\n|\\n)+)`,
+    'u',
+  )
+    .exec(workflow)?.[2]
+    .replace(/^ {10}/gmu, '');
+  assert.ok(script, name);
+  try {
+    execFileSync('sh', ['-c', script], {
+      env: { PATH: process.env.PATH, ...env },
+      stdio: 'ignore',
+    });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+// `images.yml` publishes an unsigned, unscanned build under a hand-typed tag,
+// which `tags:` reads as a comma-separated list. `1` or `1.2.3` replaced what
+// every `RR_VERSION=1` deployment pulls. `rebuild.yml` put a hand-typed
+// version into a checkout ref, a shell and image tags unchecked.
+test('the manual image workflows refuse release tags and malformed input', async () => {
+  const images = await readFile('.github/workflows/images.yml', 'utf8');
+  const rebuild = await readFile('.github/workflows/rebuild.yml', 'utf8');
+
+  // The check runs first, and the shell sees the input only through `env`.
+  assert.match(images, /steps:\n {6}(?:#.*\n {6})*- name: Check the tag\n/u);
+  assert.doesNotMatch(images, /'\$\{\{ inputs\.tag \}\}'/u);
+  assert.ok(rebuild.indexOf('Check the version') < rebuild.indexOf('Checkout the default branch'));
+
+  const tag = (value) => runStep(images, 'Check the tag', { TAG: value });
+  for (const value of ['dev', 'main', '1cb8686', 'feature_x.2', 'a'.repeat(128)])
+    assert.ok(tag(value), value);
+  for (const value of [
+    '1',
+    '1.2',
+    '1.2.3',
+    '1.2.3-rc.1',
+    '1.2.3-20260925',
+    'rc',
+    'dev,ghcr.io/remnaray/app:1',
+    '-dev',
+    '.dev',
+    'a'.repeat(129),
+    "dev';id;'",
+    '',
+  ])
+    assert.ok(!tag(value), value);
+
+  const version = (value) => runStep(rebuild, 'Check the version', { VERSION: value });
+  for (const value of ['1.2.3', '0.9.0-rc.1']) assert.ok(version(value), value);
+  for (const value of ['1.2', '01.2.3', '1.2.3-beta', '1.2.3+build', "1.2.3';id;'", ''])
+    assert.ok(!version(value), value);
+});
+
 // Section 20.3 and the 7.1 compose: failures while the API boots (Prisma,
 // Nest, the first Valkey connection) do not count toward its retries for
 // 30 s, nor the web's for 20 s; without it a slow first start marks the API

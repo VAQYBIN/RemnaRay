@@ -1046,11 +1046,28 @@ verify` against `github.com/<repo>/.github/workflows/<file>.yml@` and
      tags (fails on the old workflow); `docs.test.mjs` updated; actionlint
      1.7.12 clean. **Not verified:** a real tag push on GitHub.
 
-   Still open — the rest of the 2026-09-24 deployment review, which item 9
-   had summarised only partly:
-   - suspected, to be tested: unvalidated `images.yml` tag input.
-     Remaining review items (`rebuild.yml` Trivy tag `0.28.0`, worker `/backups` mount, restore script
-     user/themes) and the M5-004 gates recorded below.
+   - **9af manual workflow inputs checked.** Confirmed: `images.yml` put the
+     typed tag into `build-push-action` `tags:`, a comma- or
+     newline-separated list (Context7 `/docker/build-push-action`), so `1`,
+     `1.2.3` or `dev,…:1` published this unsigned, unscanned build over the
+     release tags every `RR_VERSION=1` deployment pulls; the tag also went
+     into the summary's shell quoted by hand. It must now be a Docker tag
+     (`[\w][\w.-]{0,127}`, distribution/reference `regexp.go`) and not a
+     release form (`X`, `X.Y`, `X.Y.Z`, `X.Y.Z-…`, `rc`), checked first; the
+     shell reads it through `env`. `rebuild.yml` likewise put its typed
+     version (or the latest release's) into a checkout ref, a shell and tags;
+     "Check the version" now requires `X.Y.Z` or `X.Y.Z-rc.N` before any of
+     them. Regression in `tooling.test.mjs` runs both steps from the
+     workflows (fails on the old ones); `docs/install.md` names the refused
+     tags. actionlint: `rebuild.yml` clean; `images.yml` keeps the four
+     SC2016 infos of the summary's literal Markdown backticks, present before.
+     **Not verified:** a real dispatch on GitHub.
+
+   The 2026-09-24 deployment review has no item left: the Trivy tag, the
+   worker `/backups` mount and the restore script were repaired earlier in
+   this list, the suspected ones as 9ad–9af. Still open: the console's
+   money-creating POSTs are outside the section 9.1 response store (found
+   under 9m), and the M5-004 gates recorded below.
 
 **Pre-existing E2E failure, not caused by the repair above (fixed as 2b):**
 `e2e/specs/account.spec.ts:84` "preserves the selected locale when the bot

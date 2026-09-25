@@ -78,7 +78,9 @@ The smallest servers cannot do it. On 1 vCPU and 2 GB the Next.js build alone
 takes a quarter of an hour and may run out of memory, so build the images in
 GitHub Actions and pull them instead: run the **images** workflow on your fork
 (Actions → images → Run workflow), give it a tag such as `dev`, and add two
-lines to `.env`:
+lines to `.env`. The workflow refuses a tag shaped like a release's — `1`,
+`1.2`, `1.2.3`, `1.2.3-…` or `rc` — so this unsigned build never replaces a
+published release:
 
 ```
 RR_REGISTRY=ghcr.io/<your github account, lowercase>

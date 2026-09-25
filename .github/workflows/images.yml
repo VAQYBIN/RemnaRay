@@ -50,6 +50,23 @@ jobs:
           - image: backup
             file: deploy/backup/Dockerfile
     steps:
+      # The tag is typed by hand and goes into `tags:`, a comma-separated
+      # list. `1`, `1.2`, `1.2.3`, `1.2.3-rc.1`, `1.2.3-<date>` and `rc` are
+      # what releases and rebuilds publish, signed and scanned; this unsigned
+      # build must not replace what `RR_VERSION=1` pulls.
+      - name: Check the tag
+        env:
+          TAG: ${{ inputs.tag }}
+        run: |
+          if ! printf '%s\n' "$TAG" | grep -Eqx '[A-Za-z0-9_][A-Za-z0-9_.-]{0,127}'; then
+            echo "Not a Docker tag: $TAG" >&2
+            exit 1
+          fi
+          if [ "$TAG" = rc ] || printf '%s\n' "$TAG" | grep -Eqx '[0-9]+(\.[0-9]+){0,2}|[0-9]+\.[0-9]+\.[0-9]+-.*'; then
+            echo "$TAG is a release tag; publish under another name (dev, a commit sha)" >&2
+            exit 1
+          fi
+
       - name: Checkout
         uses: actions/checkout@v7
 
@@ -91,11 +108,13 @@ jobs:
     needs: images
     steps:
       - name: Write the two lines the server needs
+        env:
+          TAG: ${{ inputs.tag }}
         run: |
           owner=$(printf '%s' '${{ github.repository_owner }}' | tr '[:upper:]' '[:lower:]')
           {
             printf 'Add to `.env` on the server:\n\n'
-            printf '```\nRR_REGISTRY=ghcr.io/%s\nRR_VERSION=%s\n```\n\n' "$owner" '${{ inputs.tag }}'
+            printf '```\nRR_REGISTRY=ghcr.io/%s\nRR_VERSION=%s\n```\n\n' "$owner" "$TAG"
             printf 'Then `./scripts/rr up`. '
             printf 'A private package needs `docker login ghcr.io` with a token that has `read:packages`.\n'
           } >> "$GITHUB_STEP_SUMMARY"

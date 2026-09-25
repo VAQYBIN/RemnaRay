@@ -59,6 +59,19 @@ jobs:
             return data.tag_name.replace(/^v/u, '');
           result-encoding: string
 
+      # Typed by hand or read from the latest release, it becomes a checkout
+      # ref, a shell argument and image tags: only a release's own form.
+      - name: Check the version
+        env:
+          VERSION: ${{ steps.release.outputs.result }}
+        run: |
+          number='(0|[1-9][0-9]*)'
+          if ! printf '%s\n' "$VERSION" \
+            | grep -Eqx "${number}\.${number}\.${number}(-rc\.${number})?"; then
+            echo "Not a released version (X.Y.Z or X.Y.Z-rc.N): $VERSION" >&2
+            exit 1
+          fi
+
       # Decided on the default branch, which carries the script and every
       # release tag: a manual rebuild of an older version must not move
       # `X.Y` or `X` back onto it.
