@@ -49,6 +49,25 @@ test.describe('public site', () => {
     await expect(page.getByRole('heading', { name: 'Privacy policy' })).toBeVisible();
   });
 
+  test('the Robokassa return lands on the invoice page, by GET and by POST', async ({
+    request,
+  }) => {
+    // Section 11.3.4: SuccessURL and FailURL are `https://<domain>/pay/robokassa`;
+    // Robokassa appends `Shp_inv` (the invoice id) and `Culture`.
+    const invoice = '0199aaaa-bbbb-7ccc-8ddd-eeeeeeeeeeee';
+    const query = `OutSum=299.00&InvId=7&SignatureValue=x&Culture=en&Shp_inv=${invoice}`;
+    const viaGet = await request.get(`/pay/robokassa?${query}`, { maxRedirects: 0 });
+    expect(viaGet.status()).toBe(303);
+    expect(viaGet.headers().location).toBe(`/en/pay/${invoice}`);
+    const viaPost = await request.post('/pay/robokassa', {
+      headers: { 'content-type': 'application/x-www-form-urlencoded' },
+      data: query,
+      maxRedirects: 0,
+    });
+    expect(viaPost.status()).toBe(303);
+    expect(viaPost.headers().location).toBe(`/en/pay/${invoice}`);
+  });
+
   test('robots and sitemap expose the public routes only', async ({ request }) => {
     const robots = await request.get('/robots.txt');
     expect(robots.ok()).toBeTruthy();

@@ -668,12 +668,34 @@ style-src 'unsafe-inline'; sandbox` and `nosniff`, which makes any theme
      harmless) and two receipt cases in `payments.service.test.ts` (Robokassa
      link carries `Receipt` only for `provider_receipt`; fails on the old
      comparison). Verified: lint, typecheck, typecheck:e2e, format,
-     `pnpm -r test` (API 259), `pnpm test` 43, `test:m1` 4/4, `test:m2` 3/3,
-     `pnpm test:e2e` 28 passed / 1 skipped. **VPS action:** none; the
-     migration runs with the image.
+     `pnpm -r test` (API 261; recorded as 259 in its commit), `pnpm test` 43,
+     `test:m1` 4/4, `test:m2` 3/3, `pnpm test:e2e` 28 passed / 1 skipped.
+     **VPS action:** none; the migration runs with the image.
 
-   Still open:
-   Robokassa SuccessURL/FailURL landing (found under 6c). Showing the available balance and held
+   - **9k. Done 2026-09-25 — Robokassa returned payers nowhere useful.**
+     11.3.4 sends the payer back to `/pay/<id>`, but Robokassa uses the
+     SuccessURL and FailURL of the store's technical settings, the same for
+     every payment, and appends `OutSum`, `InvId`, `SignatureValue`,
+     `Culture` and `Shp_*` by GET or POST (docs.robokassa.ru "notifications
+     and redirects", read 2026-09-25). **Decision:** the per-payment
+     `SuccessUrl2`/`FailUrl2` would change the signed string to
+     `MerchantLogin:OutSum:InvId:Receipt:StepByStep:ResultUrl2:SuccessUrl2:…`,
+     whose handling of the empty parts the page does not settle and no real
+     payment can check here; instead both settings are
+     `https://<domain>/pay/robokassa`, a web route that answers 303 to
+     `/<Culture or default>/pay/<Shp_inv>`, only for a UUID (anything else goes
+     to `/<locale>/account`). It is a redirect, not a source of payment, so it
+     checks no signature; the page reads the status from the API. The locale
+     middleware skips the path. Regressions:
+     `apps/web/test/robokassa-return-route.test.ts` (GET, POST, locale,
+     refused values, the matcher — fails without its exclusion) and an E2E
+     case through the stand's proxy. Verified: lint, typecheck,
+     typecheck:e2e, format, `pnpm -r test` (web 43), `pnpm test` 43,
+     `pnpm test:e2e` 29 passed / 1 skipped.
+     **VPS action:** in Robokassa's technical settings set SuccessURL and
+     FailURL to `https://<domain>/pay/robokassa`.
+
+   Still open: Showing the available balance and held
    rewards to the customer (found under 7c). The Valkey `Idempotent-Replay`
    response store of section 9.2 (found under 7e).
    Remaining review items (`rebuild.yml` Trivy tag `0.28.0`, worker `/backups` mount, restore script

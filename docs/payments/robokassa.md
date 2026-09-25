@@ -17,9 +17,11 @@ Configuration (JSON in the console or the setup wizard):
 
 In the Robokassa technical settings select the **MD5** hash algorithm and set
 **ResultURL** to `https://<domain>/webhooks/robokassa/result` (method POST).
-SuccessURL and FailURL are only where the payer is sent back and never mark
-anything paid; Robokassa takes them from the technical settings, not from the
-invoice.
+Set **SuccessURL** and **FailURL** both to `https://<domain>/pay/robokassa`
+(GET or POST). Robokassa takes them from the technical settings, not from the
+invoice, and appends `Shp_inv` and `Culture`; that page sends the payer on to
+`/<locale>/pay/<invoice>`, which shows the invoice's status. They are only
+redirects and never mark anything paid.
 
 - The payment link is built without an API call. `InvId` is the invoice's
   `numeric_id` (Robokassa takes an integer up to 2³¹ − 1) and `Shp_inv` its

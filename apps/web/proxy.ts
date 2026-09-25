@@ -79,5 +79,8 @@ export default async function proxy(request: NextRequest) {
 }
 
 export const config = {
-  matcher: ['/((?!api|themes|auth|r/|_next|.*\\..*).*)'],
+  // `pay/robokassa` is Robokassa's return landing (11.3.4): it redirects to a
+  // localized page itself, and the locale middleware would otherwise send it
+  // to `/<locale>/pay/robokassa`, the page of an invoice named "robokassa".
+  matcher: ['/((?!api|themes|auth|r/|pay/robokassa|_next|.*\\..*).*)'],
 };
