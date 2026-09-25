@@ -27,9 +27,13 @@ for it otherwise, in both profiles.
   the specification.
 - **Money** is integer minor units, never a float. A price of 299 ₽ is
   `29900`.
-- **Idempotency**: anything that creates an invoice takes an
-  `Idempotency-Key`; sending the same key twice returns the first answer
-  instead of charging twice.
+- **Idempotency**: `POST /me/invoices` requires an `Idempotency-Key: <uuid>`,
+  and `POST /me/trial` and `POST /me/promocodes/redeem` take one. The first
+  successful answer is kept 24 hours per user; the same request with the same
+  key gets it again with `Idempotent-Replay: true` instead of being performed
+  twice. The key with a different request is `422 IDEMPOTENCY_KEY_REUSED`,
+  and while the first request is still running a second is `409 CONFLICT`. A
+  failed request keeps nothing, so it can be retried with the same key.
 - **Mutations from a browser** need `X-Requested-With: RemnaRay` and either
   `Sec-Fetch-Site: same-origin` or a matching `Origin`. Webhooks are exempt —
   they authenticate by signature.

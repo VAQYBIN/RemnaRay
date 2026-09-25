@@ -161,6 +161,41 @@ test.describe('customer account', () => {
     await expect(page).toHaveURL(/\/ru\?login=1$/u);
   });
 
+  test('replays an invoice request with the same Idempotency-Key (section 9.2)', async ({
+    request,
+  }) => {
+    const state = stackState();
+    const headers = {
+      'x-internal-token': state.internalToken,
+      'x-acting-user': state.user.telegramId,
+      'content-type': 'application/json',
+    };
+    const config = (await (
+      await request.get(`${state.apiUrl}/api/internal/v1/me/topup-config`, { headers })
+    ).json()) as { minMinor: number };
+    const create = (amountMinor: number, key?: string) =>
+      request.post(`${state.apiUrl}/api/internal/v1/me/invoices`, {
+        headers: { ...headers, ...(key ? { 'idempotency-key': key } : {}) },
+        data: { kind: 'topup', provider: 'mock', amountMinor },
+      });
+    const key = crypto.randomUUID();
+
+    const first = await create(config.minMinor, key);
+    expect(first.status()).toBe(201);
+    expect(first.headers()['idempotent-replay']).toBeUndefined();
+    const again = await create(config.minMinor, key);
+    expect(again.status()).toBe(201);
+    expect(again.headers()['idempotent-replay']).toBe('true');
+    expect(((await again.json()) as { id: string }).id).toBe(
+      ((await first.json()) as { id: string }).id,
+    );
+
+    const reused = await create(config.minMinor + 100, key);
+    expect(reused.status()).toBe(422);
+    expect(await reused.json()).toMatchObject({ error: { code: 'IDEMPOTENCY_KEY_REUSED' } });
+    expect((await create(config.minMinor)).status()).toBe(400);
+  });
+
   test('buys a plan with the mock provider and sees the invoice paid', async ({
     context,
     page,

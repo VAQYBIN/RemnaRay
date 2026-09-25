@@ -713,8 +713,32 @@ style-src 'unsafe-inline'; sandbox` and `nosniff`, which makes any theme
      28), `pnpm test` 43, `test:m4` 6/6, `pnpm test:e2e` 29 passed /
      1 skipped.
 
-   Still open: the Valkey `Idempotent-Replay` response store of section 9.2
-   (found under 7e).
+   - **9m. Done 2026-09-25 — no `Idempotent-Replay` response store.**
+     Section 9.1 keeps the response of a money-, invoice- or
+     subscription-creating POST in Valkey 24 h under `rr:idem:<userId>:<key>`
+     and answers a repeat with it and `Idempotent-Replay: true`; 9.4 makes
+     the key required on `POST /me/invoices`, which instead generated a
+     random one when it was missing (a retry without it is a second
+     invoice). `IdempotencyInterceptor` (`apps/api/src/common`) now does
+     this for `POST /me/invoices` (required), `/me/trial` and
+     `/me/promocodes/redeem`, on the web and the bot's internal routes: the
+     key must be a UUID (400 `VALIDATION_ERROR`), a pending claim is taken
+     with `SET NX EX`, the same request replays the kept body, another
+     request with the key is 422 `IDEMPOTENCY_KEY_REUSED`, a second one while
+     the first runs is 409 `CONFLICT`. **Decision:** only a successful
+     response is kept; a failed one releases the key so a retry after a
+     panel or provider error is performed, and the services keep their own
+     guards (`invoices.idempotency_key`, `trial_used_at`). Regressions:
+     `idempotency.interceptor.test.ts` (9 cases) and an E2E case against the
+     stand's API and Valkey (same id with the header, 422, 400). Verified:
+     lint, typecheck, typecheck:e2e, format, `pnpm -r test` (API 269),
+     `pnpm test` 43, `test:m4` 6/6, `pnpm test:e2e` 30 passed / 1 skipped.
+     **Found, not repaired:** section 9.1 covers every money-creating POST,
+     the console's among them (balance, refund, extensions); those return
+     `Audited` values the audit interceptor unwraps and the console sends no
+     key, so they are not covered.
+
+   Still open: the review items below.
    Remaining review items (`rebuild.yml` Trivy tag `0.28.0`, worker `/backups` mount, restore script
    user/themes) and the M5-004 gates recorded below.
 

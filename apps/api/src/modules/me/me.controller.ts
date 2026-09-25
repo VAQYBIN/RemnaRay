@@ -12,9 +12,11 @@ import {
   Req,
   Res,
   UseGuards,
+  UseInterceptors,
 } from '@nestjs/common';
 import type { FastifyReply } from 'fastify';
 
+import { IdempotencyInterceptor, IdempotencyRequired } from '../../common/idempotency.interceptor';
 import { AuthGuard, InternalTokenGuard, type AuthenticatedRequest } from '../auth/auth.guards';
 import { PlansService } from '../plans/plans.service';
 import { MeService } from './me.service';
@@ -71,6 +73,7 @@ export class MeController {
   }
 
   @Post('trial')
+  @UseInterceptors(IdempotencyInterceptor)
   @HttpCode(200)
   trial(@Req() request: AuthenticatedRequest) {
     return this.me.trial(this.userId(request));
@@ -87,6 +90,8 @@ export class MeController {
   }
 
   @Post('invoices')
+  @UseInterceptors(IdempotencyInterceptor)
+  @IdempotencyRequired()
   @HttpCode(201)
   createInvoice(
     @Req() request: AuthenticatedRequest,
@@ -140,6 +145,7 @@ export class MeController {
   }
 
   @Post('promocodes/redeem')
+  @UseInterceptors(IdempotencyInterceptor)
   @HttpCode(200)
   redeem(@Req() request: AuthenticatedRequest, @Body() body: unknown) {
     return this.me.redeemPromocode(this.userId(request), body);
@@ -202,6 +208,7 @@ export class InternalMeController {
   }
 
   @Post('trial')
+  @UseInterceptors(IdempotencyInterceptor)
   @HttpCode(200)
   async trial(@Headers('x-acting-user') actingUser: string | undefined) {
     return this.me.trial(await this.me.userIdForTelegram(actingUser));
@@ -218,6 +225,8 @@ export class InternalMeController {
   }
 
   @Post('invoices')
+  @UseInterceptors(IdempotencyInterceptor)
+  @IdempotencyRequired()
   @HttpCode(201)
   async createInvoice(
     @Headers('x-acting-user') actingUser: string | undefined,
@@ -277,6 +286,7 @@ export class InternalMeController {
   }
 
   @Post('promocodes/redeem')
+  @UseInterceptors(IdempotencyInterceptor)
   @HttpCode(200)
   async redeem(@Headers('x-acting-user') actingUser: string | undefined, @Body() body: unknown) {
     return this.me.redeemPromocode(await this.me.userIdForTelegram(actingUser), body);
