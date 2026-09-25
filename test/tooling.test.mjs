@@ -391,3 +391,16 @@ test('every workflow scans with the one Trivy action tag that exists', async () 
       tags.add(match[1]);
   assert.deepEqual([...tags], ['v0.36.0']);
 });
+
+test('the worker reads the backup status the backup service writes (section 20.3)', async () => {
+  const compose = await readFile('compose.yaml', 'utf8');
+  const worker = /\n {2}worker:\n([\s\S]*?)\n {2}\w[\w-]*:\n/u.exec(compose)?.[1] ?? '';
+  const backup =
+    /\n {2}backup:\n([\s\S]*?)(?:\n {2}\w[\w-]*:\n|\nvolumes:)/u.exec(compose)?.[1] ?? '';
+  // `maintenance.backup-check` reads `RR_BACKUP_DIR` (default /backups).
+  assert.match(backup, /- \.\/backups:\/backups\n/u);
+  assert.match(worker, /- \.\/backups:\/backups:ro\n/u, 'the worker never sees .last-status');
+  // Its own list replaces the common one, so the common mounts must be there.
+  for (const mount of ['./themes:/themes:ro', './locales:/locales:ro', 'uploads:/uploads'])
+    assert.ok(worker.includes(`- ${mount}\n`), `the worker lost ${mount}`);
+});

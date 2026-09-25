@@ -738,7 +738,7 @@ style-src 'unsafe-inline'; sandbox` and `nosniff`, which makes any theme
      `Audited` values the audit interceptor unwraps and the console sends no
      key, so they are not covered.
 
-   - **9n. Done 2026-09-25 — the monthly rebuild scanned with a Trivy
+   - **9n. Done 2026-09-25 — the weekly rebuild scanned with a Trivy
      action tag that does not exist.** `rebuild.yml` used
      `aquasecurity/trivy-action@0.28.0`; the action's tags are `v`-prefixed
      (`gh api repos/aquasecurity/trivy-action/git/ref/tags/0.28.0` → 404,
@@ -747,7 +747,21 @@ style-src 'unsafe-inline'; sandbox` and `nosniff`, which makes any theme
      `v0.36.0` on 2026-09-23; the rebuild now uses it too. Regression in
      `test/tooling.test.mjs` (one Trivy tag across the workflows, the one
      that exists; fails on the old file). Verified: `pnpm test` 44. **Not
-     verified:** a GitHub run of `rebuild.yml`.
+     verified:** a GitHub run of `rebuild.yml`. (Its commit calls the rebuild
+     monthly; it is weekly, `0 4 * * 1`, section 24.6.)
+   - **9o. Done 2026-09-25 — the worker never saw the backup status.**
+     `maintenance.backup-check` reads `.last-status` from `RR_BACKUP_DIR`
+     (`/backups`), which the `backup` service writes to `./backups`, but the
+     worker mounted only the common `themes`, `locales` and `uploads`; every
+     daily check found no file, reported the backup `missing` on
+     `/admin/system` and raised the backup alert. The worker now mounts
+     `./backups:/backups:ro`, repeating the common mounts because a merge key
+     does not merge lists (resolved with `docker compose config`: worker
+     themes, locales, uploads, backups read-only; api unchanged). The status
+     file is written under the default umask (0644), readable by the image's
+     `node` user. Regression in `test/tooling.test.mjs` (fails on the old
+     compose file). Verified: `pnpm test` 45, lint. **VPS action:** none
+     beyond pulling the new `compose.yaml`; **not verified** on the VPS.
 
    Still open: the review items below.
    Remaining review items (`rebuild.yml` Trivy tag `0.28.0`, worker `/backups` mount, restore script
