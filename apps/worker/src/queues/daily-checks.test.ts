@@ -58,6 +58,9 @@ describe('the section 19.2 and 20.3 daily checks in the worker', () => {
   let answers: number[];
   const posted: string[] = [];
   const disk: Record<string, unknown>[] = [];
+  const github: string[] = [];
+  const updates: Record<string, unknown>[] = [];
+  let updatesOn = false;
 
   beforeEach(() => {
     vi.useFakeTimers({ toFake: ['setInterval', 'clearInterval', 'Date'] });
@@ -66,6 +69,9 @@ describe('the section 19.2 and 20.3 daily checks in the worker', () => {
     bull.added.length = 0;
     posted.length = 0;
     disk.length = 0;
+    github.length = 0;
+    updates.length = 0;
+    updatesOn = false;
     process.env.VALKEY_URL = 'redis://127.0.0.1:6379/0';
     process.env.RR_BACKUP_DIR = mkdtempSync(join(tmpdir(), 'rr-backups-'));
     delete process.env.RR_DOMAIN;
@@ -75,6 +81,25 @@ describe('the section 19.2 and 20.3 daily checks in the worker', () => {
         if (url.endsWith('/system/backup-result')) posted.push(url);
         if (url.endsWith('/system/disk-result'))
           disk.push(JSON.parse(init?.body as string) as Record<string, unknown>);
+        if (url.endsWith('/system/update-check'))
+          return Promise.resolve(new Response(JSON.stringify({ enabled: updatesOn })));
+        if (url.startsWith('https://api.github.com/')) {
+          github.push(url);
+          return Promise.resolve(
+            new Response(
+              JSON.stringify([
+                {
+                  tag_name: 'v1.3.0',
+                  html_url: 'https://h/v1.3.0',
+                  draft: false,
+                  prerelease: false,
+                },
+              ]),
+            ),
+          );
+        }
+        if (url.endsWith('/system/update-result'))
+          updates.push(JSON.parse(init?.body as string) as Record<string, unknown>);
         const status = answers.shift() ?? 200;
         return Promise.resolve(
           new Response(status === 200 ? '{}' : '{"error":{"code":"SETUP_NOT_COMPLETED"}}', {
@@ -134,5 +159,37 @@ describe('the section 19.2 and 20.3 daily checks in the worker', () => {
     await vi.advanceTimersByTimeAsync(60_000);
     expect(diskChecks()).toHaveLength(2);
     await worker.onModuleDestroy();
+  });
+
+  it('asks GitHub for releases daily only while admin.check_updates is on (24.6)', async () => {
+    answers = [];
+    const off = new WorkerService();
+    await off.onModuleInit();
+    await settle();
+    expect(github).toEqual([]);
+    expect(updates).toEqual([]);
+    await off.onModuleDestroy();
+
+    bull.added.length = 0;
+    updatesOn = true;
+    const on = new WorkerService();
+    await on.onModuleInit();
+    await settle();
+    expect(github).toEqual([
+      'https://api.github.com/repos/VAQYBIN/remnaray-astra/releases?per_page=100',
+    ]);
+    expect(updates).toEqual([
+      {
+        releases: [
+          { version: '1.3.0', url: 'https://h/v1.3.0', security: false, publishedAt: null },
+        ],
+      },
+    ]);
+    const updateChecks = () => bull.added.filter((job) => job.name === 'maintenance.update-check');
+    await vi.advanceTimersByTimeAsync(23 * 60 * 60_000);
+    expect(updateChecks()).toHaveLength(1);
+    await vi.advanceTimersByTimeAsync(60 * 60_000);
+    expect(updateChecks()).toHaveLength(2);
+    await on.onModuleDestroy();
   });
 });

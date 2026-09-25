@@ -496,3 +496,23 @@ test('the api and web healthchecks give the process time to start', async () => 
   assert.match(healthcheck('web'), /^ {6}interval: 10s$/mu);
   assert.match(healthcheck('web'), /^ {6}start_period: 20s$/mu);
 });
+
+// Section 24.6: `/admin/system` shows the running version and whether a newer
+// release is out. The runtime image carries no package.json, so without the
+// tag baked in every deployment read 0.0.0.
+test('the app image knows its release, and releases mark security fixes', async () => {
+  const dockerfile = await readFile('deploy/docker/app.Dockerfile', 'utf8');
+  const release = await readFile('.github/workflows/release.yml', 'utf8');
+  const rebuild = await readFile('.github/workflows/rebuild.yml', 'utf8');
+  const notes = await readFile('.github/release.yml', 'utf8');
+  const runtime = dockerfile.slice(dockerfile.lastIndexOf('\nFROM '));
+
+  assert.match(runtime, /^ARG RR_APP_VERSION=0\.0\.0-dev$/mu);
+  assert.match(runtime, /^ENV RR_APP_VERSION=\$\{RR_APP_VERSION\}$/mu);
+  assert.match(release, /build-args: RR_APP_VERSION=\$\{\{ steps\.version\.outputs\.version \}\}/u);
+  assert.match(rebuild, /build-args: RR_APP_VERSION=\$\{\{ steps\.release\.outputs\.result \}\}/u);
+  // The generated notes put `security`-labelled pull requests under their
+  // own heading, which the update check reads as the badge.
+  assert.match(release, /generate_release_notes: true/u);
+  assert.match(notes, /- title: Security\n\s+labels:\n\s+- security\n/u);
+});

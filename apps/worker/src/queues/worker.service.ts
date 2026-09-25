@@ -12,17 +12,24 @@ import { Queue, Worker, type Job } from 'bullmq';
 import { backupStatus } from './backup-check';
 import { checkDue, cronJobs, DAY_MS, HOUR_MS, type CheckState } from './schedule';
 import { diskStatus } from './disk-check';
+import { publishedReleases, UPDATE_REPOSITORY } from './update-check';
 import { certificateStatus } from './tls-check';
 import { workerValkeyUrl } from './worker-config';
 
 type InternalCall = { path: string; body?: unknown };
-type Check = 'maintenance.tls-check' | 'maintenance.backup-check' | 'maintenance.disk-check';
+type Check =
+  | 'maintenance.tls-check'
+  | 'maintenance.backup-check'
+  | 'maintenance.disk-check'
+  | 'maintenance.update-check';
 
 /** How often each of the worker's own checks runs once recorded. */
 const CHECK_PERIODS: Record<Check, number> = {
   'maintenance.tls-check': DAY_MS,
   'maintenance.backup-check': DAY_MS,
   'maintenance.disk-check': HOUR_MS,
+  // Section 24.6: once a day.
+  'maintenance.update-check': DAY_MS,
 };
 
 /** Section 7.3; `webhooks` (9.8) is not in its table. */
@@ -113,7 +120,9 @@ export class WorkerService implements OnModuleInit, OnModuleDestroy {
               ? await this.backupCheck()
               : job.name === 'maintenance.disk-check'
                 ? await this.diskCheck()
-                : await this.call(maintenanceCall(job)),
+                : job.name === 'maintenance.update-check'
+                  ? await this.updateCheck()
+                  : await this.call(maintenanceCall(job)),
         { ...options, concurrency: CONCURRENCY.maintenance },
       ),
     );
@@ -228,6 +237,7 @@ export class WorkerService implements OnModuleInit, OnModuleDestroy {
     'maintenance.tls-check': {},
     'maintenance.backup-check': {},
     'maintenance.disk-check': {},
+    'maintenance.update-check': {},
   };
 
   /**
@@ -267,6 +277,38 @@ export class WorkerService implements OnModuleInit, OnModuleDestroy {
     });
     this.recorded('maintenance.disk-check');
     return result;
+  }
+
+  /**
+   * Section 24.6: which releases GitHub has, unless `admin.check_updates` is
+   * off — then GitHub is not asked at all. A failed lookup is reported, so
+   * `/admin/system` says so, and left unrecorded to be tried again.
+   */
+  private async updateCheck(): Promise<unknown> {
+    const { enabled } = (await this.call({ path: '/api/internal/v1/system/update-check' })) as {
+      enabled?: unknown;
+    };
+    if (enabled !== true) {
+      this.recorded('maintenance.update-check');
+      return { skipped: 'admin.check_updates is off' };
+    }
+    try {
+      const releases = await publishedReleases(
+        process.env.RR_UPDATE_REPOSITORY || UPDATE_REPOSITORY,
+      );
+      const result = await this.call({
+        path: '/api/internal/v1/system/update-result',
+        body: { releases },
+      });
+      this.recorded('maintenance.update-check');
+      return result;
+    } catch (error) {
+      await this.call({
+        path: '/api/internal/v1/system/update-result',
+        body: { releases: [], error: String(error).slice(0, 200) },
+      }).catch(() => undefined);
+      throw error;
+    }
   }
 
   private recorded(name: Check): void {

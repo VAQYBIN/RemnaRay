@@ -1,0 +1,12 @@
+# Categories of the notes GitHub generates for a release (`release.yml`
+# publishes with `generate_release_notes`). Pull requests labelled `security`
+# — Renovate labels its vulnerability PRs so (section 24.6) — get a heading of
+# their own, which the update check reads as the release's "security" badge.
+changelog:
+  categories:
+    - title: Security
+      labels:
+        - security
+    - title: Changes
+      labels:
+        - '*'

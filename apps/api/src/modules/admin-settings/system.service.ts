@@ -1,5 +1,3 @@
-import { readFileSync } from 'node:fs';
-import { resolve } from 'node:path';
 import { Injectable } from '@nestjs/common';
 import { Queue } from 'bullmq';
 import Redis from 'ioredis';
@@ -12,19 +10,13 @@ import { RemnawaveService } from '../remnawave/remnawave.service';
 import { SettingsService } from '../settings/settings.service';
 import { caddyHasRateLimit } from '../../tools/proxy-render';
 import { ForwardedObserver } from './forwarded.interceptor';
-import { BACKUP_STATUS_KEY, DISK_STATUS_KEY, TLS_STATUS_KEY } from './proxy.controller';
-
-function appVersion(): string {
-  if (process.env.RR_APP_VERSION) return process.env.RR_APP_VERSION;
-  try {
-    const manifest = JSON.parse(readFileSync(resolve(process.cwd(), 'package.json'), 'utf8')) as {
-      version?: string;
-    };
-    return manifest.version ?? '0.0.0';
-  } catch {
-    return '0.0.0';
-  }
-}
+import { appVersion } from './app-version';
+import {
+  BACKUP_STATUS_KEY,
+  DISK_STATUS_KEY,
+  TLS_STATUS_KEY,
+  UPDATE_STATUS_KEY,
+} from './proxy.controller';
 
 /** FR-146 health page. */
 @Injectable()
@@ -87,6 +79,23 @@ export class SystemService {
     };
   }
 
+  /** Section 24.6: the last `maintenance.update-check`, unless it is off. */
+  private async updateStatus(): Promise<Record<string, unknown>> {
+    if ((await this.settings.get('admin.check_updates')) !== true) return { enabled: false };
+    const raw = await this.infra.redis.get(UPDATE_STATUS_KEY).catch(() => null);
+    const parsed = raw ? (JSON.parse(raw) as Record<string, unknown>) : {};
+    const text = (key: string) => (typeof parsed[key] === 'string' ? parsed[key] : null);
+    return {
+      enabled: true,
+      latest: text('latest'),
+      url: text('url'),
+      available: parsed['available'] === true,
+      security: parsed['security'] === true,
+      error: text('error'),
+      checkedAt: text('checkedAt'),
+    };
+  }
+
   async overview() {
     const [panelSync, botMode, botUsername, outboxPending, tlsExpiresAt, dbSize] =
       await Promise.all([
@@ -132,6 +141,7 @@ export class SystemService {
           caddyHasRateLimit(process.env.RR_CADDY_IMAGE),
       },
       backups: await this.backupStatus(),
+      update: await this.updateStatus(),
       healthUrl: '/api/v1/health',
     };
   }

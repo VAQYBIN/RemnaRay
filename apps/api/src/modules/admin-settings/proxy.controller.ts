@@ -15,6 +15,7 @@ import { Infrastructure } from '../../infra/infra.module';
 import { InternalTokenGuard } from '../auth/auth.guards';
 import { NotifyService } from '../notify/notify.service';
 import { SettingsService } from '../settings/settings.service';
+import { appVersion, updateFor } from './app-version';
 
 const reloadResultSchema = z.object({
   ok: z.boolean(),
@@ -48,10 +49,26 @@ const diskResultSchema = z.object({
   error: z.string().max(200).optional(),
 });
 
+/** Section 24.6: the final releases `maintenance.update-check` found. */
+const updateResultSchema = z.object({
+  releases: z
+    .array(
+      z.object({
+        version: z.string().regex(/^\d+\.\d+\.\d+$/u),
+        url: z.string().max(500),
+        security: z.boolean(),
+        publishedAt: z.string().max(40).nullable(),
+      }),
+    )
+    .max(100),
+  error: z.string().max(200).optional(),
+});
+
 export const TLS_ALERT_DAYS = 14;
 export const TLS_STATUS_KEY = 'rr:tls:status';
 export const BACKUP_STATUS_KEY = 'rr:backup:status';
 export const DISK_STATUS_KEY = 'rr:disk:status';
+export const UPDATE_STATUS_KEY = 'rr:update:status';
 
 /**
  * Section 21.6: `proxy-reloader` reports every apply here, so the outcome is
@@ -127,6 +144,38 @@ export class InternalProxyController {
             : `${input.state}, ${input.ageHours.toFixed(1)} h old`,
       });
     return { recorded: true, alerted: !input.ok };
+  }
+
+  /** Section 24.6: whether the worker may ask GitHub at all. */
+  @Post('update-check')
+  @HttpCode(200)
+  async updateCheck() {
+    return { enabled: (await this.settings.get('admin.check_updates')) === true };
+  }
+
+  /**
+   * Section 24.6: what `/admin/system` says about a newer version. A failed
+   * lookup keeps the previous answer and adds the error, so a GitHub outage
+   * does not hide an update already found.
+   */
+  @Post('update-result')
+  @HttpCode(200)
+  async updateResult(@Body() body: unknown) {
+    const input = updateResultSchema.parse(body);
+    const checkedAt = new Date().toISOString();
+    if (input.error) {
+      const previous = await this.infra.redis.get(UPDATE_STATUS_KEY).catch(() => null);
+      const kept = previous ? (JSON.parse(previous) as Record<string, unknown>) : {};
+      await this.infra.redis
+        .set(UPDATE_STATUS_KEY, JSON.stringify({ ...kept, error: input.error, checkedAt }))
+        .catch(() => null);
+      return { recorded: true };
+    }
+    const update = updateFor(appVersion(), input.releases);
+    await this.infra.redis
+      .set(UPDATE_STATUS_KEY, JSON.stringify({ ...update, error: null, checkedAt }))
+      .catch(() => null);
+    return { recorded: true, ...update };
   }
 
   /**

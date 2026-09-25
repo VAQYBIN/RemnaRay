@@ -5,7 +5,7 @@ import { useTranslations } from 'next-intl';
 import { z } from 'zod';
 
 import { permissions as allPermissions } from '@remnaray/domain';
-import { Button, DataTable, Stat, useToast } from '@remnaray/ui';
+import { Badge, Button, DataTable, Stat, useToast } from '@remnaray/ui';
 
 import { adminApi, errorCode } from '../../../lib/admin-client';
 import { bytes } from '../../../lib/format';
@@ -31,6 +31,15 @@ const overviewSchema = z.object({
   }),
   tls: z.object({ domain: z.string(), expiresAt: z.string().nullable() }),
   backups: z.object({ lastRunAt: z.string().nullable() }),
+  update: z
+    .object({
+      enabled: z.boolean(),
+      latest: z.string().nullable().optional(),
+      url: z.string().nullable().optional(),
+      available: z.boolean().optional(),
+      security: z.boolean().optional(),
+    })
+    .optional(),
   healthUrl: z.string(),
 });
 
@@ -124,6 +133,10 @@ export default function SystemClient() {
                           : t('system.diskUnknown')
                       }
                     />
+                    <Stat
+                      label={t('system.update')}
+                      value={<UpdateStatus update={data.overview.update} />}
+                    />
                     <Stat label={t('bot.mode')} value={String(data.overview.bot.mode)} />
                     <Stat
                       label={t('system.health')}
@@ -209,5 +222,21 @@ export default function SystemClient() {
         );
       }}
     </AdminShell>
+  );
+}
+
+/** Section 24.6: "version X.Y.Z is available", with a security badge. */
+function UpdateStatus({ update }: { update: z.infer<typeof overviewSchema>['update'] }) {
+  const t = useTranslations('admin');
+  if (!update?.enabled) return <>{t('system.updateOff')}</>;
+  if (!update.latest) return <>{t('system.diskUnknown')}</>;
+  if (!update.available) return <>{t('system.updateCurrent')}</>;
+  return (
+    <span className="flex flex-wrap items-center gap-2">
+      <a className="text-primary underline" href={update.url ?? undefined}>
+        {t('system.updateAvailable', { version: update.latest })}
+      </a>
+      {update.security ? <Badge variant="danger">{t('system.updateSecurity')}</Badge> : null}
+    </span>
   );
 }

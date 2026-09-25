@@ -923,11 +923,41 @@ uploads:…` resolves to the project volume — checked on a scratch
      worker 22, web 45, `pnpm test` 48, `m1.worker-cron`, E2E 30 passed /
      1 skipped. **Not verified:** on the VPS.
 
+   - **9y daily update check (24.6).** `/admin/system` was to say "version
+     X.Y.Z is available" from a daily GitHub Releases check in the worker,
+     off with `admin.check_updates`, with a "security" badge; nothing did,
+     and the setting was unused. Also found: `RR_APP_VERSION` was never set
+     and the runtime image has no `package.json`, so every deployment showed
+     version `0.0.0`. Now: `app.Dockerfile` takes `ARG RR_APP_VERSION`
+     (default `0.0.0-dev`) and `release.yml`/`rebuild.yml` pass the tag;
+     `maintenance.update-check` (start and daily, retried after a refusal)
+     first asks `/api/internal/v1/system/update-check` whether it may — off
+     means GitHub is never contacted — then lists
+     `repos/<RR_UPDATE_REPOSITORY or VAQYBIN/remnaray-astra>/releases`,
+     keeps published final `vX.Y.Z` releases and posts them to
+     `update-result`; the API picks the highest version (not GitHub's
+     `latest`, which orders by `created_at` — a later patch to an older
+     minor would win), compares it with the running one, and marks
+     `security` when any release between them has a Security heading. That
+     heading comes from `.github/release.yml`, which files `security`-
+     labelled PRs (Renovate's vulnerability label) under its own category
+     of the generated notes. `/admin/system` shows the update with a
+     `danger` badge. Contracts (Context7 `/websites/github_en_rest`,
+     `/github/docs`): list releases fields and `per_page` 100, `latest`
+     ordering, 60 unauthenticated requests an hour per IP, `User-Agent`
+     required (403 without), release-notes categories config. **Not
+     verified:** the exact heading level GitHub gives a category (any level
+     `Security` matches); a real call to GitHub; the image build with the
+     argument. Tests: `update-check.test.ts` in worker (3) and API (6),
+     `daily-checks.test.ts` (off → no GitHub call; on → list posted, daily),
+     `tooling.test.mjs` (image argument, workflows, categories; fails on the
+     old Dockerfile). Verified: lint, typecheck, i18n-check, build (OpenAPI
+     unchanged), API 283, worker 26, web 45, bot 28, `pnpm test` 49,
+     `m1.worker-cron`, E2E 30 passed / 1 skipped.
+
    Still open — the rest of the 2026-09-24 deployment review, which item 9
    had summarised only partly:
-   - specification gaps: no daily update
-     check (24.6),
-     releases attested with `attest-build-provenance` rather than a `cosign`
+   - specification gap: releases attested with `attest-build-provenance` rather than a `cosign`
      signature and a comment in `release.yml` claiming otherwise (24.4 p. 3);
    - unpinned or floating: `certbot/certbot:latest`, the `caddy-ratelimit`
      module without a version, the Caddy base pinned to `2.11.4` against

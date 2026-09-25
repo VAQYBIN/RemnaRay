@@ -31,6 +31,11 @@ RUN apk add --no-cache "postgresql18-client=${POSTGRES_CLIENT_VERSION}" \
     && rm -rf /var/cache/apk/*
 
 ENV NODE_ENV=production
+# The release this image is (section 24.6): `/admin/system` shows it and the
+# update check compares with it. The workflows pass the tag; a source build
+# is `0.0.0-dev`, which never claims an update.
+ARG RR_APP_VERSION=0.0.0-dev
+ENV RR_APP_VERSION=${RR_APP_VERSION}
 WORKDIR /app
 
 COPY --from=build /out/runtime/node_modules ./node_modules

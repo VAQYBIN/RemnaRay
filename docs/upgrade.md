@@ -27,6 +27,17 @@ restarts.
 Afterwards, open **Settings → System** in the console: it shows the panel, the
 queues, the certificate and the last backup.
 
+## Knowing there is one
+
+Once a day the worker asks GitHub Releases which versions exist, and
+`/admin/system` says "version X.Y.Z is available" when one is newer than the
+running image, with a **security** badge when a release on the way fixes a
+vulnerability (its notes carry the Security section that pull requests
+labelled `security` fill). Turn it off with the `admin.check_updates` setting;
+GitHub is then not contacted at all. A fork points it at its own repository
+with `RR_UPDATE_REPOSITORY=<owner>/<repo>` in `.env`. An image built from a
+source checkout is `0.0.0-dev` and never claims an update.
+
 ## Read the changelog first
 
 Every release says what an owner has to know under three headings:
