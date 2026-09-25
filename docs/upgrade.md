@@ -5,6 +5,10 @@
 and patch of major 1. Pin `RR_VERSION=1.2.3` in `.env` if you would rather
 decide each time.
 
+`1` and `1.2` always name the newest final release of their line. A security
+patch to the previous minor moves `1.1` but not `1`, and a release candidate
+moves neither.
+
 ## The procedure
 
 ```sh
@@ -54,10 +58,11 @@ restore the pre-migrate dump first:
 
 ## Security rebuilds
 
-The base images move faster than the application. Every Monday the four images
-are rebuilt on the current `node`, `nginx` and `caddy` bases, scanned, and
-published as `X.Y.Z-<yyyymmdd>` with the floating `X.Y` and `X` tags moved onto
-them. The application version does not change and neither does the changelog,
+The base images move faster than the application. Every Monday the five images
+are rebuilt on the current `node`, `nginx`, `caddy` and `postgres` bases,
+scanned, and published as `X.Y.Z-<yyyymmdd>` with the floating `X.Y` and `X`
+tags moved onto them. A manual rebuild of an older version moves only the
+floating tags it is still the newest of. The application version does not change and neither does the changelog,
 so `docker compose pull` on a quiet week still picks up the patched base.
 
 `postgres` and `valkey` are pinned by tag and updated through a pull request on

@@ -151,9 +151,10 @@ test('the release workflows exist and publish on a version tag', async () => {
     release,
     /type=raw,value=rc,enable=\$\{\{ steps\.version\.outputs\.prerelease == 'true' \}\}/u,
   );
+  // `floating-tags.sh` answers false for a candidate (tooling.test.mjs).
   assert.match(
     release,
-    /pattern=\{\{major\}\},enable=\$\{\{ steps\.version\.outputs\.prerelease == 'false' \}\}/u,
+    /pattern=\{\{major\}\},enable=\$\{\{ steps\.floating\.outputs\.major == 'true' \}\}/u,
   );
   assert.match(release, /platforms: linux\/amd64,linux\/arm64/u);
   assert.match(release, /sbom: true/u);

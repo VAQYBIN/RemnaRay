@@ -1,6 +1,8 @@
 import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
-import { glob, readFile } from 'node:fs/promises';
+import { glob, mkdtemp, readFile, rm } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join, resolve } from 'node:path';
 import test from 'node:test';
 
 const packageManifest = JSON.parse(await readFile('package.json', 'utf8'));
@@ -261,6 +263,7 @@ test('the scripts the documentation invokes are executable', () => {
     'deploy/ci/gen-selfsigned.sh',
     'deploy/backup/backup-entrypoint.sh',
     'deploy/backup/restore.sh',
+    'scripts/floating-tags.sh',
   ];
   // The index, not the working tree: `core.fileMode=false` — which every
   // checkout on a Windows filesystem sets — hides a missing bit locally and
@@ -403,4 +406,73 @@ test('the worker reads the backup status the backup service writes (section 20.3
   // Its own list replaces the common one, so the common mounts must be there.
   for (const mount of ['./themes:/themes:ro', './locales:/locales:ro', 'uploads:/uploads'])
     assert.ok(worker.includes(`- ${mount}\n`), `the worker lost ${mount}`);
+});
+
+// Section 24.4: `X.Y` and `X` are what `RR_VERSION=1.2` and `1` resolve to,
+// the newest release of their line. A patch to the previous minor (24.5) or a
+// manual rebuild of an older version used to move them back onto it.
+test('the floating tags move only for the newest final release of their line', async () => {
+  const repository = await mkdtemp(join(tmpdir(), 'rr-tags-'));
+  const git = (...args) =>
+    execFileSync('git', ['-c', 'user.email=ci@example.test', '-c', 'user.name=ci', ...args], {
+      cwd: repository,
+      encoding: 'utf8',
+    });
+  const floating = (version) =>
+    execFileSync('sh', [resolve('scripts/floating-tags.sh'), version], {
+      cwd: repository,
+      encoding: 'utf8',
+    });
+  try {
+    git('init', '-q');
+    git('commit', '-q', '--allow-empty', '-m', 'release');
+    for (const tag of ['v1.1.5', 'v1.2.3', 'v1.2.10', 'v1.3.0-rc.1', 'v2.0.0']) git('tag', tag);
+
+    // The newest of both lines, compared as versions rather than as text.
+    assert.equal(floating('1.2.10'), 'minor=true\nmajor=true\n');
+    // A rebuild of an older patch of the current minor moves neither.
+    assert.equal(floating('1.2.3'), 'minor=false\nmajor=false\n');
+    // A security patch to the previous minor takes `1.1`, not `1`.
+    assert.equal(floating('1.1.6'), 'minor=true\nmajor=false\n');
+    // A candidate moves neither, even as the highest version.
+    assert.equal(floating('1.3.0-rc.1'), 'minor=false\nmajor=false\n');
+    assert.equal(floating('1.10.0'), 'minor=true\nmajor=true\n');
+    assert.equal(floating('2.0.1'), 'minor=true\nmajor=true\n');
+  } finally {
+    await rm(repository, { recursive: true, force: true });
+  }
+});
+
+test('the release and rebuild workflows move the floating tags by that rule', async () => {
+  const release = await readFile('.github/workflows/release.yml', 'utf8');
+  const rebuild = await readFile('.github/workflows/rebuild.yml', 'utf8');
+
+  for (const workflow of [release, rebuild]) {
+    assert.match(
+      workflow,
+      /run: scripts\/floating-tags\.sh '\$\{\{ steps\.\w+\.outputs\.\w+ \}\}' >> "\$GITHUB_OUTPUT"/u,
+    );
+    // The script reads the release tags, which only a full fetch brings.
+    assert.match(workflow, /uses: actions\/checkout@v7\n {8}with:\n {10}fetch-depth: 0\n/u);
+  }
+  assert.match(
+    release,
+    /pattern=\{\{major\}\}\.\{\{minor\}\},enable=\$\{\{ steps\.floating\.outputs\.minor == 'true' \}\}/u,
+  );
+  assert.match(
+    release,
+    /pattern=\{\{major\}\},enable=\$\{\{ steps\.floating\.outputs\.major == 'true' \}\}/u,
+  );
+  // The rebuild decides on the default branch, before it checks out the old
+  // release, whose tree may not carry the script.
+  assert.ok(rebuild.indexOf('Decide the floating tags') < rebuild.indexOf('Checkout that release'));
+  assert.match(
+    rebuild,
+    /if \[ "\$MOVE_MINOR" = true \]; then tags="\$tags \$\{VERSION%\.\*\}"; fi/u,
+  );
+  assert.match(
+    rebuild,
+    /if \[ "\$MOVE_MAJOR" = true \]; then tags="\$tags \$\{VERSION%%\.\*\}"; fi/u,
+  );
+  assert.doesNotMatch(rebuild, /for tag in "\$dated" "\$minor" "\$major"/u);
 });

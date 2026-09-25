@@ -828,10 +828,26 @@ uploads:…` resolves to the project volume — checked on a scratch
      (now 7/7). Verified: API lint, typecheck, 273 tests, `pnpm test` 45.
      **Not verified:** on the VPS.
 
+   - **9t floating tags moving backwards.** A manual `rebuild.yml` run for
+     an older version re-pointed `X.Y` and `X` at it, and `release.yml` moved
+     both for any final release — a security patch to the previous minor
+     (24.5), say `1.1.6` after `1.2.3`, would have become what
+     `RR_VERSION=1` pulls. `scripts/floating-tags.sh` now decides from the
+     repository's `vX.Y.Z` tags (compared with `sort -V`): `X.Y` and `X`
+     move only for the newest final release of their line, never for a
+     candidate. `release.yml` feeds it to `metadata-action`'s `enable`;
+     `rebuild.yml` runs it on the default branch (`fetch-depth: 0`, which
+     `actions/checkout` documents as fetching all tags — Context7
+     `/actions/checkout`) before it checks out the old release. Regression in
+     `tooling.test.mjs`: the script on a scratch repository with
+     `v1.1.5 v1.2.3 v1.2.10 v1.3.0-rc.1 v2.0.0`, and both workflows wired to
+     it; the wiring test fails on the old workflows. Both workflows parse as
+     YAML (checked with `yaml`, which caught a duplicated `with:` on the
+     first try). Verified: `pnpm test` 47, lint, format. **Not verified:** a
+     real run on GitHub; `actionlint` is not installed here.
+
    Still open — the rest of the 2026-09-24 deployment review, which item 9
    had summarised only partly:
-   - a manual `rebuild.yml` run for an older version republishes the major
-     tag `X`, moving it backwards (24.4 p. 4);
    - special characters in the PostgreSQL password break the `DATABASE_URL`
      compose builds (`init-env.sh` takes the password from input);
    - specification gaps: no `maintenance.disk-check` (20.3), no daily update

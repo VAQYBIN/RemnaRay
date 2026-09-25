@@ -2,7 +2,7 @@
 # Monday the five images are rebuilt on whatever `node:24-alpine`,
 # `nginx:1.30-alpine`, `caddy:2-alpine` and `postgres:18-alpine` currently are,
 # published as `X.Y.Z-<yyyymmdd>`, and the floating `X.Y` and `X` tags are
-# moved onto them.
+# moved onto them when the version is the newest of their line.
 # The changelog does not change: nothing about the application did.
 name: rebuild
 
@@ -59,6 +59,18 @@ jobs:
             return data.tag_name.replace(/^v/u, '');
           result-encoding: string
 
+      # Decided on the default branch, which carries the script and every
+      # release tag: a manual rebuild of an older version must not move
+      # `X.Y` or `X` back onto it.
+      - name: Checkout the default branch
+        uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      - name: Decide the floating tags
+        id: floating
+        run: scripts/floating-tags.sh '${{ steps.release.outputs.result }}' >> "$GITHUB_OUTPUT"
+
       - name: Checkout that release
         uses: actions/checkout@v7
         with:
@@ -111,12 +123,14 @@ jobs:
         env:
           IMAGE: ${{ env.REGISTRY }}/${{ steps.ns.outputs.owner }}/${{ matrix.image }}
           VERSION: ${{ steps.release.outputs.result }}
+          MOVE_MINOR: ${{ steps.floating.outputs.minor }}
+          MOVE_MAJOR: ${{ steps.floating.outputs.major }}
         run: |
-          dated="${VERSION}-$(date -u '+%Y%m%d')"
-          major="${VERSION%%.*}"
-          minor="${VERSION%.*}"
+          tags="${VERSION}-$(date -u '+%Y%m%d')"
+          if [ "$MOVE_MINOR" = true ]; then tags="$tags ${VERSION%.*}"; fi
+          if [ "$MOVE_MAJOR" = true ]; then tags="$tags ${VERSION%%.*}"; fi
           source="${IMAGE}:${VERSION}-${{ github.run_id }}"
-          for tag in "$dated" "$minor" "$major"; do
+          for tag in $tags; do
             docker buildx imagetools create --tag "${IMAGE}:${tag}" "$source"
           done
 
