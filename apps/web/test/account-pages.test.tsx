@@ -28,6 +28,7 @@ const userMe = {
   language: 'ru',
   email: null,
   balance: { amountMinor: 0, currency: 'RUB' },
+  balanceHeld: { amountMinor: 0, currency: 'RUB' },
   referralCode: 'AB12CD34',
   referralLink: 'https://shop.test/r/AB12CD34',
   botReferralLink: 'https://t.me/bot?start=ref_AB12CD34',
@@ -150,4 +151,31 @@ describe('AC-133: every account page renders loading, empty and error', () => {
       expect(error, 'localized error code').toContain('Панель временно недоступна');
     });
   }
+});
+
+describe('the balance page (section 15.2)', () => {
+  const routes = (held: number) => ({
+    '/api/v1/me': {
+      body: {
+        ...userMe,
+        balance: { amountMinor: 20000, currency: 'RUB' },
+        balanceHeld: { amountMinor: held, currency: 'RUB' },
+      },
+    },
+    '/api/v1/me/topup-config': { body: { presetsMinor: [], minMinor: 100, maxMinor: 1000 } },
+    '/api/v1/me/payment-methods': { body: { items: [] } },
+    '/api/v1/me/transactions': { body: { items: [], nextCursor: null } },
+  });
+
+  it('shows held referral rewards as pending next to the available balance', async () => {
+    const markup = await renderPage(BalanceClient, routes(9900));
+    expect(markup).toMatch(/200(?:&nbsp;|\s)?₽/u);
+    expect(markup).toContain('В обработке:');
+    expect(markup).toMatch(/99(?:&nbsp;|\s)?₽/u);
+  });
+
+  it('shows no pending line when nothing is held', async () => {
+    const markup = await renderPage(BalanceClient, routes(0));
+    expect(markup).not.toContain('В обработке:');
+  });
 });

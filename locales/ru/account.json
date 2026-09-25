@@ -61,6 +61,7 @@
   "account.balance.title": "Баланс",
   "account.balance.description": "Пополнение и история операций.",
   "account.balance.current": "Текущий баланс",
+  "account.balance.held": "В обработке: {amount}",
   "account.balance.topUp": "Пополнить",
   "account.balance.customAmount": "Своя сумма",
   "account.balance.range": "От {min} до {max}",

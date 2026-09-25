@@ -9,7 +9,7 @@ request without `rr_sid` is redirected to `/<locale>?login=1`.
 | -------------------- | ----------------------------------------------------------------- | ---------------------------------------------------- |
 | `/account`           | Status, expiry, traffic, subscription link, QR, client deep links | «У вас нет подписки» with the trial and plan actions |
 | `/account/plans`     | Plan cards, provider radio (balance first), promo code preview    | «Тарифов пока нет»                                   |
-| `/account/balance`   | Balance, presets, custom amount, cursor-paginated history         | «Операций пока нет»                                  |
+| `/account/balance`   | Available balance with held rewards as pending, presets, history  | «Операций пока нет»                                  |
 | `/account/referrals` | Links, statistics, terms, masked invited users                    | «Пока никого»                                        |
 | `/account/devices`   | HWID list, removal when the owner allows it                       | «Устройств нет»                                      |
 | `/account/settings`  | Language, receipt email, marketing, anonymization request         | —                                                    |

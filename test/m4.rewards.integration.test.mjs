@@ -190,6 +190,16 @@ test(
         await prisma.transaction.count({ where: { userId: referrer.id, type: 'purchase' } }),
         0,
       );
+      // And the customer sees it that way: nothing available, 59.80 pending.
+      const account = new MeService({ db: prisma }, settings, {}, payments, {}, {});
+      const profile = await account.profile(referrer.id);
+      assert.deepEqual(profile.balance, { amountMinor: 0, currency: 'RUB' });
+      assert.deepEqual(profile.balanceHeld, { amountMinor: 5980, currency: 'RUB' });
+      const methods = await account.paymentMethods(referrer.id);
+      assert.deepEqual(methods.items.find((item) => item.code === 'balance').balance, {
+        amountMinor: 0,
+        currency: 'RUB',
+      });
 
       // AC-153: refunding the source reverses the reward and the balance.
       const sourceTransaction = await prisma.transaction.findFirst({

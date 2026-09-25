@@ -143,6 +143,16 @@
             },
             "required": ["amountMinor", "currency"]
           },
+          "balanceHeld": {
+            "type": "object",
+            "properties": {
+              "amountMinor": {
+                "anyOf": [{ "type": "integer" }, { "type": "string", "pattern": "^-?\\d+$" }]
+              },
+              "currency": { "type": "string", "pattern": "^[A-Z]{3}$" }
+            },
+            "required": ["amountMinor", "currency"]
+          },
           "referralCode": { "type": "string" },
           "referralLink": { "type": "string" },
           "botReferralLink": { "type": "string" },
@@ -158,6 +168,7 @@
           "language",
           "email",
           "balance",
+          "balanceHeld",
           "referralCode",
           "referralLink",
           "botReferralLink",

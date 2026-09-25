@@ -39,6 +39,7 @@ const userMe = {
   language: 'ru',
   email: null,
   balance: { amountMinor: 0, currency: 'RUB' },
+  balanceHeld: { amountMinor: 0, currency: 'RUB' },
   referralCode: 'AB12CD34',
   referralLink: 'https://shop.test/r/AB12CD34',
   botReferralLink: 'https://t.me/bot?start=ref_AB12CD34',

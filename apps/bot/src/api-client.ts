@@ -38,6 +38,7 @@ export type HomeState = {
   language: Locale;
   email: string | null;
   balance: { amountMinor: number; currency: string };
+  balanceHeld: { amountMinor: number; currency: string };
   referralCode: string;
   referralLink: string;
   botReferralLink: string;

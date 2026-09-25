@@ -61,6 +61,7 @@
   "account.balance.title": "Balance",
   "account.balance.description": "Top-ups and transaction history.",
   "account.balance.current": "Current balance",
+  "account.balance.held": "Pending: {amount}",
   "account.balance.topUp": "Top up",
   "account.balance.customAmount": "Custom amount",
   "account.balance.range": "From {min} to {max}",

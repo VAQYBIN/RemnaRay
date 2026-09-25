@@ -50,6 +50,7 @@
   "bot.screen.pay.wait": "Счёт на {price} создан до {until}.",
   "bot.screen.pay.ok": "Оплата прошла. Ваша подписка готова.",
   "bot.screen.balance.details": "Баланс: {balance}.",
+  "bot.screen.balance.held": "В обработке: {held} — реферальные начисления, станут доступны после удержания.",
   "bot.screen.balance.transactions": "Последние операции:",
   "bot.screen.topup.title": "Выберите сумму пополнения:",
   "bot.screen.ref.details": "Ваша ссылка: {link}\nПриглашено: {invited}, оплатили: {converted}.",

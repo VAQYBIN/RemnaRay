@@ -79,7 +79,7 @@ export function registerScreens(bot: Bot<RrContext>, api: ApiClient): void {
   );
 }
 
-async function showBalance(ctx: RrContext, api: ApiClient): Promise<void> {
+export async function showBalance(ctx: RrContext, api: ApiClient): Promise<void> {
   if (!ctx.from) return;
   const [state, transactions] = await Promise.all([
     api.getMe(ctx.from.id),
@@ -95,9 +95,14 @@ async function showBalance(ctx: RrContext, api: ApiClient): Promise<void> {
     .text(ctx.t('bot.btn.topup'), 'topup:open')
     .row()
     .text(ctx.t('bot.btn.back'), 'home');
+  // Section 15.2: held referral rewards are shown as pending.
+  const held =
+    state.balanceHeld.amountMinor > 0
+      ? `\n${ctx.t('bot.screen.balance.held', { held: formatMinor(state.balanceHeld.amountMinor, state.balanceHeld.currency) })}`
+      : '';
   await show(
     ctx,
-    `${ctx.t('bot.screen.balance.details', { balance: formatMinor(state.balance.amountMinor, state.balance.currency) })}\n${recent}`,
+    `${ctx.t('bot.screen.balance.details', { balance: formatMinor(state.balance.amountMinor, state.balance.currency) })}${held}\n${recent}`,
     keyboard,
   );
 }

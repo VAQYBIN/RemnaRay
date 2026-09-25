@@ -50,6 +50,7 @@
   "bot.screen.pay.wait": "Invoice for {price} is valid until {until}.",
   "bot.screen.pay.ok": "Payment received. Your subscription is ready.",
   "bot.screen.balance.details": "Balance: {balance}.",
+  "bot.screen.balance.held": "Pending: {held} — referral rewards, available once the hold ends.",
   "bot.screen.balance.transactions": "Recent transactions:",
   "bot.screen.topup.title": "Choose a top-up amount:",
   "bot.screen.ref.details": "Your link: {link}\nInvited: {invited}, paid: {converted}.",

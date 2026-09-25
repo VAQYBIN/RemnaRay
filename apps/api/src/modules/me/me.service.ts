@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import { HttpStatus, Injectable } from '@nestjs/common';
 import * as QRCode from 'qrcode';
+import { Prisma } from '@remnaray/db';
 
 import { Infrastructure } from '../../infra/infra.module';
 import { PaymentError } from '../payments/payments.errors';
@@ -74,8 +75,8 @@ export class MeService {
 
   async profile(userId: string) {
     const user = await this.require(userId);
-    const [account, subscription, purchases, botUsername, domain] = await Promise.all([
-      this.infra.db.account.findFirst({ where: { kind: 'user', userId, currency: 'RUB' } }),
+    const [wallet, subscription, purchases, botUsername, domain] = await Promise.all([
+      this.balance(userId),
       this.infra.db.subscription.findFirst({
         where: { userId, status: { in: ['provisioning', 'active', 'grace'] } },
         orderBy: { expiresAt: 'desc' },
@@ -95,7 +96,8 @@ export class MeService {
       firstName: user.firstName,
       language: user.language,
       email: user.email,
-      balance: money(account?.balanceMinor ?? 0n),
+      balance: money(wallet.available),
+      balanceHeld: money(wallet.held),
       referralCode: user.referralCode,
       referralLink: `https://${String(domain)}/r/${user.referralCode}`,
       botReferralLink: `https://t.me/${String(botUsername)}?start=ref_${user.referralCode}`,
@@ -208,15 +210,35 @@ export class MeService {
     return { subscription, status: subscription.status };
   }
 
+  /**
+   * Section 15.2: held referral rewards are shown as pending and cannot be
+   * spent, so what the customer sees as the balance, and what a balance
+   * payment is offered against, is `balance_minor − SUM(held rewards)` — the
+   * sum `settleBalance` checks. Read without a lock: it is only displayed.
+   */
+  private async balance(userId: string): Promise<{ available: bigint; held: bigint }> {
+    const [account, rows] = await Promise.all([
+      this.infra.db.account.findFirst({ where: { kind: 'user', userId, currency: 'RUB' } }),
+      this.infra.db.$queryRaw<Array<{ held: bigint }>>(Prisma.sql`
+        SELECT COALESCE(SUM(rr.amount_minor), 0)::bigint AS held
+        FROM referral_rewards rr
+        JOIN transactions t ON t.id = rr.transaction_id
+        WHERE t.user_id = ${userId}::uuid AND rr.status = 'held'
+      `),
+    ]);
+    const held = rows[0]?.held ?? 0n;
+    return { available: (account?.balanceMinor ?? 0n) - held, held };
+  }
+
   /** AC-061: a provider without a successful healthcheck is never offered. */
   async paymentMethods(userId: string) {
-    const [providers, account, topupEnabled] = await Promise.all([
+    const [providers, wallet, topupEnabled] = await Promise.all([
       this.infra.db.paymentProvider.findMany({
         where: { enabled: true },
         orderBy: { sortOrder: 'asc' },
         select: { code: true, displayName: true, lastHealthcheckOk: true },
       }),
-      this.infra.db.account.findFirst({ where: { kind: 'user', userId, currency: 'RUB' } }),
+      this.balance(userId),
       this.settings.get('balance.topup_enabled'),
     ]);
 
@@ -227,7 +249,7 @@ export class MeService {
           displayName: { ru: 'Баланс', en: 'Balance' },
           kind: 'balance' as const,
           available: Boolean(topupEnabled),
-          balance: money(account?.balanceMinor ?? 0n),
+          balance: money(wallet.available),
         },
         // AC-061: a provider is offered only after a successful healthcheck.
         ...providers.map((provider) => ({
@@ -345,15 +367,15 @@ export class MeService {
     const { planId } = planIdQuerySchema.parse(query);
     try {
       const quote = await this.subscriptions.quoteChange(userId, { planId });
-      const [plan, balance] = await Promise.all([
+      const [plan, wallet] = await Promise.all([
         this.infra.db.plan.findUnique({ where: { id: quote.newPlanId } }),
-        this.infra.db.account.findFirst({ where: { kind: 'user', userId, currency: 'RUB' } }),
+        this.balance(userId),
       ]);
       return {
         creditMinor: Number(quote.creditMinor),
         newPriceMinor: Number(plan?.priceMinor ?? 0n),
         toPayMinor: Number(quote.chargeMinor),
-        canPayFromBalance: (balance?.balanceMinor ?? 0n) >= quote.chargeMinor,
+        canPayFromBalance: wallet.available >= quote.chargeMinor,
       };
     } catch (error) {
       if (error instanceof ApiError) throw error;

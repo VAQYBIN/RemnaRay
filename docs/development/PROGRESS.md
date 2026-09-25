@@ -695,9 +695,26 @@ style-src 'unsafe-inline'; sandbox` and `nosniff`, which makes any theme
      **VPS action:** in Robokassa's technical settings set SuccessURL and
      FailURL to `https://<domain>/pay/robokassa`.
 
-   Still open: Showing the available balance and held
-   rewards to the customer (found under 7c). The Valkey `Idempotent-Replay`
-   response store of section 9.2 (found under 7e).
+   - **9l. Done 2026-09-25 — the customer saw held rewards as spendable.**
+     Section 15.2 shows held referral rewards "в обработке" and makes the
+     available balance `balance_minor − SUM(held rewards)`; since 7c a
+     balance payment honours it, but `/me`, the payment methods and the
+     plan-change quote showed and compared the whole balance, so a balance
+     payment was offered and then refused with `INSUFFICIENT_FUNDS`. Now
+     `UserMe.balance` and the balance payment method are the available
+     amount, the new `UserMe.balanceHeld` carries the held sum (OpenAPI
+     regenerated), `canPayFromBalance` compares the available amount, and
+     the account's balance page and the bot's balance screen add a pending
+     line when something is held. Regressions: `m4.rewards` (real
+     PostgreSQL: all 59.80 held → balance 0, held 59.80, balance method 0;
+     fails on the old code), `me.service.test.ts`, the balance page test and
+     `apps/bot/src/screens/balance.test.ts`. Verified: lint, typecheck,
+     typecheck:e2e, format, i18n-check, `pnpm -r test` (API 262, web 45, bot
+     28), `pnpm test` 43, `test:m4` 6/6, `pnpm test:e2e` 29 passed /
+     1 skipped.
+
+   Still open: the Valkey `Idempotent-Replay` response store of section 9.2
+   (found under 7e).
    Remaining review items (`rebuild.yml` Trivy tag `0.28.0`, worker `/backups` mount, restore script
    user/themes) and the M5-004 gates recorded below.
 

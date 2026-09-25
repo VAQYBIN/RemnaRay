@@ -10,7 +10,10 @@ export const userMeSchema = z.object({
   firstName: z.string().nullable(),
   language: z.string(),
   email: z.string().nullable(),
+  /** Section 15.2: what can be spent, `balance_minor − SUM(held rewards)`. */
   balance: moneySchema,
+  /** Referral rewards still held for a possible reversal, shown as pending. */
+  balanceHeld: moneySchema,
   referralCode: z.string(),
   referralLink: z.string(),
   botReferralLink: z.string(),

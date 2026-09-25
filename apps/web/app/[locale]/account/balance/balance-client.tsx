@@ -129,6 +129,18 @@ export default function BalanceClient({ locale }: { locale: Locale }) {
                   data.profile.balance.currency,
                   locale,
                 )}
+                // Section 15.2: held referral rewards are shown as pending.
+                hint={
+                  data.profile.balanceHeld.amountMinor > 0
+                    ? t('balance.held', {
+                        amount: money(
+                          data.profile.balanceHeld.amountMinor,
+                          data.profile.balanceHeld.currency,
+                          locale,
+                        ),
+                      })
+                    : undefined
+                }
               />
 
               <Card>

@@ -64,6 +64,8 @@ function service(overrides: Record<string, unknown> = {}) {
         .mockResolvedValue([{ id: 'user-2', firstName: 'Anastasia', username: null }]),
     },
     account: { findFirst: vi.fn().mockResolvedValue({ balanceMinor: 29900n }) },
+    // Section 15.2: the held referral rewards of the user.
+    $queryRaw: vi.fn().mockResolvedValue([{ held: 0n }]),
     subscription: { findFirst: vi.fn().mockResolvedValue(null) },
     transaction: { count: vi.fn().mockResolvedValue(0), findMany: vi.fn().mockResolvedValue([]) },
     plan: {
@@ -111,6 +113,22 @@ describe('MeService', () => {
       referralLink: 'https://shop.example.test/r/AB12CD34',
       botReferralLink: 'https://t.me/manta_bot?start=ref_AB12CD34',
       trialAvailable: true,
+    });
+  });
+
+  it('shows the available balance and the held rewards apart (section 15.2)', async () => {
+    const test = service();
+    test.db.$queryRaw.mockResolvedValue([{ held: 9900n }]);
+
+    await expect(test.instance.profile('user-1')).resolves.toMatchObject({
+      balance: { amountMinor: 20000, currency: 'RUB' },
+      balanceHeld: { amountMinor: 9900, currency: 'RUB' },
+    });
+    const methods = await test.instance.paymentMethods('user-1');
+    const balance = methods.items.find((item) => item.kind === 'balance');
+    expect(balance && 'balance' in balance ? balance.balance : null).toEqual({
+      amountMinor: 20000,
+      currency: 'RUB',
     });
   });
 
