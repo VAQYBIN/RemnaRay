@@ -52,6 +52,15 @@ alone, `pg_restore --clean --if-exists`, start the stack — and asks for
 confirmation first, because `--clean` drops what is there now. Set
 `RR_RESTORE_ASSUME_YES=true` to skip the prompt in a script.
 
+- It restores as the database user and into the database PostgreSQL itself was
+  given (`POSTGRES_USER`, `POSTGRES_DB` in `.env`), whatever the shell has.
+- When `files-<stamp>.tar.gz` of the same stamp lies next to the dump, it
+  restores `themes/` and the `uploads` volume from it too; files the archive
+  does not name are kept. A pre-migrate dump has no such archive, and the
+  files are then left as they are.
+- It waits for PostgreSQL over TCP, so it also works on an empty data volume
+  (acceptance 26.4 R3 removes it first).
+
 ## The pre-migrate dump
 
 Section 20.4: the `migrate` service applies migrations before `api`, `bot` and

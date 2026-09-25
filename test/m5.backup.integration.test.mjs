@@ -162,3 +162,122 @@ test(
     }
   },
 );
+
+/**
+ * Section 20.5 and 26.4 R3 through `deploy/backup/restore.sh` itself, on a
+ * compose project of its own: a database user and name other than the
+ * defaults, which only compose knows (the operator's shell never reads
+ * `.env`), and the themes and uploads archive the backup takes with the dump.
+ */
+test(
+  '26.4 R3: restore.sh brings back the database, themes and uploads with a custom user',
+  { timeout: 600_000 },
+  async () => {
+    docker(['build', '-f', 'deploy/backup/Dockerfile', '-t', IMAGE, '.']);
+    const directory = mkdtempSync(join(tmpdir(), 'rr-restore-'));
+    const project = `rrrestore${String(process.pid)}`;
+    const composeFile = join(directory, 'compose.yaml');
+    writeFileSync(
+      composeFile,
+      `name: ${project}
+services:
+  # No named data volume: after a down the database starts empty, as 26.4 R3
+  # has it after removing remnaray_pgdata.
+  postgres:
+    image: postgres:18-alpine
+    environment: { POSTGRES_USER: shop_owner, POSTGRES_PASSWORD: secret, POSTGRES_DB: shopdb }
+    healthcheck:
+      test: [CMD-SHELL, 'pg_isready -U shop_owner -d shopdb']
+      interval: 1s
+      retries: 60
+  backup:
+    image: ${IMAGE}
+    environment:
+      { POSTGRES_HOST: postgres, POSTGRES_USER: shop_owner, POSTGRES_PASSWORD: secret, POSTGRES_DB: shopdb }
+    volumes:
+      - ./backups:/backups
+      - ${SCRIPTS}:/scripts:ro
+      - ./themes:/src/themes:ro
+      - uploads:/src/uploads:ro
+    depends_on: { postgres: { condition: service_healthy } }
+    profiles: [nginx]
+volumes:
+  uploads: {}
+`,
+    );
+    const compose = (...args) => docker(['compose', '-f', composeFile, ...args]);
+    const sql = (statement) =>
+      compose(
+        'exec',
+        '-T',
+        'postgres',
+        'psql',
+        '-U',
+        'shop_owner',
+        '-d',
+        'shopdb',
+        '-tAc',
+        statement,
+      ).trim();
+    // Standard output only: compose reports the one-off container on stderr.
+    const upload = (command) =>
+      execFileSync(
+        'docker',
+        ['compose', '-f', composeFile, 'run', '--rm', '-T', '--no-deps', '-v', 'uploads:/u'].concat(
+          ['--entrypoint', 'sh', 'backup', '-c', command],
+        ),
+        { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] },
+      ).trim();
+    // The operator's shell: no database variables, as on a server.
+    const shell = Object.fromEntries(
+      Object.entries(process.env).filter(
+        ([name]) => !['POSTGRES_USER', 'POSTGRES_DB', 'POSTGRES_PASSWORD'].includes(name),
+      ),
+    );
+    try {
+      execFileSync('mkdir', ['-p', join(directory, 'themes/manta'), join(directory, 'backups')]);
+      writeFileSync(join(directory, 'themes/manta/theme.json'), '{"v":1}');
+      compose('--profile', 'nginx', 'up', '-d', '--wait');
+      sql("CREATE TABLE marks (v text); INSERT INTO marks VALUES ('backed-up')");
+      upload('echo logo-v1 > /u/logo.txt');
+
+      // R1: the backup, with its files archive.
+      compose('exec', '-T', 'backup', '/bin/sh', '/scripts/backup-entrypoint.sh', 'once');
+      const dump = readdirSync(join(directory, 'backups')).find((name) =>
+        /^remnaray-\d/u.test(name),
+      );
+      assert.ok(dump, 'no dump was written');
+      const stamp = dump.replace(/^remnaray-/u, '').replace(/\.dump$/u, '');
+      assert.ok(readdirSync(join(directory, 'backups')).includes(`files-${stamp}.tar.gz`));
+
+      // R2: what happens after the backup.
+      sql("INSERT INTO marks VALUES ('after')");
+      writeFileSync(join(directory, 'themes/manta/theme.json'), '{"v":2}');
+      upload('echo logo-v2 > /u/logo.txt');
+
+      // R3: the restore, confirmed up front as an unattended run would be.
+      const restore = spawnSync(
+        'sh',
+        ['deploy/backup/restore.sh', join(directory, 'backups', dump)],
+        {
+          env: {
+            ...shell,
+            COMPOSE_FILE: composeFile,
+            RR_PROXY_PROFILE: 'nginx',
+            RR_RESTORE_ASSUME_YES: 'true',
+          },
+          encoding: 'utf8',
+        },
+      );
+      assert.equal(restore.status, 0, `${restore.stdout}${restore.stderr}`);
+
+      assert.equal(sql("SELECT string_agg(v, ',') FROM marks"), 'backed-up');
+      assert.equal(readFileSync(join(directory, 'themes/manta/theme.json'), 'utf8'), '{"v":1}');
+      assert.equal(upload('cat /u/logo.txt'), 'logo-v1');
+    } finally {
+      docker(['compose', '-f', composeFile, '--profile', 'nginx', 'down', '-v'], {
+        expectSuccess: false,
+      });
+    }
+  },
+);

@@ -763,9 +763,51 @@ style-src 'unsafe-inline'; sandbox` and `nosniff`, which makes any theme
      compose file). Verified: `pnpm test` 45, lint. **VPS action:** none
      beyond pulling the new `compose.yaml`; **not verified** on the VPS.
 
-   Still open: the review items below.
-   Remaining review items (`rebuild.yml` Trivy tag `0.28.0`, worker `/backups` mount, restore script
-   user/themes) and the M5-004 gates recorded below.
+   - **9p. Done 2026-09-25 — the restore failed with a custom database user
+     and never restored the files.** `restore.sh` expanded `POSTGRES_USER`
+     and `POSTGRES_DB` in the operator's shell, which never reads `.env`, so a
+     non-default user restored as `remnaray` and failed; the
+     `files-<stamp>.tar.gz` the backup takes of `themes/` and `uploads/`
+     (section 20.5) was never restored. **Found while testing:** on an empty
+     data volume (26.4 R3 removes it) the image initialises with a
+     socket-only server that answers `pg_isready` and then restarts, so the
+     restore raced it ("the database system is shutting down"). Now the
+     readiness check and `pg_restore` run with the container's own
+     `$POSTGRES_USER`/`$POSTGRES_DB`, readiness is asked over TCP, and a
+     matching files archive is extracted by a one-off `backup` container
+     into `./themes` and the `uploads` volume (`docker compose run -v
+uploads:…` resolves to the project volume — checked on a scratch
+     project). Regression: a second test in `m5.backup.integration.test.mjs`
+     runs `restore.sh` itself on a compose project with user `shop_owner`,
+     database `shopdb` and no data volume: a real backup, then a row, a theme
+     and an upload changed, then the restore brings all three back; it fails
+     on the old script. Verified: `test:m5` 6/6, `pnpm test` 45, lint,
+     format. **Not verified:** on the VPS.
+
+   Still open — the rest of the 2026-09-24 deployment review, which item 9
+   had summarised only partly:
+   - the TLS and backup checks are queued at worker start and daily with no
+     retry, so a check refused during setup leaves `/admin/system` empty for
+     up to 24 h (20.3);
+   - `proxy-reloader.ts` never checks the status of its result call, so a
+     `proxy-reload-result` refused during setup is dropped silently (21.6);
+   - a manual `rebuild.yml` run for an older version republishes the major
+     tag `X`, moving it backwards (24.4 p. 4);
+   - special characters in the PostgreSQL password break the `DATABASE_URL`
+     compose builds (`init-env.sh` takes the password from input);
+   - specification gaps: no `maintenance.disk-check` (20.3), no daily update
+     check (24.6), no `start_period: 30s` on the api healthcheck (20.3),
+     releases attested with `attest-build-provenance` rather than a `cosign`
+     signature and a comment in `release.yml` claiming otherwise (24.4 p. 3);
+   - unpinned or floating: `certbot/certbot:latest`, the `caddy-ratelimit`
+     module without a version, the Caddy base pinned to `2.11.4` against
+     6.1's `caddy:2-alpine`, Grafana's admin password defaulting to `admin`,
+     the nightly Trivy not scanning the `backup` image;
+   - suspected, to be tested: a TLS-mode switch within one profile may not
+     reach nginx; a reload request during a reload is dropped; loose
+     `release.yml` tag filter; unvalidated `images.yml` tag input.
+     Remaining review items (`rebuild.yml` Trivy tag `0.28.0`, worker `/backups` mount, restore script
+     user/themes) and the M5-004 gates recorded below.
 
 **Pre-existing E2E failure, not caused by the repair above (fixed as 2b):**
 `e2e/specs/account.spec.ts:84` "preserves the selected locale when the bot
