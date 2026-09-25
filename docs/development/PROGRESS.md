@@ -468,7 +468,7 @@ style-src 'unsafe-inline'; sandbox` and `nosniff`, which makes any theme
      **Found, not repaired:** the settings page is not the section 14 tab
      set ("Вебхуки" among them); the recipients are edited as one JSON value.
      A failed `m1.integration` leaves a Valkey client reconnecting for ever,
-     so the run hangs instead of ending.
+     so the run hangs instead of ending (repaired under 9d).
 
    - **9b. Done 2026-09-25 — `panel.reset-traffic` and `panel.delete-user`
      were never performed** (found under item 5). The console queued them
@@ -519,7 +519,48 @@ style-src 'unsafe-inline'; sandbox` and `nosniff`, which makes any theme
      **Not verified:** against a live panel, including whether its reset of
      a `LIMITED` user makes it `ACTIVE` again.
 
-   Still open:
+   - **9d. Done 2026-09-25 — a trial never reached the panel.** Found while
+     auditing panel sync coverage: `subscriptions.trial` created the
+     subscription `active` and queued no `panel.sync-user`, and
+     reconciliation only visits users that already have a `panel_users` row,
+     so a trial user got no panel user and no link (only the console's ban
+     and unban ever queued a sync). FR-010 and EX-01: the trial is now
+     created `provisioning` with `panel.sync-user {reason:'trial'}` in the
+     same transaction; the sync that reaches the panel makes it `active`
+     (conditional on `provisioning`, so two syncs activate once) and, in that
+     transaction, emits `subscription.activated` (moved from the trial's
+     creation, as the 10.3 pseudo-code has it) and queues the customer's
+     `sub.activated` with the link. `provisioning → provisioning_failed` was
+     implemented nowhere, although the dashboard counts it. **Decision on
+     EX-01 against 10.3:** a sync's ten retries end within about 85 minutes,
+     but EX-01 fails a subscription only after 24 h, so every
+     reconciliation (15 min) queues another sync for a subscription still
+     `provisioning` and, after 24 h, sets `provisioning_failed` with the
+     `provisioning.failed` alert (its text already existed). The bot shows
+     "activating, the link follows" meanwhile (new `bot.screen.sub.provisioning`);
+     the account page already rendered `provisioning`.
+     Regressions: `test/m1.trial-provisioning.integration.test.mjs` (real
+     PostgreSQL and the panel mock: provisioning and the queued sync, the
+     panel user created with the trial's expiry, one activation with its event
+     and message, a panel down leaves it provisioning and reconciliation
+     re-queues it, `provisioning_failed` and the alert after 24 h; fails on
+     the old code) and `apps/bot/src/screens/subscription.test.ts`.
+     `m1.integration` now expects the trial provisioning and drains its sync
+     before the item 5 replace checks, and closes Valkey and the relay in
+     `finally`: a failing run now ends (checked with a forced failure,
+     exit 1) instead of hanging. Verified: lint, typecheck, format,
+     i18n-check, `pnpm -r test` (API 255, bot 26), `pnpm test` 43, `test:m1`
+     3/3, `test:m2` 3/3, `test:m4` 5/5. **Not verified:** a live panel; E2E
+     not rerun (no browser flow takes a trial).
+
+   Still open: panel sync after the console's and the bot's extensions,
+   the console's set-plan (with the FR-023 reset), bulk extension and the
+   invitee bonus days; a ban must disable the panel user (FR-141), but a
+   sync with no live subscription changes nothing, and ban/unban are not
+   one transaction; the panel `tag` must match `/^[A-Z0-9_]{1,16}$/`
+   (verified against remnawave/backend `create-user.command.ts` and
+   `update-user.command.ts`) and is always `TRIAL` instead of the plan's
+   slug (10.3).
    Robokassa SuccessURL/FailURL landing and the `settings.fiscal.mode`
    vocabulary (found under 6c). Showing the available balance and held
    rewards to the customer (found under 7c). The Valkey `Idempotent-Replay`

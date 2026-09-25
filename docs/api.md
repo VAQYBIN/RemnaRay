@@ -63,7 +63,7 @@ console, a JSON array; the value is secret, so it is written whole):
 ]
 ```
 
-Events: `user.created`, `subscription.activated` (a purchase, trial, plan
+Events: `user.created`, `subscription.activated` (a purchase, a trial once the panel has the user, plan
 change, invitee bonus or an administrator's extension), `subscription.expired`,
 `payment.succeeded` (money taken for an invoice, including one credited to the
 balance), `payment.refunded`, `referral.rewarded`. The body is

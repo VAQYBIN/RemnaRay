@@ -20,6 +20,10 @@ test(
       .withExposedPorts(6379)
       .start();
     const databaseUrl = postgres.getConnectionUri();
+    // Closed in `finally`: a client left open after a failed assertion keeps
+    // reconnecting to the stopped container, and the run never ends.
+    let redis;
+    let relay;
     try {
       execFileSync('pnpm', ['--filter', '@remnaray/db', 'db:migrate:deploy'], {
         cwd: process.cwd(),
@@ -87,20 +91,23 @@ test(
         graceHours: 0,
       });
       assert.equal(trial.source, 'trial');
+      assert.equal(trial.status, 'provisioning', 'EX-01: live once the panel has the user');
       const activated = await subscriptions.activate(subscriptionUser.id, plan.id, 'purchase');
       const renewed = await subscriptions.activate(subscriptionUser.id, plan.id, 'purchase');
       assert.equal(renewed.status, 'active');
       assert.ok(Date.parse(renewed.expiresAt) > Date.parse(activated.expiresAt));
       assert.equal(await subscriptions.expire(new Date(Date.now() + 366 * 86_400_000), 0), 1);
-      // Section 9.8: each of those wrote its event in its own transaction.
+      // Section 9.8: each of those wrote its event in its own transaction. The
+      // trial is `provisioning` until the panel has the user (EX-01), so its
+      // activation event comes from the sync, which this test does not run.
       const events = await prisma.outboxJob.findMany({
-        where: { name: 'webhooks.dispatch' },
-        orderBy: { createdAt: 'asc' },
+        where: { name: { in: ['webhooks.dispatch', 'panel.sync-user'] } },
+        orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
       });
       assert.deepEqual(
-        events.map((row) => row.payload.type),
+        events.map((row) => row.payload.type ?? row.name),
         [
-          'subscription.activated',
+          'panel.sync-user',
           'subscription.activated',
           'subscription.activated',
           'subscription.expired',
@@ -117,8 +124,8 @@ test(
       // Resolved through the worker, which owns the dependency (section 6.1).
       const { Worker } = await import('../apps/worker/node_modules/bullmq/dist/cjs/index.js');
       const valkeyUrl = `redis://${valkey.getHost()}:${String(valkey.getMappedPort(6379))}/0`;
-      const redis = createRedisConnection(valkeyUrl);
-      const relay = new OutboxRelay(prisma, redis);
+      redis = createRedisConnection(valkeyUrl);
+      relay = new OutboxRelay(prisma, redis);
       await prisma.$transaction(async (transaction) => {
         await new OutboxWriter().enqueue(transaction, {
           queue: 'notify',
@@ -151,6 +158,11 @@ test(
       // Section 7.3 `panel.sync-user`: `jobId = sync:<userId>`, re-queueing
       // replaces. The shared id used to be the BullMQ id, so the finished
       // first sync, kept by `removeOnComplete`, swallowed every renewal.
+      // The trial's own sync (EX-01) was relayed above; it is another user's.
+      const { Queue } = await import('../apps/worker/node_modules/bullmq/dist/cjs/index.js');
+      const panelQueue = new Queue('panel', { connection: redis, prefix: QUEUE_PREFIX });
+      await panelQueue.drain();
+      await panelQueue.close();
       const runs = [];
       let hold;
       let failNext = false;
@@ -223,11 +235,10 @@ test(
         await panelWorker.close(true);
       }
 
-      redis.disconnect();
-      await relay.close();
-
       await prisma.$disconnect();
     } finally {
+      redis?.disconnect();
+      await relay?.close();
       await valkey.stop();
       await postgres.stop();
     }

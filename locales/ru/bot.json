@@ -44,6 +44,7 @@
   "bot.screen.trial.confirm": "Триал: {days, plural, one {# день} few {# дня} many {# дней} other {# дня}}, трафик {traffic}.",
   "bot.screen.sub.empty": "У вас нет активной подписки.",
   "bot.screen.sub.details": "Подписка до {until}. Ссылка: <code>{link}</code>",
+  "bot.screen.sub.provisioning": "Активируем подписку, пришлём ссылку через минуту.",
   "bot.screen.plans.title": "Выберите тариф:",
   "bot.screen.plan.details": "{plan}: {price} на {days, plural, one {# день} few {# дня} many {# дней} other {# дней}}.",
   "bot.screen.pay.wait": "Счёт на {price} создан до {until}.",

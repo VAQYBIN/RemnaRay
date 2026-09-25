@@ -66,7 +66,9 @@ export class SubscriptionsRepository implements SubscriptionsRepositoryPort {
           userId,
           planId: null,
           source: 'trial',
-          status: 'active',
+          // FR-010, EX-01: the trial is live once the panel has the user;
+          // `panel.sync-user` makes it `active`.
+          status: 'provisioning',
           startsAt,
           expiresAt,
           trafficLimitBytes: BigInt(config.trialTrafficGb) * 1024n * 1024n * 1024n,
@@ -76,12 +78,16 @@ export class SubscriptionsRepository implements SubscriptionsRepositoryPort {
         },
       });
       await transaction.user.update({ where: { id: userId }, data: { trialUsedAt: startsAt } });
-      await emitWebhook(
-        transaction,
-        'subscription.activated',
-        userId,
-        subscriptionData(subscription),
-      );
+      // `subscription.activated` (9.8) and the customer's message go out when
+      // the sync activates it, as section 10.3 has it.
+      await transaction.outboxJob.create({
+        data: {
+          queue: 'panel',
+          name: 'panel.sync-user',
+          payload: { userId, reason: 'trial' },
+          jobId: `sync:${userId}`,
+        },
+      });
       return view(subscription);
     });
   }

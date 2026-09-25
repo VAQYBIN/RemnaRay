@@ -44,6 +44,7 @@
   "bot.screen.trial.confirm": "Trial: {days, plural, one {# day} other {# days}}, traffic {traffic}.",
   "bot.screen.sub.empty": "You have no active subscription.",
   "bot.screen.sub.details": "Subscription until {until}. Link: <code>{link}</code>",
+  "bot.screen.sub.provisioning": "Activating your subscription; we will send the link in a minute.",
   "bot.screen.plans.title": "Choose a plan:",
   "bot.screen.plan.details": "{plan}: {price} for {days, plural, one {# day} other {# days}}.",
   "bot.screen.pay.wait": "Invoice for {price} is valid until {until}.",

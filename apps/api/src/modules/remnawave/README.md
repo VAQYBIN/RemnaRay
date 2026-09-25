@@ -15,6 +15,14 @@ panel reports more used; `POST /api/users/{userId}/actions/reset-traffic`) and `
 deleted, and the `panel_users` row goes with it). The worker fails a panel job
 it does not know rather than reconciling.
 
+A trial starts `provisioning` with a `panel.sync-user` queued (FR-010, EX-01).
+The sync that reaches the panel makes it `active`, emits
+`subscription.activated` and sends the customer `sub.activated` with the link.
+Each reconciliation queues another sync for a subscription still
+`provisioning`, since a sync's own retries end within about an hour; after
+24 h it becomes `provisioning_failed` and the administrators get the
+`provisioning.failed` alert.
+
 The transport and mock are in `packages/remnawave-sdk` and
 `packages/remnawave-mock`. ADR-010 records the v3.4.4 numeric panel identifier
 incompatibilities; live compatibility remains a mapping concern for the later

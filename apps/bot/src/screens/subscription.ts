@@ -12,6 +12,11 @@ export async function showSubscription(ctx: RrContext, api: ApiClient): Promise<
     await show(ctx, ctx.t('bot.screen.sub.empty'), backButton(ctx));
     return;
   }
+  // EX-01: the panel has not been reached yet; the link comes as a message.
+  if (state.subscription.status === 'provisioning') {
+    await show(ctx, ctx.t('bot.screen.sub.provisioning'), backButton(ctx));
+    return;
+  }
   const link = state.panel?.subscriptionUrl ?? '';
   const keyboard = new InlineKeyboard()
     .text(ctx.t('bot.btn.clients'), 'sub:clients')

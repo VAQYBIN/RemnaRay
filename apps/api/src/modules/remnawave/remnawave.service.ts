@@ -9,6 +9,10 @@ import {
 
 import { Infrastructure } from '../../infra/infra.module';
 import { SettingsService } from '../settings/settings.service';
+import { emitWebhook, subscriptionData } from '../webhooks/outgoing';
+
+/** EX-01: how long a subscription may stay `provisioning`. */
+const PROVISIONING_DEADLINE_MS = 24 * 60 * 60 * 1000;
 
 export class PanelUnavailableError extends Error {
   readonly code = 'PANEL_UNAVAILABLE';
@@ -65,11 +69,7 @@ export class RemnawaveService {
           current = await client.users.enable(current.id);
       }
       await this.saveSnapshot(userId, current, false);
-      if (subscription?.status === 'provisioning')
-        await this.infra.db.subscription.update({
-          where: { id: subscription.id },
-          data: { status: 'active' },
-        });
+      if (subscription?.status === 'provisioning') await this.activate(subscription);
       return current;
     } catch (error) {
       await this.infra.db.panelUser.updateMany({
@@ -84,7 +84,105 @@ export class RemnawaveService {
     }
   }
 
-  async reconcile(): Promise<{ checked: number; drifted: number }> {
+  /**
+   * EX-01 completion (section 10.3): `provisioning → active` once the panel has
+   * the user, with `subscription.activated` (9.8) and the customer's
+   * `sub.activated` message carrying the link. Conditional on the status, so
+   * two syncs activate once.
+   */
+  private async activate(subscription: {
+    id: string;
+    userId: string;
+    planId: string | null;
+    source: string;
+    startsAt: Date;
+    expiresAt: Date;
+  }): Promise<void> {
+    await this.infra.db.$transaction(async (tx) => {
+      const { count } = await tx.subscription.updateMany({
+        where: { id: subscription.id, status: 'provisioning' },
+        data: { status: 'active' },
+      });
+      if (count === 0) return;
+      await emitWebhook(
+        tx,
+        'subscription.activated',
+        subscription.userId,
+        subscriptionData({ ...subscription, status: 'active' }),
+      );
+      const dedupKey = `sub.activated:${subscription.id}:${subscription.expiresAt.toISOString()}`;
+      await tx.outboxJob.create({
+        data: {
+          queue: 'notify',
+          name: 'notify.send',
+          payload: {
+            event: 'sub.activated',
+            userId: subscription.userId,
+            subscriptionId: subscription.id,
+            dedupKey,
+            params: { until: subscription.expiresAt.toISOString().slice(0, 10) },
+          },
+          jobId: `notify:${dedupKey}`,
+        },
+      });
+    });
+  }
+
+  /**
+   * EX-01: a subscription still `provisioning` is synced again on every
+   * reconciliation, since a sync's own retries end within about an hour and a
+   * user with no `panel_users` row is not otherwise revisited. After 24 h it
+   * is `provisioning_failed`, and the administrators are alerted.
+   */
+  async retryProvisioning(now = new Date()): Promise<{ retried: number; failed: number }> {
+    const stuck = await this.infra.db.subscription.findMany({
+      where: { status: 'provisioning' },
+      select: { id: true, userId: true, createdAt: true },
+    });
+    let retried = 0;
+    let failed = 0;
+    for (const subscription of stuck) {
+      await this.infra.db.$transaction(async (tx) => {
+        if (subscription.createdAt.getTime() > now.getTime() - PROVISIONING_DEADLINE_MS) {
+          await tx.outboxJob.create({
+            data: {
+              queue: 'panel',
+              name: 'panel.sync-user',
+              payload: { userId: subscription.userId, reason: 'provisioning' },
+              jobId: `sync:${subscription.userId}`,
+            },
+          });
+          retried += 1;
+          return;
+        }
+        const { count } = await tx.subscription.updateMany({
+          where: { id: subscription.id, status: 'provisioning' },
+          data: { status: 'provisioning_failed' },
+        });
+        if (count === 0) return;
+        await tx.outboxJob.create({
+          data: {
+            queue: 'notify',
+            name: 'notify.alert',
+            payload: { type: 'provisioning.failed', details: subscription.userId },
+            jobId: `alert:provisioning.failed:${subscription.id}`,
+          },
+        });
+        failed += 1;
+      });
+    }
+    return { retried, failed };
+  }
+
+  async reconcile(): Promise<{
+    checked: number;
+    drifted: number;
+    retried: number;
+    failed: number;
+  }> {
+    // Before the panel is asked anything: a panel that is down is the reason
+    // these are still waiting.
+    const provisioning = await this.retryProvisioning();
     const client = await this.client();
     let drifted = 0;
     try {
@@ -129,7 +227,7 @@ export class RemnawaveService {
           drifted += 1;
         } else await this.saveSnapshot(row.userId, current, false);
       }
-      return { checked: rows.length, drifted };
+      return { checked: rows.length, drifted, ...provisioning };
     } finally {
       await client.close();
     }
