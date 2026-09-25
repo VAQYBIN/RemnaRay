@@ -117,7 +117,10 @@ test('init-env.sh generates a password when none is typed', () => {
       input: 'shop.example.test\nops@example.test\n\n',
       stdio: ['pipe', 'pipe', 'pipe'],
     });
-    assert.match(readFileSync(envFile, 'utf8'), /^POSTGRES_PASSWORD='[0-9a-f]{48}'$/mu);
+    const written = readFileSync(envFile, 'utf8');
+    assert.match(written, /^POSTGRES_PASSWORD='[0-9a-f]{48}'$/mu);
+    // Grafana refuses to start without one of its own (section 20.2).
+    assert.match(written, /^RR_GRAFANA_PASSWORD=[0-9a-f]{32}$/mu);
   } finally {
     rmSync(directory, { recursive: true, force: true });
   }

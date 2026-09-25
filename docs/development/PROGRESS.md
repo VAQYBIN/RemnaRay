@@ -973,11 +973,31 @@ verify` against `github.com/<repo>/.github/workflows/<file>.yml@` and
      `tooling.test.mjs` (fails on the old workflows); both workflows parse.
      **Not verified:** a real signing run on GitHub.
 
+   - **9aa Grafana's default password.** The monitoring profile set
+     `GF_SECURITY_ADMIN_PASSWORD: ${RR_GRAFANA_PASSWORD:-admin}`, so an owner
+     who skipped the variable got `admin`/`admin`, reachable from every
+     container on `rr_net` and through any proxy rule they add. A required
+     `${…:?}` is not an option: checked on compose v5.5.1, it fails
+     interpolation for every command even when the profile is off. Grafana's
+     entrypoint is now wrapped (the image's is `/run.sh`, user 472): with the
+     password empty or `admin` it prints what to set and exits 1; otherwise
+     it `exec`s `/run.sh`. `init-env.sh` generates `RR_GRAFANA_PASSWORD`
+     (`openssl rand -hex 16`). `docs/monitoring.md` says how to change it on
+     an existing install (Grafana applies it only when it creates its
+     database). Regression `test/m5.grafana.integration.test.mjs` (in
+     `test:m5`) on the real `grafana/grafana:12.3.1`: refused without a
+     password and with `admin`; with one, `admin:<it>` reaches `/api/user`
+     and `admin:admin` does not. Red: on the old file Grafana started instead
+     of refusing (the run had to be stopped by hand, so the test now bounds
+     each call to 180 s). `m1.database-url` checks the generated password.
+     Verified: `pnpm lint`, `pnpm test` 50, the two integration files.
+     **Not verified:** on the VPS; an existing Grafana keeps its password.
+
    Still open — the rest of the 2026-09-24 deployment review, which item 9
    had summarised only partly:
    - unpinned or floating: `certbot/certbot:latest`, the `caddy-ratelimit`
      module without a version, the Caddy base pinned to `2.11.4` against
-     6.1's `caddy:2-alpine`, Grafana's admin password defaulting to `admin`,
+     6.1's `caddy:2-alpine`,
      the nightly Trivy not scanning the `backup` image;
    - suspected, to be tested: a TLS-mode switch within one profile may not
      reach nginx; a loose

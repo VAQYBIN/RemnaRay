@@ -69,8 +69,12 @@ or, more simply, from the server itself:
 docker compose --profile monitoring exec grafana wget -qO- http://127.0.0.1:3010/api/health
 ```
 
-`RR_GRAFANA_PASSWORD` sets the administrator password; without it Grafana ships
-its own default, which is why the variable is in `.env.example`.
+`RR_GRAFANA_PASSWORD` sets the administrator password, and `init-env.sh`
+generates one. Grafana refuses to start without it, or with `admin`, rather
+than come up with its own `admin`/`admin`; the rest of the stack is not
+affected. Grafana takes the password when it first creates its database: to
+change it on an existing install, run
+`docker compose --profile monitoring exec grafana grafana cli admin reset-admin-password <new>`.
 
 Alerts are not Prometheus's job here. Section 16.5 puts them in the
 application, which knows the deployment's own thresholds and can reach the

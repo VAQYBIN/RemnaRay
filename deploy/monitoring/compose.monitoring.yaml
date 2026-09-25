@@ -29,8 +29,25 @@ services:
 
   grafana:
     image: grafana/grafana:12.3.1
+    # Without a password Grafana creates `admin`/`admin`, reachable from every
+    # container on `rr_net` and through any proxy rule an owner adds. A
+    # required variable (`:?`) would stop the whole stack, monitoring or not,
+    # since compose interpolates every profile; so Grafana itself refuses to
+    # start without one, and the rest of the deployment is untouched.
+    entrypoint:
+      - sh
+      - -c
+      - |
+        case "$${GF_SECURITY_ADMIN_PASSWORD:-}" in
+          '' | admin)
+            echo 'Set RR_GRAFANA_PASSWORD in .env (not "admin"); Grafana does not start with the default password.' >&2
+            exit 1
+            ;;
+        esac
+        exec /run.sh "$$@"
+      - grafana
     environment:
-      GF_SECURITY_ADMIN_PASSWORD: ${RR_GRAFANA_PASSWORD:-admin}
+      GF_SECURITY_ADMIN_PASSWORD: ${RR_GRAFANA_PASSWORD:-}
       GF_USERS_ALLOW_SIGN_UP: 'false'
       GF_ANALYTICS_REPORTING_ENABLED: 'false'
       GF_ANALYTICS_CHECK_FOR_UPDATES: 'false'

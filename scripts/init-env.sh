@@ -35,6 +35,8 @@ esac
 app_key=$(openssl rand -base64 32 | tr -d '\n')
 internal_token=$(openssl rand -base64 32 | tr -d '\n')
 setup_token=$(openssl rand -base64 24 | tr -d '\n')
+# Used only with --profile monitoring; Grafana refuses to start without one.
+grafana_password=$(openssl rand -hex 16)
 
 cat > "$env_file" <<ENV
 RR_DOMAIN=$domain
@@ -52,6 +54,7 @@ RR_TRUSTED_PROXIES=172.28.0.0/16
 RR_EXTERNAL_HTTP_PORT=8080
 RR_LOG_LEVEL=info
 RR_PAYMENTS_MOCK=false
+RR_GRAFANA_PASSWORD=$grafana_password
 ENV
 chmod 600 "$env_file"
 printf 'Created %s with mode 600.\n' "$env_file"
