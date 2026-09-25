@@ -872,10 +872,27 @@ uploads:…` resolves to the project volume — checked on a scratch
      cases. Red: with the old `compose.yaml` the URL assertion fails; the
      old pair mangles the password as above. Verified: `pnpm lint`,
      `pnpm typecheck`, `pnpm -r test` (API 273, web 45, bot 28, worker 18),
-     `pnpm test` 47, `test:m5` 7/7. Found meanwhile, next: the pre-migrate
+     `pnpm test` 47, `test:m5` 7/7. Found meanwhile (fixed as 9v): the pre-migrate
      `pg_dump` in `migrate.ts` runs without `PGPASSWORD`. **Not verified:**
      on the VPS; an existing `.env` with an unquoted password is read as
      before.
+
+   - **9v pre-migrate dump without a password.** Found while fixing 9u:
+     `migrate.ts` ran `pg_dump --host postgres …` with no `PGPASSWORD`. The
+     `postgres` image asks network clients for one (`scram-sha-256`), so
+     before any `reversible: no` migration the dump failed with
+     `fe_sendauth: no password supplied`, `migrate` exited 1 and the stack
+     did not start on that upgrade (section 20.4). `pg_dump` now gets
+     `PGPASSWORD` from `POSTGRES_PASSWORD`, as `backup-entrypoint.sh` already
+     did. Regression `test/m5.premigrate-backup.integration.test.mjs` (in
+     `test:m5`, now 8/8): the real `migrate.js` against PostgreSQL 18 with
+     every migration applied and one more `reversible: no` pending, with
+     `pg_dump` on the PATH being the real one run in `postgres:18-alpine`
+     with only the libpq variables `migrate` passes, reaching the server by
+     its bridge address; it failed with exactly that error before and now
+     writes `pre-migrate-<version>.dump`. Verified: `pnpm lint`,
+     `pnpm typecheck`, API 273, `pnpm test` 47. **Not verified:** in the
+     runtime image on the VPS.
 
    Still open — the rest of the 2026-09-24 deployment review, which item 9
    had summarised only partly:

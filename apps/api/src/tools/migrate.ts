@@ -43,8 +43,8 @@ export function needsPreMigrateBackup(directory: string, pending: string[]): boo
   });
 }
 
-function run(command: string, args: string[]): void {
-  const result = spawnSync(command, args, { stdio: 'inherit' });
+function run(command: string, args: string[], env: NodeJS.ProcessEnv = process.env): void {
+  const result = spawnSync(command, args, { stdio: 'inherit', env });
   if (result.status !== 0)
     throw new Error(`${command} ${args.join(' ')} exited with ${String(result.status ?? -1)}`);
 }
@@ -59,18 +59,27 @@ function preMigrateBackup(version: string): void {
   mkdirSync(BACKUP_DIRECTORY, { recursive: true });
   const target = resolve(BACKUP_DIRECTORY, `pre-migrate-${version}.dump`);
   process.stdout.write(`migrate: taking a pre-migrate dump into ${target}\n`);
-  run('pg_dump', [
-    '--host',
-    process.env.POSTGRES_HOST ?? 'postgres',
-    '--username',
-    process.env.POSTGRES_USER ?? 'remnaray',
-    '--dbname',
-    process.env.POSTGRES_DB ?? 'remnaray',
-    '--format=custom',
-    '--compress=6',
-    '--file',
-    target,
-  ]);
+  run(
+    'pg_dump',
+    [
+      '--host',
+      process.env.POSTGRES_HOST ?? 'postgres',
+      '--username',
+      process.env.POSTGRES_USER ?? 'remnaray',
+      '--dbname',
+      process.env.POSTGRES_DB ?? 'remnaray',
+      '--format=custom',
+      '--compress=6',
+      '--file',
+      target,
+    ],
+    {
+      ...process.env,
+      // The `postgres` service asks every network client for the password
+      // (`scram-sha-256`), and a one-shot container has no terminal to type it.
+      PGPASSWORD: process.env.POSTGRES_PASSWORD ?? '',
+    },
+  );
 }
 
 async function main(): Promise<void> {
