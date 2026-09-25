@@ -3,6 +3,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import process from 'node:process';
 import { PostgreSqlContainer } from '@testcontainers/postgresql';
+import { GenericContainer } from 'testcontainers';
 
 /**
  * FR-010 and EX-01 on a real PostgreSQL and the panel mock: a trial waits in
@@ -12,13 +13,18 @@ import { PostgreSqlContainer } from '@testcontainers/postgresql';
  * reconciliation, and after 24 h it is `provisioning_failed` with an alert.
  */
 test('M1 a trial reaches the panel before it is active', { timeout: 240_000 }, async () => {
-  const postgres = await new PostgreSqlContainer('postgres:18-alpine')
-    .withDatabase('remnaray')
-    .withUsername('remnaray')
-    .withPassword('remnaray')
-    .start();
+  const [postgres, valkey] = await Promise.all([
+    new PostgreSqlContainer('postgres:18-alpine')
+      .withDatabase('remnaray')
+      .withUsername('remnaray')
+      .withPassword('remnaray')
+      .start(),
+    // The `rr:lock:panel:<userId>` lock of section 10.3.
+    new GenericContainer('valkey/valkey:9.1-alpine').withExposedPorts(6379).start(),
+  ]);
   let prisma;
   let panel;
+  let redis;
   try {
     execFileSync('pnpm', ['--filter', '@remnaray/db', 'db:migrate:deploy'], {
       cwd: process.cwd(),
@@ -31,6 +37,10 @@ test('M1 a trial reaches the panel before it is active', { timeout: 240_000 }, a
     const { RemnawaveService } =
       await import('../apps/api/dist/modules/remnawave/remnawave.service.js');
     const { createRemnawaveMock } = await import('../packages/remnawave-mock/dist/index.js');
+    const { createRedisConnection } = await import('../packages/queues/dist/index.js');
+    redis = createRedisConnection(
+      `redis://${valkey.getHost()}:${String(valkey.getMappedPort(6379))}/0`,
+    );
     prisma = createPrismaClient(postgres.getConnectionUri());
     panel = createRemnawaveMock();
     const baseUrl = await panel.listen({ port: 0, host: '127.0.0.1' });
@@ -41,7 +51,7 @@ test('M1 a trial reaches the panel before it is active', { timeout: 240_000 }, a
       'brand.name': 'Manta',
     };
     const remnawave = new RemnawaveService(
-      { db: prisma },
+      { db: prisma, redis },
       { get: (key) => Promise.resolve(values[key]) },
     );
     const subscriptions = new SubscriptionsRepository(prisma);
@@ -77,8 +87,16 @@ test('M1 a trial reaches the panel before it is active', { timeout: 240_000 }, a
     );
     assert.deepEqual(await outbox('webhooks.dispatch'), [], 'not activated yet');
 
-    // --- the sync provisions and activates it ---
-    await remnawave.syncUser(user.id, 'trial');
+    // --- the sync provisions and activates it; a concurrent one waits its turn ---
+    // Two `panel` jobs run at once (7.3); `rr:lock:panel:<userId>` (10.3)
+    // keeps them from creating the panel user twice.
+    const both = await Promise.allSettled([
+      remnawave.syncUser(user.id, 'trial'),
+      remnawave.syncUser(user.id, 'trial'),
+    ]);
+    assert.deepEqual(both.map((result) => result.status).sort(), ['fulfilled', 'rejected']);
+    assert.equal(both.find((result) => result.status === 'rejected').reason.code, 'PANEL_BUSY');
+    assert.equal(await redis.exists(`rr:lock:panel:${user.id}`), 0, 'the lock is released');
     const active = await prisma.subscription.findUniqueOrThrow({ where: { id: trial.id } });
     assert.equal(active.status, 'active');
     assert.equal(panel.users.size, 1);
@@ -127,7 +145,8 @@ test('M1 a trial reaches the panel before it is active', { timeout: 240_000 }, a
     assert.deepEqual(await remnawave.retryProvisioning(), { retried: 0, failed: 0 });
   } finally {
     await panel?.close();
+    redis?.disconnect();
     await prisma?.$disconnect();
-    await postgres.stop();
+    await Promise.all([postgres.stop(), valkey.stop()]);
   }
 });

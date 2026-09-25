@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { panelCall } from './worker.service';
+import { CONCURRENCY, panelCall } from './worker.service';
 
 describe('panel jobs', () => {
   const data = { userId: '0199a0b0-0000-7000-8000-000000000001' };
@@ -22,5 +22,18 @@ describe('panel jobs', () => {
   it('fails a job it does not know instead of reconciling', () => {
     // Reset traffic and delete-user used to fall through to reconciliation.
     expect(() => panelCall({ name: 'panel.unknown', data })).toThrow(/unknown panel job/u);
+  });
+});
+
+describe('worker concurrency (section 7.3)', () => {
+  it('runs each queue at the concurrency the table gives it', () => {
+    expect(CONCURRENCY).toEqual({
+      panel: 2,
+      payments: 4,
+      notify: 5,
+      broadcast: 1,
+      maintenance: 1,
+      webhooks: 5,
+    });
   });
 });

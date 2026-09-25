@@ -16,6 +16,16 @@ import { workerValkeyUrl } from './worker-config';
 
 type InternalCall = { path: string; body?: unknown };
 
+/** Section 7.3; `webhooks` (9.8) is not in its table. */
+export const CONCURRENCY: Record<QueueName, number> = {
+  panel: 2,
+  payments: 4,
+  notify: 5,
+  broadcast: 1,
+  maintenance: 1,
+  webhooks: 5,
+};
+
 /**
  * Section 7.3 queue consumers. The worker owns no domain logic: it calls the
  * internal API, which holds the transactional boundaries.
@@ -36,18 +46,22 @@ export class WorkerService implements OnModuleInit, OnModuleDestroy {
     // on `bull:*` while every relayed job sits in `rr:q:*` for ever.
     const options = { connection, prefix: QUEUE_PREFIX };
 
+    // Section 7.3 concurrency: payments 4, notify 5, broadcast 1, panel 2,
+    // maintenance 1. Payments lock the invoice and event rows, notifications
+    // are deduplicated by `notification_log`, and a panel write holds the
+    // user's `rr:lock:panel:<userId>`.
     this.workers.push(
       new Worker(
         'payments',
         async (job: Job<{ eventId?: string }>) => this.call(paymentCall(job)),
-        options,
+        { ...options, concurrency: CONCURRENCY.payments },
       ),
     );
     this.workers.push(
       new Worker(
         'notify',
         async (job: Job<Record<string, unknown>>) => this.call(notifyCall(job)),
-        { ...options, concurrency: 1 },
+        { ...options, concurrency: CONCURRENCY.notify },
       ),
     );
     this.workers.push(
@@ -55,15 +69,14 @@ export class WorkerService implements OnModuleInit, OnModuleDestroy {
         'broadcast',
         async (job: Job<Record<string, unknown>>) =>
           this.call({ path: '/api/internal/v1/broadcasts/chunk', body: job.data }),
-        { ...options, concurrency: 1 },
+        { ...options, concurrency: CONCURRENCY.broadcast },
       ),
     );
     this.workers.push(
-      new Worker(
-        'panel',
-        async (job: Job<Record<string, unknown>>) => this.call(panelCall(job)),
-        options,
-      ),
+      new Worker('panel', async (job: Job<Record<string, unknown>>) => this.call(panelCall(job)), {
+        ...options,
+        concurrency: CONCURRENCY.panel,
+      }),
     );
     // Section 9.8. Up to ten seconds a delivery on a recipient's answer, so
     // several at once; the retry schedule is the queue package's.
@@ -78,7 +91,7 @@ export class WorkerService implements OnModuleInit, OnModuleDestroy {
                 : '/api/internal/v1/webhooks/dispatch',
             body: job.data,
           }),
-        { ...options, concurrency: 5, settings: { backoffStrategy } },
+        { ...options, concurrency: CONCURRENCY.webhooks, settings: { backoffStrategy } },
       ),
     );
     this.workers.push(
@@ -90,7 +103,7 @@ export class WorkerService implements OnModuleInit, OnModuleDestroy {
             : job.name === 'maintenance.backup-check'
               ? await this.backupCheck()
               : await this.call(maintenanceCall(job)),
-        options,
+        { ...options, concurrency: CONCURRENCY.maintenance },
       ),
     );
 

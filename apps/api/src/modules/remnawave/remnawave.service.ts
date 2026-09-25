@@ -1,4 +1,4 @@
-import { createHmac, timingSafeEqual } from 'node:crypto';
+import { createHmac, randomUUID, timingSafeEqual } from 'node:crypto';
 import { Injectable } from '@nestjs/common';
 import {
   createRemnawaveClient,
@@ -13,6 +13,18 @@ import { emitWebhook, subscriptionData } from '../webhooks/outgoing';
 
 /** EX-01: how long a subscription may stay `provisioning`. */
 const PROVISIONING_DEADLINE_MS = 24 * 60 * 60 * 1000;
+
+/** Section 10.3: `rr:lock:panel:<userId>`, PX 30 s. */
+const PANEL_LOCK_MS = 30_000;
+const RELEASE_LOCK = `if redis.call('get', KEYS[1]) == ARGV[1] then return redis.call('del', KEYS[1]) end return 0`;
+
+/** Another panel write for the user holds the lock; the job is retried. */
+export class PanelBusyError extends Error {
+  readonly code = 'PANEL_BUSY';
+  constructor(userId: string) {
+    super(`another panel operation holds the lock of user ${userId}`);
+  }
+}
 
 export class PanelUnavailableError extends Error {
   readonly code = 'PANEL_UNAVAILABLE';
@@ -35,7 +47,29 @@ export class RemnawaveService {
     private readonly settings: SettingsService,
   ) {}
 
+  /**
+   * Section 10.3: one panel write per user at a time, whichever job it is and
+   * however many run at once (the `panel` worker runs two). Taken with a token
+   * and released only by its holder, so an operation outliving the 30 s does
+   * not release the next holder's lock.
+   */
+  private async locked<T>(userId: string, operation: () => Promise<T>): Promise<T> {
+    const key = `rr:lock:panel:${userId}`;
+    const token = randomUUID();
+    if ((await this.infra.redis.set(key, token, 'PX', PANEL_LOCK_MS, 'NX')) !== 'OK')
+      throw new PanelBusyError(userId);
+    try {
+      return await operation();
+    } finally {
+      await this.infra.redis.eval(RELEASE_LOCK, 1, key, token);
+    }
+  }
+
   async syncUser(userId: string, reason: string): Promise<PanelUser | null> {
+    return this.locked(userId, () => this.sync(userId, reason));
+  }
+
+  private async sync(userId: string, reason: string): Promise<PanelUser | null> {
     const user = await this.infra.db.user.findUnique({ where: { id: userId } });
     if (!user) return null;
     const subscription = await this.infra.db.subscription.findFirst({
@@ -214,13 +248,13 @@ export class RemnawaveService {
       });
       for (const row of rows) {
         if (row.panelUserId === null) {
-          await this.syncUser(row.userId, 'reconcile:legacy-panel-id');
+          await this.resync(row.userId, 'reconcile:legacy-panel-id');
           drifted += 1;
           continue;
         }
         const current = await client.users.getById(row.panelUserId);
         if (!current) {
-          await this.syncUser(row.userId, 'reconcile:missing');
+          await this.resync(row.userId, 'reconcile:missing');
           drifted += 1;
           continue;
         }
@@ -245,13 +279,22 @@ export class RemnawaveService {
           squadDrift ||
           (subscription?.status === 'active' && current.status === 'DISABLED')
         ) {
-          await this.syncUser(row.userId, 'reconcile:drift');
+          await this.resync(row.userId, 'reconcile:drift');
           drifted += 1;
         } else await this.saveSnapshot(row.userId, current, false);
       }
       return { checked: rows.length, drifted, ...provisioning };
     } finally {
       await client.close();
+    }
+  }
+
+  /** A user whose panel write is under way is left to that write. */
+  private async resync(userId: string, reason: string): Promise<void> {
+    try {
+      await this.syncUser(userId, reason);
+    } catch (error) {
+      if (!(error instanceof PanelBusyError)) throw error;
     }
   }
 
@@ -341,6 +384,10 @@ export class RemnawaveService {
    * user the panel does not know yet has no traffic to reset.
    */
   async resetTraffic(userId: string, ifUsedAboveBytes?: bigint): Promise<{ reset: boolean }> {
+    return this.locked(userId, () => this.reset(userId, ifUsedAboveBytes));
+  }
+
+  private async reset(userId: string, ifUsedAboveBytes?: bigint): Promise<{ reset: boolean }> {
     const row = await this.infra.db.panelUser.findUnique({ where: { userId } });
     if (!row || row.panelUserId === null) return { reset: false };
     const client = await this.client();
@@ -365,6 +412,10 @@ export class RemnawaveService {
    * mapping goes too, so reconciliation does not look for the user again.
    */
   async deleteUser(userId: string): Promise<{ deleted: boolean }> {
+    return this.locked(userId, () => this.remove(userId));
+  }
+
+  private async remove(userId: string): Promise<{ deleted: boolean }> {
     const row = await this.infra.db.panelUser.findUnique({ where: { userId } });
     if (!row) return { deleted: false };
     if (row.panelUserId !== null) {

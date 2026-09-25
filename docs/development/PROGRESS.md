@@ -635,14 +635,30 @@ style-src 'unsafe-inline'; sandbox` and `nosniff`, which makes any theme
      delivered once after ≥ 1 s; an always-429 chat tried six times and
      `failed` (fails on the old code). Verified: lint, typecheck, format,
      `pnpm -r test` (API 257), `pnpm test` 43, `test:m4` 6/6.
+   - **9i. Done 2026-09-25 — worker concurrency differed from section 7.3,
+     and panel writes had no per-user lock.** The workers ran `payments` 1,
+     `notify` 1 (no recorded reason) and `panel` 1 where 7.3 says 4, 5 and 2. Two panel jobs at once need the section 10.3 lock
+     `rr:lock:panel:<userId>` (PX 30 s), which did not exist. Now every
+     panel write — `syncUser`, `resetTraffic`, `deleteUser` — takes it with
+     a token and releases it only if still the holder (Lua compare-and-del);
+     a write that finds it held throws `PANEL_BUSY` and its job is retried on
+     its backoff, and reconciliation skips such a user. `CONCURRENCY` in the
+     worker is the 7.3 table (`webhooks` 5, not in the table). Payments stay
+     safe under 4 (invoice and event rows are locked), notifications under 5
+     (`notification_log` is unique). Regressions: two concurrent syncs of
+     one user in `m1.trial-provisioning` on a real Valkey (one `PANEL_BUSY`,
+     lock released; both went through before), lock cases in
+     `remnawave.service.test.ts`, and the table in `panel-call.test.ts`.
+     `m4.panel-sync` runs on a real Valkey too. Verified: lint, typecheck,
+     format, `pnpm -r test` (API 259, worker 14), `pnpm test` 43, `test:m1`
+     3/3, `test:m2` 3/3, `test:m4` 6/6, `pnpm test:e2e` 28 passed / 1 skipped.
 
    Still open:
    Robokassa SuccessURL/FailURL landing and the `settings.fiscal.mode`
    vocabulary (found under 6c). Showing the available balance and held
    rewards to the customer (found under 7c). The Valkey `Idempotent-Replay`
    response store of section 9.2 (found under 7e).
-   Remaining review items (panel worker concurrency 2,
-   `rebuild.yml` Trivy tag `0.28.0`, worker `/backups` mount, restore script
+   Remaining review items (`rebuild.yml` Trivy tag `0.28.0`, worker `/backups` mount, restore script
    user/themes) and the M5-004 gates recorded below.
 
 **Pre-existing E2E failure, not caused by the repair above (fixed as 2b):**

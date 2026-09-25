@@ -3,6 +3,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import process from 'node:process';
 import { PostgreSqlContainer } from '@testcontainers/postgresql';
+import { GenericContainer } from 'testcontainers';
 
 /**
  * Section 10.6 on a real PostgreSQL and the panel mock: the store is the
@@ -13,13 +14,18 @@ import { PostgreSqlContainer } from '@testcontainers/postgresql';
  * unban and the bulk extension.
  */
 test('M4 console changes reach the panel', { timeout: 240_000 }, async () => {
-  const postgres = await new PostgreSqlContainer('postgres:18-alpine')
-    .withDatabase('remnaray')
-    .withUsername('remnaray')
-    .withPassword('remnaray')
-    .start();
+  const [postgres, valkey] = await Promise.all([
+    new PostgreSqlContainer('postgres:18-alpine')
+      .withDatabase('remnaray')
+      .withUsername('remnaray')
+      .withPassword('remnaray')
+      .start(),
+    // The `rr:lock:panel:<userId>` lock of section 10.3.
+    new GenericContainer('valkey/valkey:9.1-alpine').withExposedPorts(6379).start(),
+  ]);
   let prisma;
   let panel;
+  let redis;
   try {
     execFileSync('pnpm', ['--filter', '@remnaray/db', 'db:migrate:deploy'], {
       cwd: process.cwd(),
@@ -38,6 +44,10 @@ test('M4 console changes reach the panel', { timeout: 240_000 }, async () => {
     const { grantInviteeBonus } =
       await import('../apps/api/dist/modules/rewards/referrals.engine.js');
     const { createRemnawaveMock } = await import('../packages/remnawave-mock/dist/index.js');
+    const { createRedisConnection } = await import('../packages/queues/dist/index.js');
+    redis = createRedisConnection(
+      `redis://${valkey.getHost()}:${String(valkey.getMappedPort(6379))}/0`,
+    );
     prisma = createPrismaClient(postgres.getConnectionUri());
     panel = createRemnawaveMock();
     const values = {
@@ -47,7 +57,7 @@ test('M4 console changes reach the panel', { timeout: 240_000 }, async () => {
       'brand.name': 'Manta',
     };
     const settings = { get: (key) => Promise.resolve(values[key]) };
-    const infra = { db: prisma };
+    const infra = { db: prisma, redis };
     const remnawave = new RemnawaveService(infra, settings);
     const users = new AdminUsersService(infra, settings, remnawave);
     const bulk = new AdminPaymentsService(infra, {}, settings);
@@ -171,7 +181,8 @@ test('M4 console changes reach the panel', { timeout: 240_000 }, async () => {
     }
   } finally {
     await panel?.close();
+    redis?.disconnect();
     await prisma?.$disconnect();
-    await postgres.stop();
+    await Promise.all([postgres.stop(), valkey.stop()]);
   }
 });
