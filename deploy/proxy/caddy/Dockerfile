@@ -1,8 +1,15 @@
 ARG CADDY_VERSION=2.11.4
+# `caddy-ratelimit` has one tag, v0.1.0, far behind; without a version xcaddy
+# builds whatever its default branch holds that day, so a rebuild could ship
+# something no build before it used. Pinned to the default branch's head as of
+# 2026-09-25 (a commit of 2026-06-12), which `go get` accepts as a version;
+# moving it is a change of its own.
+ARG CADDY_RATELIMIT_VERSION=5625512f24f6f59d6f64fb3aafe5eecff0b286db
 
 FROM caddy:${CADDY_VERSION}-builder-alpine AS builder
+ARG CADDY_RATELIMIT_VERSION
 
-RUN xcaddy build --with github.com/mholt/caddy-ratelimit
+RUN xcaddy build --with "github.com/mholt/caddy-ratelimit@${CADDY_RATELIMIT_VERSION}"
 
 FROM caddy:${CADDY_VERSION}-alpine
 

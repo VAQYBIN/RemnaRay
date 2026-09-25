@@ -149,7 +149,13 @@ test('the Caddy proxy image pins the verified release and rate-limit module', as
   const dockerfile = await readFile('deploy/proxy/caddy/Dockerfile', 'utf8');
   assert.match(dockerfile, /^ARG CADDY_VERSION=2\.11\.4$/m);
   assert.match(dockerfile, /FROM caddy:\$\{CADDY_VERSION\}-builder-alpine AS builder/);
-  assert.match(dockerfile, /xcaddy build --with github\.com\/mholt\/caddy-ratelimit/);
+  // A version, never the module's default branch of the day.
+  assert.match(dockerfile, /^ARG CADDY_RATELIMIT_VERSION=[0-9a-f]{40}$/mu);
+  assert.match(
+    dockerfile,
+    /xcaddy build --with "github\.com\/mholt\/caddy-ratelimit@\$\{CADDY_RATELIMIT_VERSION\}"/u,
+  );
+  assert.doesNotMatch(dockerfile, /caddy-ratelimit\s*$/mu);
   assert.match(dockerfile, /http\.handlers\.rate_limit/);
 });
 

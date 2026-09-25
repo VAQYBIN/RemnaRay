@@ -999,11 +999,23 @@ verify` against `github.com/<repo>/.github/workflows/<file>.yml@` and
      context as the release). Regression in `tooling.test.mjs` (fails
      without it). **Not verified:** a real nightly run.
 
+   - **9ac `caddy-ratelimit` pinned; certbot and the Caddy base kept.**
+     `xcaddy build --with github.com/mholt/caddy-ratelimit` named no version,
+     so every build took the module's default branch of that day. The module
+     has a single tag, `v0.1.0` (checked through the GitHub API); it is now
+     pinned by `ARG CADDY_RATELIMIT_VERSION` to the head of 2026-09-25,
+     commit `5625512f…` of 2026-06-12, which xcaddy passes to `go get`
+     (Context7 `/caddyserver/xcaddy`). Built locally: `caddy build-info`
+     reports `v0.1.1-0.20260612195517-5625512f24f6`, `rate_limit` is listed,
+     and `m5.proxy` 4/4 runs the image. The commit's code was not reviewed.
+     Kept as the specification has them, not changed: `certbot/certbot:latest`
+     is what the 7.1 compose names, and the Caddy base `2.11.4` is the 2.x
+     patch M0-003 verified for 6.1's `caddy:2-alpine` line (moving it is a
+     Renovate/M0-003-style check, not this review). Regression in
+     `tooling.test.mjs` (fails on the old Dockerfile).
+
    Still open — the rest of the 2026-09-24 deployment review, which item 9
    had summarised only partly:
-   - unpinned or floating: `certbot/certbot:latest`, the `caddy-ratelimit`
-     module without a version, the Caddy base pinned to `2.11.4` against
-     6.1's `caddy:2-alpine`;
    - suspected, to be tested: a TLS-mode switch within one profile may not
      reach nginx; a loose
      `release.yml` tag filter; unvalidated `images.yml` tag input.
