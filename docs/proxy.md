@@ -21,6 +21,8 @@ settings.admin.ip_allowlist ─┼─► proxy-config ──► proxy-conf volum
 - `proxy-reloader` is the only container with the docker socket, mounted
   read-only. On `rr:proxy.reload` it runs `nginx -t` inside `proxy-nginx` and
   reloads only if that passes, so a broken render never takes the site down.
+  One reload runs at a time; a request that arrives during it is applied
+  right after it, and any number of them make one more reload.
   Every outcome is reported to `POST /api/internal/v1/system/proxy-reload-result`,
   which writes `audit_log(action=proxy.reload)` and raises the
   `proxy.config_invalid` alert on a refusal. A report the API refuses — it

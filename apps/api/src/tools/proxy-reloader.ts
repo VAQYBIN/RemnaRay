@@ -47,10 +47,28 @@ async function main(): Promise<void> {
     (line) => process.stderr.write(line),
   );
   let running = false;
+  let requested: string | undefined;
 
+  // One reload at a time. A request that arrives meanwhile is applied after
+  // it rather than dropped: `render-proxy` writes the files and then
+  // publishes, and the running `nginx -t` may have read the previous ones.
+  // Any number of requests during one reload make one more.
   const reload = async (reason: string): Promise<void> => {
+    requested = reason;
     if (running) return;
     running = true;
+    try {
+      while (requested !== undefined) {
+        const next = requested;
+        requested = undefined;
+        await apply(next);
+      }
+    } finally {
+      running = false;
+    }
+  };
+
+  const apply = async (reason: string): Promise<void> => {
     try {
       let last: ExecResult = { exitCode: 0, output: '' };
       for (const command of reloadCommands(profile)) {
@@ -65,8 +83,6 @@ async function main(): Promise<void> {
       process.stderr.write(`Proxy reload failed: ${String(error)}\n`);
       await reports.add(false, String(error));
       if (process.argv.includes('--reload')) process.exitCode = 1;
-    } finally {
-      running = false;
     }
   };
 

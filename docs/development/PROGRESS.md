@@ -813,6 +813,21 @@ uploads:…` resolves to the project volume — checked on a scratch
      Verified: API lint, typecheck, 273 tests, `test:m5` 6/6 (proxy 4,
      backup 2). **Not verified:** on the VPS.
 
+   - **9s reload requested during a reload.** Confirmed first: the
+     reloader returned on `if (running)`, so a `rr:proxy.reload` published
+     while a reload ran was dropped. `render-proxy` writes the files and then
+     publishes, and the running `nginx -t` may have read the previous ones,
+     so the new configuration stayed unapplied until some later change. A
+     request during a reload is now remembered and applied right after it;
+     any number of them make one more. Regression:
+     `m5.proxy-reloader.integration.test.mjs` runs the real reloader on
+     Valkey against a stand-in Docker Engine on a unix socket that holds each
+     exec: a second request during the first reload's `nginx -t` gets its own
+     `nginx -t` and reload, and three during one reload get exactly one more.
+     It times out on the old reloader; three green runs. Added to `test:m5`
+     (now 7/7). Verified: API lint, typecheck, 273 tests, `pnpm test` 45.
+     **Not verified:** on the VPS.
+
    Still open — the rest of the 2026-09-24 deployment review, which item 9
    had summarised only partly:
    - a manual `rebuild.yml` run for an older version republishes the major
@@ -828,7 +843,7 @@ uploads:…` resolves to the project volume — checked on a scratch
      6.1's `caddy:2-alpine`, Grafana's admin password defaulting to `admin`,
      the nightly Trivy not scanning the `backup` image;
    - suspected, to be tested: a TLS-mode switch within one profile may not
-     reach nginx; a reload request during a reload is dropped; loose
+     reach nginx; a loose
      `release.yml` tag filter; unvalidated `images.yml` tag input.
      Remaining review items (`rebuild.yml` Trivy tag `0.28.0`, worker `/backups` mount, restore script
      user/themes) and the M5-004 gates recorded below.
