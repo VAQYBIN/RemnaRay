@@ -377,3 +377,17 @@ test('the API OpenAPI document is generated from shared Zod contracts', async ()
   assert.match(generator, /OpenApiGeneratorV31/);
   assert.match(generator, /@remnaray\/domain/);
 });
+
+test('every workflow scans with the one Trivy action tag that exists', async () => {
+  // `aquasecurity/trivy-action` tags are `v`-prefixed; `@0.28.0` does not
+  // exist, so a workflow that used it failed at the scan and published
+  // nothing. The nightly was corrected to v0.36.0; the rebuild kept 0.28.0.
+  const workflows = ['.github/workflows/nightly.yml', '.github/workflows/rebuild.yml'];
+  const tags = new Set();
+  for (const path of workflows)
+    for (const match of (await readFile(path, 'utf8')).matchAll(
+      /aquasecurity\/trivy-action@(\S+)/gu,
+    ))
+      tags.add(match[1]);
+  assert.deepEqual([...tags], ['v0.36.0']);
+});

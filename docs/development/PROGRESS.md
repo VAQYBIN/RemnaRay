@@ -738,6 +738,17 @@ style-src 'unsafe-inline'; sandbox` and `nosniff`, which makes any theme
      `Audited` values the audit interceptor unwraps and the console sends no
      key, so they are not covered.
 
+   - **9n. Done 2026-09-25 — the monthly rebuild scanned with a Trivy
+     action tag that does not exist.** `rebuild.yml` used
+     `aquasecurity/trivy-action@0.28.0`; the action's tags are `v`-prefixed
+     (`gh api repos/aquasecurity/trivy-action/git/ref/tags/0.28.0` → 404,
+     `v0.36.0` → `a9c7b0f`), so the rebuild failed at its scan and never
+     published the refreshed images. The nightly was corrected to
+     `v0.36.0` on 2026-09-23; the rebuild now uses it too. Regression in
+     `test/tooling.test.mjs` (one Trivy tag across the workflows, the one
+     that exists; fails on the old file). Verified: `pnpm test` 44. **Not
+     verified:** a GitHub run of `rebuild.yml`.
+
    Still open: the review items below.
    Remaining review items (`rebuild.yml` Trivy tag `0.28.0`, worker `/backups` mount, restore script
    user/themes) and the M5-004 gates recorded below.
