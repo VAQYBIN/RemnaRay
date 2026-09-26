@@ -101,12 +101,13 @@ panel users yet).
   error name/message/stack); stream read failures are logged. Evidence:
   `ingress.test.ts` red → green, `errors.test.ts` handler cases; bot
   lint/typecheck/tests green; `docs/troubleshooting.md` explains the search.
-- **F3 Bot calls `getPaymentMethods()` without the Telegram id.**
-  `apps/bot/src/api-client.ts:295` sends no `x-acting-user`, but
-  `GET /api/internal/v1/me/payment-methods` resolves the user from it
-  (`me.controller.ts:218`). Breaks the plan screen (`plans.ts:21`), renew,
-  top-up (`screens/index.ts:111`) and the custom top-up conversation
-  (`conversations.ts` ~97). Audit every `/me/*` call in the bot client.
+- **F3 Done — bot called `getPaymentMethods()` without the Telegram id.**
+  `GET /api/internal/v1/me/payment-methods` resolves the customer from
+  `x-acting-user` and answered 403, which (with F2) silently broke the plan
+  card, renewal and top-up. `ApiClient.getPaymentMethods(telegramId)` now
+  sends it from all three callers. Audit: every other `/me/*` call that the
+  API resolves a user for already passes it; `plans` and `topup-config` need
+  none. Evidence: `api-client.test.ts` red → green; bot lint/typecheck/tests.
 - **F4 Bot «Клиенты» sends a `happ://` URL button.** `subscription.ts:55`;
   Telegram inline URL buttons accept only http/https/tg (verify in Bot API
   docs), so the whole screen fails (swallowed by F2). Happ is hard-coded;

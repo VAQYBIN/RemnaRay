@@ -94,7 +94,7 @@ export function installConversations(bot: Bot<RrContext>, redis: Redis, api: Api
             );
             await reply.reply(t('bot.screen.support.sent'));
           } else {
-            const methods = await conversation.external(() => api.getPaymentMethods());
+            const methods = await conversation.external(() => api.getPaymentMethods(telegramId));
             const provider = methods.items.find(
               (item) => item.available && item.kind !== 'balance',
             )?.code;

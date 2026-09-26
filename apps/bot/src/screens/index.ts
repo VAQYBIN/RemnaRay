@@ -108,7 +108,11 @@ export async function showBalance(ctx: RrContext, api: ApiClient): Promise<void>
 }
 
 async function showTopup(ctx: RrContext, api: ApiClient): Promise<void> {
-  const [config, methods] = await Promise.all([api.getTopupConfig(), api.getPaymentMethods()]);
+  if (!ctx.from) return;
+  const [config, methods] = await Promise.all([
+    api.getTopupConfig(),
+    api.getPaymentMethods(ctx.from.id),
+  ]);
   const provider = methods.items.find((item) => item.available && item.kind !== 'balance')?.code;
   const keyboard = new InlineKeyboard();
   for (const amount of config.presetsMinor) {

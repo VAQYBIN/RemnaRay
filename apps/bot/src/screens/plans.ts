@@ -13,12 +13,13 @@ export async function showPlans(ctx: RrContext, api: ApiClient): Promise<void> {
 }
 
 export async function showPlan(ctx: RrContext, api: ApiClient, slug: string): Promise<void> {
+  if (!ctx.from) return;
   const plan = (await api.getPlans()).items.find((item) => item.slug === slug);
   if (!plan) {
     await show(ctx, ctx.t('bot.error.invoice_expired'), backButton(ctx, 'plans'));
     return;
   }
-  const methods = await api.getPaymentMethods();
+  const methods = await api.getPaymentMethods(ctx.from.id);
   const keyboard = new InlineKeyboard();
   for (const method of methods.items.filter((item) => item.available))
     keyboard

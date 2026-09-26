@@ -42,6 +42,25 @@ describe('ApiClient', () => {
     expect(requests[0]?.headers.get('x-acting-user')).toBe('123');
   });
 
+  it('names the customer whose payment methods it asks for', async () => {
+    const requests: Request[] = [];
+    const api = new ApiClient({
+      baseUrl: 'http://api.test',
+      internalToken: 'internal-secret',
+      fetchImpl: (input, init) => {
+        requests.push(new Request(input, init));
+        return Promise.resolve(Response.json({ items: [] }));
+      },
+    });
+
+    await api.getPaymentMethods(123);
+
+    // `GET /me/payment-methods` resolves the customer from `x-acting-user`
+    // and answers 403 without it.
+    expect(requests[0]?.url).toBe('http://api.test/api/internal/v1/me/payment-methods');
+    expect(requests[0]?.headers.get('x-acting-user')).toBe('123');
+  });
+
   it('turns structured API errors into ApiClientError', async () => {
     const api = new ApiClient({
       fetchImpl: () =>

@@ -292,7 +292,7 @@ export class ApiClient {
     });
   }
 
-  getPaymentMethods() {
+  getPaymentMethods(telegramId: number) {
     return this.request<{
       items: Array<{
         code: string;
@@ -300,7 +300,7 @@ export class ApiClient {
         kind: string;
         available: boolean;
       }>;
-    }>('/api/internal/v1/me/payment-methods');
+    }>('/api/internal/v1/me/payment-methods', { userId: telegramId });
   }
 
   getTopupConfig() {
