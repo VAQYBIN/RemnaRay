@@ -40,9 +40,12 @@ export function supportRelay(
       : config.defaultLocale;
     const catalog = await i18n.catalog(language);
     try {
+      // `formatMessage` escapes the values for HTML, so the message is sent
+      // as HTML: an operator's "<" or "'" reaches the customer as typed.
       await ctx.api.sendMessage(
         Number(target.telegramId),
         formatMessage(language, catalog, 'bot.screen.support.reply', { text }),
+        { parse_mode: 'HTML' },
       );
     } catch (error) {
       if (!(error instanceof GrammyError)) throw error;
@@ -52,6 +55,7 @@ export function supportRelay(
           reason: error.description,
         }),
         {
+          parse_mode: 'HTML',
           reply_parameters: { message_id: message.message_id },
           ...(message.is_topic_message && message.message_thread_id !== undefined
             ? { message_thread_id: message.message_thread_id }

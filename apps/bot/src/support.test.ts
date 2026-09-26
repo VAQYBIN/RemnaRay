@@ -46,7 +46,9 @@ describe('support relay (FR-124)', () => {
     await middleware(ctx, next);
 
     expect(routeSupport).toHaveBeenCalledWith({ chatId: -100500, threadId: 71 });
-    expect(sendMessage).toHaveBeenCalledWith(42, 'Support replied: We are on it');
+    expect(sendMessage).toHaveBeenCalledWith(42, 'Support replied: We are on it', {
+      parse_mode: 'HTML',
+    });
     expect(next).not.toHaveBeenCalled();
   });
 
@@ -57,7 +59,9 @@ describe('support relay (FR-124)', () => {
     await middleware(ctx, vi.fn());
 
     expect(routeSupport).toHaveBeenCalledWith({ chatId: -100500, replyToMessageId: 11 });
-    expect(sendMessage).toHaveBeenCalledWith(42, 'Ответ поддержки: Готово');
+    expect(sendMessage).toHaveBeenCalledWith(42, 'Ответ поддержки: Готово', {
+      parse_mode: 'HTML',
+    });
   });
 
   it('tells the operators when the customer cannot be reached', async () => {
@@ -91,5 +95,22 @@ describe('support relay (FR-124)', () => {
 
     expect(next).toHaveBeenCalled();
     expect(routeSupport).not.toHaveBeenCalled();
+  });
+
+  it("delivers an operator's special characters as typed", async () => {
+    const { middleware } = relay({ telegramId: '42', language: 'en' });
+    const { ctx, sendMessage } = update({
+      text: "Don't use <b> & co",
+      reply_to_message: { message_id: 11 },
+    });
+
+    await middleware(ctx, vi.fn());
+
+    // Escaped for HTML and sent as HTML: Telegram shows the original text.
+    expect(sendMessage).toHaveBeenCalledWith(
+      42,
+      'Support replied: Don&#39;t use &lt;b&gt; &amp; co',
+      { parse_mode: 'HTML' },
+    );
   });
 });
