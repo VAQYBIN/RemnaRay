@@ -234,8 +234,13 @@ tests, 25/25 integration, E2E 38 passed.
 ### Next
 
 1. P0, P1 except F9/F17, and P2 — done (F1–F8, F10–F16, F18–F28).
-2. Owner decisions: F9 (contents of the bot «Профиль»), F17 (rate limits —
-   inventory below), F29 (whether to plan the move to Telegram's OIDC login).
+2. Owner decisions of 2026-09-26: F9 — the full profile (Telegram id,
+   language, balance, subscription status and term, referral code, receipt
+   email; «Открыть кабинет», «Язык», «Email для чеков»). F17 — separate sign-in
+   from the console: 5 r/m only on the sign-in and TOTP `POST`s, `auth/me` in
+   the console zone, the console zone raised to about 120 r/m (burst 120),
+   the rest as section 21.3; the deviation is recorded. F29 — move the site
+   login to Telegram's OIDC now. Order: F9, F17, F29.
 3. Redeploy the stand (fresh data; the seven fake payments go with it), check
    in the panel whether the owner's own user lost its squads to the MONTH plan
    (F28), re-run the acceptance walk including support topics (F14) and the
