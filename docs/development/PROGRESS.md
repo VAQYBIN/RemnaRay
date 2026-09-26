@@ -1,5 +1,202 @@
 # RemnaRay Development Progress
 
+## VPS acceptance run — 2026-09-26 (next work starts here)
+
+Current milestone remains M5 (NOT VERIFIED); TASK-M5-004 remains the sole
+milestone task. The owner redeployed the test VPS from scratch
+(`test.raccoonito.org`, `/opt/test`, profile `nginx`, `RR_TLS_MODE=acme`,
+images `ghcr.io/vaqybin/*:dev` from `images.yml` run 36241561466 at
+`f34a095`) and walked the stand by hand. Nothing below is repaired yet. The
+owner's rule for this pass: record everything, fix afterwards, one
+Conventional Commit per repair, security/money first.
+
+**Worked on the stand:** `./scripts/rr up` → HTTPS ready (ACME); step 7
+checks; setup wizard (with `https://` in the panel URL); YooKassa purchase
+and top-up; balance top-up via YooKassa and plan purchase from the balance
+(after workaround W2); trial; existing Remnawave user matched by Telegram
+ID (no duplicate), tag TRIAL → MONTH after purchase; promocode preview
+amounts; console reconcile button (answers `{checked:0,…}` — correct with no
+panel users yet).
+
+**Manual changes on the stand (not in code):**
+
+- W1 `UPDATE plans SET description='{"ru":"","en":""}' WHERE description='{}'`
+  (made `/account/plans` load — confirms F5).
+- W2 `UPDATE payment_providers SET enabled=false WHERE code='balance'`
+  (made top-up use YooKassa — confirms F6).
+- `brand.support_forward_chat_id` set to a forum supergroup id.
+- Fake payments from F1 are still in the stand's data: six top-ups
+  (100+100+300+500+1000+100 = 2100 ₽) and one 299 ₽ purchase at
+  2026-09-26 13:09:47 UTC, all with `payment_events.headers->>'source'='poll'`
+  from provider `balance`. Owner leans to redeploying after the fixes.
+
+**Owner decisions recorded:**
+
+- Support: per-user forum topics in the operator chat — **wanted** (beyond
+  FR-124; see F14).
+- Rate limits: to be **discussed as a whole** before changing (F17); the
+  owner has hit 429s before.
+- Bot «Профиль» contents: **open** — proposal awaiting the owner (F9).
+- Provider forms: separate fields instead of JSON, in the wizard and the
+  console (F12).
+
+### Findings, in repair order
+
+**P0 — money / security**
+
+- **F1 Free payment through provider `balance` + recheck.** CONFIRMED on the
+  stand (admin path) and by code (customer path, not yet reproduced by a
+  test). `BalanceProvider.fetchStatus` always answers `paid`
+  (`apps/api/src/modules/payments/builtin-providers.ts` ~line 809) although
+  it declares `statusPolling: false`; `PaymentService.recheck`
+  (`payments.service.ts:272`) never checks `statusPolling` and applies the
+  polled event; a balance invoice whose `settleBalance` fails with
+  `INSUFFICIENT_FUNDS` stays `pending` (`payments.service.ts:161`,
+  `payments.repository.ts` settleBalance); `MeService.checkInvoice`
+  (`me.service.ts:336`, web «Проверить» on `/pay/<id>`, bot `inv:check`)
+  calls the same `recheck`; `MeService.createInvoice` does not check that a
+  provider is enabled/healthy (AC-061). Any customer with zero balance can
+  buy a plan or top up "from balance", press «Проверить», and get it free.
+  Plan: failing tests first (API unit + E2E customer path, red now); recheck
+  skips providers without `statusPolling`; `BalanceProvider.fetchStatus`
+  stops claiming `paid`; a failed balance settlement closes the invoice
+  (check section 11 for the status); invoice creation refuses disabled or
+  unhealthy providers except the built-in balance; audit every other
+  provider's `fetchStatus` for stubs. Use `$remnaray-financial-safety` +
+  `$differential-review`.
+
+**P1 — broken core flows**
+
+- **F2 Bot errors are invisible (FR-127).** `bot.catch` in
+  `apps/bot/src/bot.ts:127` should log «Telegram update failed» and reply
+  `bot.error.generic` with an incident id; on the stand the bot container
+  logged nothing for 30 minutes that included several failing handlers, and
+  users saw nothing ("button blinks, nothing happens"). Telegram webhooks
+  hit the API (`/tg/webhook/*`, always 200 in ~5 ms) and reach the bot some
+  other way — trace that path, find where errors are swallowed, verify the
+  grammY error-handling contract (Context7/official docs; not from memory).
+  Fix before the bot items below: it is how they will be diagnosed.
+- **F3 Bot calls `getPaymentMethods()` without the Telegram id.**
+  `apps/bot/src/api-client.ts:295` sends no `x-acting-user`, but
+  `GET /api/internal/v1/me/payment-methods` resolves the user from it
+  (`me.controller.ts:218`). Breaks the plan screen (`plans.ts:21`), renew,
+  top-up (`screens/index.ts:111`) and the custom top-up conversation
+  (`conversations.ts` ~97). Audit every `/me/*` call in the bot client.
+- **F4 Bot «Клиенты» sends a `happ://` URL button.** `subscription.ts:55`;
+  Telegram inline URL buttons accept only http/https/tg (verify in Bot API
+  docs), so the whole screen fails (swallowed by F2). Happ is hard-coded;
+  the client list the API already returns (`api-client.ts:73`, `clients[]`
+  with `deepLink`) is unused. Show the list; custom schemes via an https
+  bridge page or the copyable link. Check the spec's client section.
+- **F5 A plan without a description breaks `/account/plans`.**
+  `plans.description` defaults to `{}` (`schema.prisma` Plan), the API passes
+  it through, the web schema requires `{ru,en}` (`packages/domain/src/
+contracts/plans.ts:10`) → client parse error, "Не удалось загрузить
+  страницу" with an empty incident code. The console plan form has no
+  description fields. Fix: API always returns `{ru,en}`, a migration
+  normalises `{}`, description fields in the console (and wizard).
+- **F6 A second `balance` payment method.** The wizard's payments step lists
+  `balance` and `stars` as ordinary providers with JSON config; enabling
+  `balance` created a `payment_providers` row, so `/me/payment-methods`
+  returned the built-in balance plus `{code:"balance",kind:"redirect"}`
+  (`me.service.ts:234`). Web top-up picks the first available non-balance
+  method (`balance-client.tsx:118`) → invoice paid from the balance itself →
+  `INSUFFICIENT_FUNDS`. Fix: `balance` is never a provider row / list entry;
+  top-up (web and bot) gets a real provider choice.
+- **F7 `inviteeBonus: null` breaks `/account/referrals`.** `me.service.ts:440`
+  does `Number(settings referral.invitee_bonus)`, but the setting is an
+  object `{type,value}` (`settings.schemas.ts:333`) → `NaN` → JSON `null`;
+  the web schema wants a number (`contracts/me.ts:131`). Decide the contract
+  shape from section 9.4/15 and align API, schema and page.
+- **F8 Validation errors answer 500.** No global `ZodError` handling; services
+  call `schema.parse(body)` (~17 files), so any bad field is Nest's
+  `{statusCode:500,"Internal server error"}` with no incident id. Seen in
+  the wizard: panel URL without scheme. Fix: a global filter → 400
+  `VALIDATION_ERROR` with field details and `requestId` (section 9.x error
+  envelope); a failing test first.
+- **F9 Bot «Профиль» does nothing.** `screens/index.ts:37` routes `profile`
+  to `showHome`, re-rendering the same message. FR-122 names the button,
+  not its contents. Proposal for the owner: Telegram id, language, balance,
+  subscription status/expiry, referral code, «Открыть кабинет».
+- **F10 Bot hard-coded values.** Welcome uses `brand: 'RemnaRay'`
+  (`home.ts:57`) instead of `brand.name`; trial confirm always says
+  «3 дня, 10 GB» (`home.ts:67`). Also review `'RemnaRay'` fallbacks in
+  `payments.service.ts:40`, `builtin-providers.ts:706`, `stars.service.ts:77`
+  (payer-visible titles) and the TOTP issuer in `admin.crypto.ts:23,34`
+  (check the spec: product or brand). `x-requested-with: RemnaRay` is a
+  protocol constant — leave it.
+- **F11 Landing «Войти» shows no login widget.** `#login` anchor
+  (`[locale]/page.tsx:99`) points at `LoginWidget`, whose `next/script`
+  appends the Telegram script to `<body>`, so the widget iframe is created
+  outside `#login` (`login-widget.tsx`). Also requires BotFather
+  `/setdomain` — show a clear hint when unavailable and document it in
+  `docs/setup.md`. Owner's DevTools check not yet reported.
+- **F12 Payment providers: JSON config and no editing after setup.** Wizard
+  step 7 and console «Платежи» take raw JSON with no field list; the console
+  cannot enable/disable, reorder or edit a provider although
+  `PUT /api/admin/v1/providers/:code` and `/reorder` exist (spec 9.x
+  `/providers`). One provider form driven by each `configSchema` (fields,
+  hints, docs link, masked secrets), used by both.
+- **F13 Bot referral screen.** Shows only the site link; FR-151 asks for
+  link, invited, paid **and earned**; the Telegram link
+  `t.me/<bot>?start=ref_<code>` (US-G-03, already in the API's `botLink`) is
+  missing. Optional «Поделиться» (`t.me/share/url`). The link preview is in
+  English although the shop default is `ru` — check metadata for requests
+  without `Accept-Language`.
+- **F14 Support (FR-124).** With no `support_forward_chat_id` the API returns
+  204 silently (`bot.controller.ts:185`) and the bot says «передано»; it
+  should show `support_contact`. Operator reply-through is not implemented
+  (nothing handles `reply_to_message`). A failed forward (500) ends the
+  conversation silently and the next message is lost. Owner wants per-user
+  forum topics when the operator chat is a forum (bot needs topic rights;
+  report missing rights in the console). Stand log: one forward failed with
+  `ConnectTimeoutError` to `api.telegram.org` (149.154.166.110 and an IPv6
+  address) — transient VPS egress, watch IPv6.
+- **F15 Bot `/help` is a stub.** Spec (command table, `/help`): client
+  instructions + FAQ from locale keys. Now one generic line
+  (`screens/index.ts:29`). Build it from `bot.screen.help.*`/`bot.faq.*`,
+  editable in «Локали»; share the client list with the landing.
+- **F16 Bot balance history.** Raw ISO UTC timestamps; should be localised
+  and in `locale.timezone`, with the operation type.
+- **F17 Rate limits — discuss first.** `GET /api/admin/v1/auth/me` (every
+  console page) falls under nginx `rr_auth` 5r/m burst 10
+  (`deploy/proxy/nginx/site.conf.tmpl:60`) → 429 after ~10 section
+  switches. This is the spec's own 7.1 template, while 9.1 limits
+  `POST /api/v1/auth/*`. Prepare for the discussion: every proxy zone
+  (nginx + Caddy) and throttler limit vs spec 9.1/21.3/26, measured requests
+  per console/account page, and a proposal per zone marking spec deviations.
+
+**P2 — usability**
+
+- **F18 Worker jobs fail before setup.** Every scheduled job gets 503
+  `SETUP_NOT_COMPLETED` until the wizard finishes (61 failed jobs on the
+  stand, all this reason, none after 12:45). Skip quietly while setup is
+  incomplete instead of recording failures.
+- **F19 «Последняя сверка с панелью»** shows `max(panel_users.synced_at)`
+  (`system.service.ts:124`), not the last reconcile run; «Не выполнялась»
+  with no panel users however often it runs.
+- **F20 `./scripts/rr up` does not pull.** A leftover `app:dev` image from
+  2026-09-23 ran with the new `compose.yaml` → migrate
+  `DATABASE_URL is required` (the pre-`56168cb` message). Pull before `up`,
+  or document it in `install.md`/`upgrade.md`.
+- **F21 Wizard panel URL** needs `https://`; add a hint or prepend it.
+- **F22 Timezone** is a free text field; use an IANA list
+  (`Intl.supportedValuesOf('timeZone')`) with server validation, wizard and
+  console alike.
+- **F23 Promocode apply** button sits in each plan card; one «Применить» next
+  to the field, previewing every plan (the API preview is per plan).
+- **F24 Class check:** find every page/bot screen whose schema can reject a
+  200 answer (F5 and F7 are the same class) and make such failures carry a
+  visible reason.
+
+### Next
+
+1. F1 (after the owner compacts the session and says go).
+2. F2, then F3/F4 with the error path visible.
+3. F5–F8, then the rest of P1; F17 only after the discussion.
+4. P2.
+5. Redeploy the stand, re-run the acceptance walk, then the M5-004 gates.
+
 ## Code review repair queue — 2026-09-24
 
 Current milestone remains M5 (NOT VERIFIED); the sole milestone task remains
