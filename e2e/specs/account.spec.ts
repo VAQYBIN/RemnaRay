@@ -240,6 +240,29 @@ test.describe('customer account', () => {
     expect(await topup.json()).toMatchObject({ error: { code: 'PROVIDER_UNAVAILABLE' } });
   });
 
+  test('answers an invalid field with 400 VALIDATION_ERROR and its path (section 9.3)', async ({
+    request,
+  }) => {
+    const state = stackState();
+    const response = await request.patch(`${state.apiUrl}/api/internal/v1/me`, {
+      headers: {
+        'x-internal-token': state.internalToken,
+        'x-acting-user': state.user.telegramId,
+        'content-type': 'application/json',
+        'x-request-id': 'e2e-validation-1',
+      },
+      data: { email: 'not an email' },
+    });
+    expect(response.status()).toBe(400);
+    expect(await response.json()).toMatchObject({
+      error: {
+        code: 'VALIDATION_ERROR',
+        details: [{ path: 'email' }],
+        requestId: 'e2e-validation-1',
+      },
+    });
+  });
+
   test('buys a plan with the mock provider and sees the invoice paid', async ({
     context,
     page,

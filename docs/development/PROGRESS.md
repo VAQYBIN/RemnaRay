@@ -156,12 +156,21 @@ panel users yet).
   states the terms per `percent_first|percent_all|fixed_first` and the
   invitee's bonus. Evidence: API contract test (`referralsSchema.parse`)
   red → green; web terms tests; API 297, web 51, domain 12 tests.
-- **F8 Validation errors answer 500.** No global `ZodError` handling; services
-  call `schema.parse(body)` (~17 files), so any bad field is Nest's
-  `{statusCode:500,"Internal server error"}` with no incident id. Seen in
-  the wizard: panel URL without scheme. Fix: a global filter → 400
-  `VALIDATION_ERROR` with field details and `requestId` (section 9.x error
-  envelope); a failing test first.
+- **F8 Done — validation errors answered 500.** The API had no exception
+  filter: a `schema.parse` in a service threw a `ZodError` that Nest answered
+  `{statusCode:500}`; Nest exceptions (`ForbiddenException('FORBIDDEN')` …)
+  had no section 9.3 envelope, which the site reads as `INTERNAL_ERROR`; no
+  error carried `requestId`, no 5xx an `incidentId`. `ApiExceptionFilter`
+  (global `APP_FILTER`) now answers every error with the envelope: Zod →
+  400 `VALIDATION_ERROR` with `details[{path,message}]`; an envelope a
+  handler built is kept; a bare Nest exception gets its code (the message
+  when it is a code, else by status); anything else is 500 `INTERNAL_ERROR`
+  with a ULID `incidentId` logged with the error, never its message;
+  `requestId` = the proxy's `X-Request-Id` (token-checked) or Fastify's id,
+  also echoed as a header. Provider webhook answers are untouched (the
+  controller sends them itself). Evidence: E2E «answers an invalid field with
+  400 VALIDATION_ERROR» red (500) → green, filter unit tests; API 302 tests;
+  E2E 35 passed, 1 skipped. `docs/troubleshooting.md` explains the ids.
 - **F9 Bot «Профиль» does nothing.** `screens/index.ts:37` routes `profile`
   to `showHome`, re-rendering the same message. FR-122 names the button,
   not its contents. Proposal for the owner: Telegram id, language, balance,
@@ -258,7 +267,7 @@ panel users yet).
 
 1. F1 — done.
 2. F2, F3, F4 — done.
-3. F5, F6, F7 — done. F8, then the rest of P1 with F27/F28; F17 only after the
+3. F5–F8 — done. Then the rest of P1 with F27/F28; F17 only after the
    discussion.
 4. F25 (money) and F26 alongside P1; then P2.
 5. Redeploy the stand, re-run the acceptance walk, then the M5-004 gates.

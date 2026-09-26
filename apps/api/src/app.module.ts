@@ -1,5 +1,5 @@
 import { Module } from '@nestjs/common';
-import { APP_INTERCEPTOR } from '@nestjs/core';
+import { APP_FILTER, APP_INTERCEPTOR } from '@nestjs/core';
 import { LoggerModule } from 'nestjs-pino';
 
 import { HealthController } from './health/health.controller';
@@ -25,6 +25,7 @@ import { BroadcastsModule } from './modules/broadcasts/broadcasts.module';
 import { AdminSettingsModule } from './modules/admin-settings/admin-settings.module';
 import { SetupModule } from './modules/setup/setup.module';
 import { WebhooksModule } from './modules/webhooks/webhooks.module';
+import { ApiExceptionFilter } from './common/api-exception.filter';
 
 @Module({
   imports: [
@@ -57,7 +58,11 @@ import { WebhooksModule } from './modules/webhooks/webhooks.module';
     }),
   ],
   controllers: [HealthController, MetricsController],
-  providers: [{ provide: APP_INTERCEPTOR, useClass: MetricsInterceptor }],
+  providers: [
+    { provide: APP_INTERCEPTOR, useClass: MetricsInterceptor },
+    // Section 9.3: one error envelope for every route.
+    { provide: APP_FILTER, useClass: ApiExceptionFilter },
+  ],
 })
 // Nest module metadata is intentionally the complete shell for this milestone.
 // eslint-disable-next-line @typescript-eslint/no-extraneous-class

@@ -92,6 +92,19 @@ The failed update is acknowledged after the error reply; it is not delivered
 again. `Telegram update stream failed` means the bot could not read the update
 stream in Valkey and retries every half second.
 
+## The site or the console shows an error code
+
+Every API error answers `{ "error": { "code", "message", "messageKey",
+"details"?, "incidentId"?, "requestId" } }` (section 9.3), and the response
+carries the same `X-Request-Id` that the proxy logs. A field the API refused
+is `400 VALIDATION_ERROR`, and `details` lists each field's path and reason.
+A server fault is `500 INTERNAL_ERROR` with an `incidentId`; the API logs the
+error under that id:
+
+```sh
+docker compose logs api | grep -F '<incident id>'
+```
+
 ## The panel answers 401
 
 Settings → Panel → **Check** says what the panel said.
