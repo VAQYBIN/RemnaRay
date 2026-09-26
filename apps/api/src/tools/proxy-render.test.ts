@@ -57,6 +57,27 @@ describe('proxy template rendering (section 21.2)', () => {
     expect(fill('a {{ONE}} b {{TWO}} c', { ONE: '1' })).toBe('a 1 b {{TWO}} c');
   });
 
+  it('limits sign-in POSTs only, and counts the console session in the console zone (F17)', () => {
+    const files = render('acme');
+    const site = files.get('site.conf') ?? '';
+    const limits = files.get('ratelimits.inc') ?? '';
+    const location = (path: string) => {
+      const start = site.indexOf(`location ^~ ${path} {`);
+      return site.slice(start, site.indexOf('}', start));
+    };
+    expect(limits).toMatch(
+      /map \$request_method \$rr_signin_key \{\s*POST\s+\$binary_remote_addr;\s*default\s+"";\s*\}/u,
+    );
+    expect(limits).toMatch(/limit_req_zone \$rr_signin_key\s+zone=rr_signin:10m\s+rate=5r\/m;/u);
+    expect(limits).toMatch(/zone=rr_admin:10m\s+rate=120r\/m;/u);
+    expect(location('/api/admin/v1/auth/')).toContain('limit_req zone=rr_signin burst=10 nodelay;');
+    expect(location('/api/admin/v1/auth/')).toContain('limit_req zone=rr_admin burst=120 nodelay;');
+    expect(location('/api/admin/v1/auth/')).not.toContain('zone=rr_auth');
+    expect(location('/api/v1/auth/')).toContain('limit_req zone=rr_signin burst=10 nodelay;');
+    expect(location('/api/admin/')).toContain('limit_req zone=rr_admin burst=120 nodelay;');
+    expect(location('/api/setup/')).toContain('zone=rr_auth');
+  });
+
   it('renders the whole nginx set for every TLS mode', () => {
     for (const mode of ['acme', 'certbot', 'custom'] as const) {
       const files = render(mode);
@@ -258,7 +279,7 @@ describe('Caddy template rendering (section 21.4)', () => {
     // is refused here (section 21.5).
     for (const [zone, events] of [
       ['rr_auth', 15],
-      ['rr_admin', 90],
+      ['rr_admin', 240],
       ['rr_api', 130],
       ['rr_general', 250],
       ['rr_webhooks', 360],
@@ -269,6 +290,25 @@ describe('Caddy template rendering (section 21.4)', () => {
           'u',
         ),
       );
+  });
+
+  it('limits sign-in POSTs only, and lets the console session read itself in the console zone (F17)', () => {
+    const caddyfile = renderCaddy('acme');
+    const block = (path: string) => {
+      const start = caddyfile.indexOf(`handle ${path} {`);
+      return caddyfile.slice(start, caddyfile.indexOf('reverse_proxy', start));
+    };
+    const signin =
+      /zone rr_signin \{\s*match \{\s*method POST\s*\}\s*key \{client_ip\}\s*events 15\b/u;
+    expect(block('/api/admin/v1/auth/*')).toMatch(signin);
+    expect(block('/api/admin/v1/auth/*')).toMatch(
+      /zone rr_admin \{\s*key \{client_ip\}\s*events 240\b/u,
+    );
+    expect(block('/api/admin/v1/auth/*')).not.toContain('zone rr_auth ');
+    expect(block('/api/v1/auth/*')).toMatch(signin);
+    expect(block('/api/v1/auth/*')).toMatch(/zone rr_api \{/u);
+    // The setup wizard keeps the section 21.3 zone.
+    expect(block('/api/setup/*')).toContain('zone rr_auth {');
   });
 
   it('answers /healthz and redirects with 301 on :80, like the nginx profile', () => {

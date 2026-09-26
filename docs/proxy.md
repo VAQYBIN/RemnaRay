@@ -110,9 +110,18 @@ silently not work.
 
 `ghcr.io/remnaray/caddy` is `caddy:2.11.4-alpine` rebuilt with
 `github.com/mholt/caddy-ratelimit`, because the official image has no
-rate-limit module. The five zones carry the nginx numbers: `rr_webhooks`
-300/10s, `rr_auth` 5/1m, `rr_admin` 30/1m, `rr_api` 100/10s and `rr_general`
-200/10s. An owner who sets `RR_CADDY_IMAGE=caddy:2-alpine` gets a Caddyfile
+rate-limit module. The zones carry the nginx allowance (`rate × window +
+burst`, as events of a sliding window): `rr_webhooks` 360/10s, `rr_auth` 15/1m
+(the setup wizard), `rr_signin` 15/1m counting `POST`s only, `rr_admin` 240/1m,
+`rr_api` 130/10s and `rr_general` 250/10s.
+
+Sign-in and the console are limited apart (owner decision F17, 2026-09-26, a
+deviation from the section 21.3 template, which put all of
+`/api/admin/v1/auth/` under 5 r/m): only the sign-in and TOTP `POST`s spend
+the 5 r/m `rr_signin` allowance (section 9.1 limits `POST /auth/*`); the
+console reading its own session, `GET /api/admin/v1/auth/me` on every page,
+counts in `rr_admin`, raised to 120 r/m with a burst of 120 so that switching
+console pages quickly is not answered 429. An owner who sets `RR_CADDY_IMAGE=caddy:2-alpine` gets a Caddyfile
 with no `rate_limit` blocks — the documented degradation of section 21.4, with
 the limits left to `@nestjs/throttler`. `GET /api/admin/v1/system` reports it
 as `proxy.rateLimited: false` so the administration console can say so.

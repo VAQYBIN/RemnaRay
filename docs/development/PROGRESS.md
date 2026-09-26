@@ -272,14 +272,17 @@ panel users yet).
   Every other date the bot shows (subscription end, invoice deadline,
   referral list) uses the same zone. Evidence: bot `balance.test.ts` (UTC
   20:30 → 01:30 next day in Yekaterinburg) red → green; bot 49, API bot tests.
-- **F17 Rate limits — discuss first.** `GET /api/admin/v1/auth/me` (every
-  console page) falls under nginx `rr_auth` 5r/m burst 10
-  (`deploy/proxy/nginx/site.conf.tmpl:60`) → 429 after ~10 section
-  switches. This is the spec's own 7.1 template, while 9.1 limits
-  `POST /api/v1/auth/*`. Prepare for the discussion: every proxy zone
-  (nginx + Caddy) and throttler limit vs spec 9.1/21.3/26, measured requests
-  per console/account page, and a proposal per zone marking spec deviations.
-
+- **F17 Done — the console hit 429 on page switches.** Every console page
+  reads `GET /api/admin/v1/auth/me`, which the section 21.3 template limits
+  with sign-in's 5 r/m; `rr_admin` (30 r/m) was also below one busy page.
+  Owner decision (2026-09-26): nginx keys a new `rr_signin` zone (5 r/m, burst 10) by `$request_method` so it counts POSTs only, on `/api/v1/auth/` (with
+  `rr_api`) and `/api/admin/v1/auth/` (with `rr_admin`); `rr_admin` is 120 r/m
+  with burst 120; `rr_auth` stays for the setup wizard; Caddy renders the same
+  (`rr_signin` with `match { method POST }` — caddy-ratelimit README at the
+  pinned commit — and `rr_admin` 240 events/1 m). Deviation from 21.3 recorded
+  in `ratelimits.inc` and `docs/proxy.md`. Evidence: proxy-render tests red →
+  green; `m5.proxy` integration (`nginx -t`, `caddy validate` on the built
+  image) green.
 - **F27 Done — the bot `sub` screen lacked the section 12 content and buttons.**
   `sub` now shows FR-041's plan, end date and days left, traffic used of the
   limit, devices n of m (from the panel; «—» when it cannot be read) and the
@@ -418,7 +421,7 @@ tests, 25/25 integration, E2E 38 passed.
 ### Next
 
 1. P0, P1 except F9/F17, and P2 — done (F1–F8, F10–F16, F18–F28).
-2. Owner decisions of 2026-09-26: F9 — the full profile (Telegram id,
+2. F9 and F17 — done. Owner decisions of 2026-09-26: F9 — the full profile (Telegram id,
    language, balance, subscription status and term, referral code, receipt
    email; «Открыть кабинет», «Язык», «Email для чеков»). F17 — separate sign-in
    from the console: 5 r/m only on the sign-in and TOTP `POST`s, `auth/me` in

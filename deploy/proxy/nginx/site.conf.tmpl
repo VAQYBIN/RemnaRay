@@ -54,17 +54,19 @@ server {
     }
     # --- authentication: the hard limit ---
     location ^~ /api/v1/auth/ {
-        limit_req zone=rr_auth burst=10 nodelay;
+        limit_req zone=rr_signin burst=10 nodelay;
+        limit_req zone=rr_api burst=30 nodelay;
         proxy_pass http://rr_api;
     }
     location ^~ /api/admin/v1/auth/ {
-        limit_req zone=rr_auth burst=10 nodelay;
+        limit_req zone=rr_signin burst=10 nodelay;
+        limit_req zone=rr_admin burst=120 nodelay;
 {{ADMIN_ALLOWLIST_BLOCK}}
         proxy_pass http://rr_api;
     }
     # --- the administration API ---
     location ^~ /api/admin/ {
-        limit_req zone=rr_admin burst=60 nodelay;
+        limit_req zone=rr_admin burst=120 nodelay;
 {{ADMIN_ALLOWLIST_BLOCK}}
         client_max_body_size 10m;
         proxy_pass http://rr_api;
@@ -108,7 +110,7 @@ server {
         # `nodelay` like every other zone: without it nginx queues the burst
         # and releases it at 30r/m, so the console stalls for seconds a page
         # while the Caddy profile refuses outright (section 21.5).
-        limit_req zone=rr_admin burst=100 nodelay;
+        limit_req zone=rr_admin burst=120 nodelay;
 {{ADMIN_ALLOWLIST_BLOCK}}
         proxy_pass http://rr_web;
     }

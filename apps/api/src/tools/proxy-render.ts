@@ -126,17 +126,26 @@ function caddyTls(tlsMode: TlsMode): string {
  * events are that sum — otherwise the same sign-in that the nginx profile
  * serves is refused here, which is exactly what section 21.5 forbids.
  */
-const CADDY_ZONES = {
-  // 30r/s + burst 60 over 10s.
-  WEBHOOKS: { zone: 'rr_webhooks', events: 360, window: '10s' },
-  // 5r/m + burst 10.
-  AUTH: { zone: 'rr_auth', events: 15, window: '1m' },
-  // 30r/m + burst 60.
-  ADMIN: { zone: 'rr_admin', events: 90, window: '1m' },
-  // 10r/s + burst 30 over 10s.
-  API: { zone: 'rr_api', events: 130, window: '10s' },
-  // 20r/s + burst 50 over 10s.
-  GENERAL: { zone: 'rr_general', events: 250, window: '10s' },
+type CaddyZone = { zone: string; events: number; window: string; method?: string };
+
+const WEBHOOKS: CaddyZone = { zone: 'rr_webhooks', events: 360, window: '10s' }; // 30r/s + 60
+const AUTH: CaddyZone = { zone: 'rr_auth', events: 15, window: '1m' }; // 5r/m + 10
+// Owner decision F17: sign-in counts its POSTs only (the nginx `rr_signin`),
+// and the console zone is 120r/m + burst 120; see `ratelimits.inc`.
+const SIGNIN: CaddyZone = { zone: 'rr_signin', events: 15, window: '1m', method: 'POST' };
+const ADMIN: CaddyZone = { zone: 'rr_admin', events: 240, window: '1m' };
+const API: CaddyZone = { zone: 'rr_api', events: 130, window: '10s' }; // 10r/s + 30
+const GENERAL: CaddyZone = { zone: 'rr_general', events: 250, window: '10s' }; // 20r/s + 50
+
+/** The zones each `{{CADDY_RATE_LIMIT_<NAME>}}` placeholder applies together. */
+const CADDY_ZONES: Record<string, CaddyZone[]> = {
+  WEBHOOKS: [WEBHOOKS],
+  AUTH: [AUTH],
+  SIGNIN_API: [SIGNIN, API],
+  SIGNIN_ADMIN: [SIGNIN, ADMIN],
+  ADMIN: [ADMIN],
+  API: [API],
+  GENERAL: [GENERAL],
 };
 
 function caddyPlaceholders(sources: ProxySources, options: RenderOptions): Record<string, string> {
@@ -178,15 +187,21 @@ function caddyPlaceholders(sources: ProxySources, options: RenderOptions): Recor
           ].join('\n')
         : '',
   };
-  for (const [name, limit] of Object.entries(CADDY_ZONES))
+  for (const [name, zones] of Object.entries(CADDY_ZONES))
     values[`CADDY_RATE_LIMIT_${name}`] = sources.caddyRateLimit
       ? [
           '\t\trate_limit {',
-          `\t\t\tzone ${limit.zone} {`,
-          '\t\t\t\tkey {client_ip}',
-          `\t\t\t\tevents ${String(limit.events)}`,
-          `\t\t\t\twindow ${limit.window}`,
-          '\t\t\t}',
+          ...zones.flatMap((limit) => [
+            `\t\t\tzone ${limit.zone} {`,
+            // caddy-ratelimit: a zone may filter the requests it counts.
+            ...(limit.method
+              ? ['\t\t\t\tmatch {', `\t\t\t\t\tmethod ${limit.method}`, '\t\t\t\t}']
+              : []),
+            '\t\t\t\tkey {client_ip}',
+            `\t\t\t\tevents ${String(limit.events)}`,
+            `\t\t\t\twindow ${limit.window}`,
+            '\t\t\t}',
+          ]),
           '\t\t}',
         ].join('\n')
       : '';

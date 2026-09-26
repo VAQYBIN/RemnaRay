@@ -142,14 +142,14 @@ http:// {
 	}
 
 	handle /api/v1/auth/* {
-{{CADDY_RATE_LIMIT_AUTH}}
+{{CADDY_RATE_LIMIT_SIGNIN_API}}
 		reverse_proxy api:3000 {
 			import rr_upstream_headers
 		}
 	}
 	handle /api/admin/v1/auth/* {
 		import rr_admin_allow
-{{CADDY_RATE_LIMIT_AUTH}}
+{{CADDY_RATE_LIMIT_SIGNIN_ADMIN}}
 		reverse_proxy api:3000 {
 			import rr_upstream_headers
 		}
