@@ -96,11 +96,22 @@ panel users yet).
   configuration does not have). AC-061 therefore no longer offers these
   providers with wrong keys. Evidence: `builtin-providers.test.ts` (endpoint,
   credentials, failure) red → green; payments tests 71.
-- **F27 Bot `sub` screen lacks spec buttons (found while fixing F4).** The
-  section 12 screen table gives `sub` the buttons `sub:devices`,
-  `plan:change` and `sub:clients` → `sub:guide:<platform>`; the bot has none
-  of the three (no handlers either). Implement against FR-041/FR-023 and the
-  locale guide keys.
+- **F27 Done — the bot `sub` screen lacked the section 12 content and buttons.**
+  `sub` now shows FR-041's plan, end date and days left, traffic used of the
+  limit, devices n of m (from the panel; «—» when it cannot be read) and the
+  panel status, with `sub:clients`, `sub:qr`, `sub:devices`, `renew`,
+  `plan:change` (when allowed), `sub:revoke` (when allowed) and back;
+  `sub:revoke:confirm` has its own warning. `sub:clients` offers
+  `sub:guide:<platform>` for the platforms of the configured clients
+  (`bot.guide.<platform>`, editable in «Локали»). `sub:devices` lists the HWID
+  devices with `dev:rm:<hwid8>` when `user_can_remove_devices` (FR-026).
+  `plan:change` lists the other plans with the EX-06 quote, `plan:change:<slug>`
+  confirms price, credit and amount due, and pays through
+  `plan:change:go:<slug>:<provider>` (a `plan_change` invoice). Payment buttons
+  (plan card and plan change) put the balance first only when it covers the
+  amount (section 12 `plan:<slug>`); before, the plan card offered the balance
+  whenever top-ups were enabled. Evidence: bot subscription/plan-change tests;
+  bot 53 tests; every bot message compiles as ICU.
 
 - **F28 Done — console plan editor fell short of FR-145, and plans could grant
   nothing.** The panel receives `plan.squads` as `activeInternalSquads`
@@ -159,7 +170,7 @@ panel users yet).
 
 1. F1 — done.
 2. F2, F3, F4 — done.
-3. F5–F8, F10–F16, F28 — done. F27 next; F9 and F17 wait for the owner.
+3. F5–F8, F10–F16, F27, F28 — done; F9 and F17 wait for the owner.
 4. F25, F26 — done; then P2.
 5. Redeploy the stand, re-run the acceptance walk, then the M5-004 gates.
 

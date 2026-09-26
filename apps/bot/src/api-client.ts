@@ -62,15 +62,18 @@ export type PublicPlan = {
 export type SubscriptionState = {
   subscription: {
     status: string;
+    plan?: PublicPlan | null;
     expiresAt: string;
     daysLeft: number;
     canChangePlan: boolean;
     canRevoke: boolean;
   } | null;
   panel: {
+    status?: string;
     subscriptionUrl: string;
     usedTrafficBytes: number;
     trafficLimitBytes: number;
+    deviceLimit?: number | null;
   } | null;
   clients: { id: string; name: string; platforms: string[]; deepLink: string | null }[];
 };
@@ -341,6 +344,8 @@ export class ApiClient {
         displayName: Record<string, string>;
         kind: string;
         available: boolean;
+        /** The available balance, on the built-in balance method only. */
+        balance?: { amountMinor: number; currency: string };
       }>;
     }>('/api/internal/v1/me/payment-methods', { userId: telegramId });
   }
@@ -366,6 +371,39 @@ export class ApiClient {
       userId: telegramId,
       body,
       idempotencyKey,
+    });
+  }
+
+  /** FR-026: the HWID devices of the customer's panel account. */
+  getDevices(telegramId: number) {
+    return this.request<{
+      items: {
+        hwid: string;
+        platform: string | null;
+        osVersion: string | null;
+        deviceModel: string | null;
+        createdAt: string | null;
+      }[];
+      canRemove: boolean;
+    }>('/api/internal/v1/me/subscription/devices', { userId: telegramId });
+  }
+
+  removeDevice(telegramId: number, hwid: string) {
+    return this.request<unknown>(
+      `/api/internal/v1/me/subscription/devices/${encodeURIComponent(hwid)}`,
+      { method: 'DELETE', userId: telegramId },
+    );
+  }
+
+  /** FR-023 / EX-06: what changing to `planId` costs now. */
+  getPlanChangeQuote(telegramId: number, planId: string) {
+    return this.request<{
+      creditMinor: number;
+      newPriceMinor: number;
+      toPayMinor: number;
+      canPayFromBalance: boolean;
+    }>(`/api/internal/v1/me/plan-change/quote?planId=${encodeURIComponent(planId)}`, {
+      userId: telegramId,
     });
   }
 

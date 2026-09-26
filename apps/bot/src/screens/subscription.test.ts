@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { showClients, showSubscription } from './subscription.js';
+import { removeDevice, showClients, showDevices, showSubscription } from './subscription.js';
 import type { RrContext } from '../types.js';
 
 function screen(status: string) {
@@ -36,10 +36,104 @@ describe('bot subscription screen', () => {
     expect(texts).toEqual(['bot.screen.sub.provisioning']);
   });
 
-  it('shows the details of an active subscription', async () => {
-    const { ctx, api, texts } = screen('active');
+  it('shows plan, term, traffic, devices and panel status with every section 12 button (FR-041)', async () => {
+    const params: Record<string, unknown>[] = [];
+    const markups: unknown[] = [];
+    const ctx = {
+      from: { id: 123 },
+      locale: 'ru',
+      session: {},
+      t: (key: string, values: Record<string, unknown> = {}) => {
+        params.push({ key, ...values });
+        return key;
+      },
+      reply: (_text: string, options: { reply_markup?: unknown }) => {
+        markups.push(options.reply_markup);
+        return { message_id: 1 };
+      },
+    } as unknown as RrContext;
+    const api = {
+      getSubscription: () => ({
+        subscription: {
+          status: 'active',
+          plan: { id: 'p', slug: 'month', name: { ru: 'Месяц' }, deviceLimit: 3 },
+          expiresAt: '2026-10-01T00:00:00.000Z',
+          daysLeft: 5,
+          canChangePlan: true,
+          canRevoke: true,
+        },
+        panel: {
+          status: 'ACTIVE',
+          subscriptionUrl: 'https://sub.example/x',
+          usedTrafficBytes: 2 * 1024 ** 3,
+          trafficLimitBytes: 10 * 1024 ** 3,
+          deviceLimit: 3,
+        },
+        clients: [],
+      }),
+      getDevices: () => ({ items: [{ hwid: 'abcdef0123' }], canRemove: true }),
+    } as never;
+
     await showSubscription(ctx, api);
-    expect(texts).toEqual(['bot.screen.sub.details']);
+
+    expect(params).toContainEqual(
+      expect.objectContaining({ key: 'bot.screen.sub.info', plan: 'Месяц', days: 5 }),
+    );
+    expect(params).toContainEqual({ key: 'bot.screen.sub.traffic', used: '2 GB', limit: '10 GB' });
+    expect(params).toContainEqual({ key: 'bot.screen.sub.devices', count: 1, limit: 3 });
+    expect(params).toContainEqual({
+      key: 'bot.screen.sub.status',
+      status: 'bot.screen.sub.panelStatus.ACTIVE',
+    });
+    const data = (
+      markups[0] as { inline_keyboard: Array<Array<{ callback_data?: string }>> }
+    ).inline_keyboard
+      .flat()
+      .map((button) => button.callback_data);
+    expect(data).toEqual([
+      'sub:clients',
+      'sub:qr',
+      'sub:devices',
+      'plans',
+      'plan:change',
+      'sub:revoke',
+      'home',
+    ]);
+  });
+
+  it('lists devices with a remove button each when removal is allowed (FR-026)', async () => {
+    const markups: unknown[] = [];
+    const removed: string[] = [];
+    const ctx = {
+      from: { id: 123 },
+      locale: 'ru',
+      session: {},
+      t: (key: string) => key,
+      reply: (_text: string, options: { reply_markup?: unknown }) => {
+        markups.push(options.reply_markup);
+        return { message_id: 1 };
+      },
+    } as unknown as RrContext;
+    const api = {
+      getDevices: () => ({
+        items: [{ hwid: 'abcdef0123456', deviceModel: 'iPhone', platform: 'iOS' }],
+        canRemove: true,
+      }),
+      removeDevice: (_telegramId: number, hwid: string) => {
+        removed.push(hwid);
+      },
+    } as never;
+
+    await showDevices(ctx, api);
+    const data = (
+      markups[0] as { inline_keyboard: Array<Array<{ callback_data?: string }>> }
+    ).inline_keyboard
+      .flat()
+      .map((button) => button.callback_data);
+    expect(data).toEqual(['dev:rm:abcdef01', 'sub']);
+
+    await removeDevice(ctx, api, 'abcdef01');
+    expect(removed).toEqual(['abcdef0123456']);
   });
 
   it('opens each client through an https page, since Telegram buttons take http(s) and tg:// only', async () => {

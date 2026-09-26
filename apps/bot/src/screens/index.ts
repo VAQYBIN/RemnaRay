@@ -9,7 +9,16 @@ import { STARS_START_PAYLOAD, sendStarsInvoice } from './stars.js';
 import { showHelp } from './help.js';
 import { showPlan, showPlans } from './plans.js';
 import { showReferralList, showReferrals } from './referrals.js';
-import { showSubscription, showClients, showQr, confirmRevoke } from './subscription.js';
+import {
+  confirmRevoke,
+  removeDevice,
+  showClients,
+  showDevices,
+  showGuide,
+  showQr,
+  showSubscription,
+} from './subscription.js';
+import { confirmPlanChange, payPlanChange, showPlanChange } from './plan-change.js';
 import { backButton, formatDate, formatMinor, show } from './common.js';
 
 export function registerScreens(bot: Bot<RrContext>, api: ApiClient): void {
@@ -41,6 +50,20 @@ export function registerScreens(bot: Bot<RrContext>, api: ApiClient): void {
   bot.callbackQuery('sub', (ctx) => showSubscription(ctx, api));
   bot.callbackQuery('sub:clients', (ctx) => showClients(ctx, api));
   bot.callbackQuery('sub:qr', (ctx) => showQr(ctx, api));
+  bot.callbackQuery('sub:devices', (ctx) => showDevices(ctx, api));
+  bot.callbackQuery(/^dev:rm:([\w-]{1,8})$/u, (ctx) =>
+    removeDevice(ctx, api, capture(ctx.match, 1)),
+  );
+  bot.callbackQuery(/^sub:guide:(ios|android|windows|macos|linux)$/u, (ctx) =>
+    showGuide(ctx, capture(ctx.match, 1)),
+  );
+  bot.callbackQuery('plan:change', (ctx) => showPlanChange(ctx, api));
+  bot.callbackQuery(/^plan:change:go:([a-z0-9_-]+):([a-z-]+)$/u, (ctx) =>
+    payPlanChange(ctx, api, capture(ctx.match, 1), capture(ctx.match, 2)),
+  );
+  bot.callbackQuery(/^plan:change:([a-z0-9_-]+)$/u, (ctx) =>
+    confirmPlanChange(ctx, api, capture(ctx.match, 1)),
+  );
   bot.callbackQuery('sub:revoke', (ctx) => confirmRevoke(ctx));
   bot.callbackQuery('sub:revoke:go', async (ctx) => {
     try {
