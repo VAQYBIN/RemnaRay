@@ -27,9 +27,18 @@ behaviour from FR-134.
 
 ## Authentication
 
-- Telegram Login Widget on the landing page posts to `POST /api/v1/auth/telegram`
-  and refreshes the route. The bot username comes from
-  `GET /api/v1/public/config`, so `/setdomain` is the only manual step.
+- The landing page signs in with Telegram Login over OpenID Connect (owner
+  decision F29, 2026-09-26). `GET /api/v1/auth/telegram/nonce` gives the page a
+  nonce signed with `RR_APP_KEY` (ten minutes) and the bot's Client ID, and sets
+  the same nonce as the HttpOnly cookie `rr_oidc_nonce`; the button opens
+  Telegram's popup (`telegram-login.js?6`) with them; the returned `id_token`
+  goes to `POST /api/v1/auth/telegram/oidc`, which checks the signature against
+  Telegram's JWKS (RS256 or ES256), `iss`, `aud` = the bot id, `exp`, and that
+  its nonce is this browser's cookie and unused, then opens the session. The
+  Telegram id is the token's `id` claim (profile scope; `[verify]` on the first
+  live login). The section 13.3 widget route `POST /api/v1/auth/telegram`
+  remains for compatibility. Setup: `docs/setup.md`, «Site login through
+  Telegram».
 - From the bot, «Открыть кабинет» opens `/auth/tg?token=<jwt>`. The route
   handler exchanges the token through the API and forwards the `Set-Cookie`
   before redirecting into `/<locale>/account`.

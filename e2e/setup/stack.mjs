@@ -2,7 +2,7 @@ import { execFileSync, spawn } from 'node:child_process';
 import { cpSync, existsSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { createServer, request as httpRequest } from 'node:http';
-import { createHash, randomBytes } from 'node:crypto';
+import { createHash, generateKeyPairSync, randomBytes } from 'node:crypto';
 import process from 'node:process';
 import { setTimeout as sleep } from 'node:timers/promises';
 import { Buffer } from 'node:buffer';
@@ -129,6 +129,10 @@ export async function startStack({ seed = true } = {}) {
   const webPort = await freePort();
   const proxyPort = await freePort();
 
+  // F29: Telegram's OIDC keys, served locally so the specs can sign an
+  // id_token the API verifies exactly as it would Telegram's.
+  const oidc = await startOidcKeys();
+
   const apiEnv = {
     ...process.env,
     NODE_ENV: 'production',
@@ -142,6 +146,7 @@ export async function startStack({ seed = true } = {}) {
     RR_LOG_LEVEL: 'warn',
     // Section 22.1: the E2E purchase pays through the mock provider.
     RR_PAYMENTS_MOCK: 'true',
+    RR_TELEGRAM_OAUTH_URL: oidc.url,
     ...(seed ? {} : { RR_SETUP_TOKEN: SETUP_TOKEN, RR_TELEGRAM_API_URL: mocks.telegramUrl }),
   };
   const api = spawn('node', ['apps/api/dist/main.js'], { env: apiEnv, stdio: 'pipe' });
@@ -205,7 +210,9 @@ export async function startStack({ seed = true } = {}) {
       ? {}
       : { panelUrl: mocks.panelUrl, telegramUrl: mocks.telegramUrl, botToken: mocks.botToken }),
     ...fixtures,
+    oidcPrivateKey: oidc.privateKeyPem,
     async stop() {
+      oidc.server.close();
       proxy.close();
       api.kill('SIGTERM');
       web.kill('SIGTERM');
@@ -214,6 +221,30 @@ export async function startStack({ seed = true } = {}) {
       await valkey.stop();
       await postgres.stop();
     },
+  };
+}
+
+/** An RS256 key under kid `oidc-1`, published at `/.well-known/jwks.json`. */
+async function startOidcKeys() {
+  const { publicKey, privateKey } = generateKeyPairSync('rsa', { modulusLength: 2048 });
+  const jwks = JSON.stringify({
+    keys: [{ ...publicKey.export({ format: 'jwk' }), kid: 'oidc-1', alg: 'RS256' }],
+  });
+  const server = createServer((request, response) => {
+    if (request.url === '/.well-known/jwks.json') {
+      response.writeHead(200, { 'content-type': 'application/json' });
+      response.end(jwks);
+      return;
+    }
+    response.writeHead(404);
+    response.end();
+  });
+  const port = await freePort();
+  await new Promise((done) => server.listen(port, '127.0.0.1', done));
+  return {
+    server,
+    url: `http://127.0.0.1:${String(port)}`,
+    privateKeyPem: privateKey.export({ type: 'pkcs8', format: 'pem' }),
   };
 }
 

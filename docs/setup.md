@@ -62,11 +62,16 @@ link and the administration URL.
 
 ### Site login through Telegram
 
-The landing page's «Войти» shows the Telegram Login Widget, which Telegram only
-draws for a domain linked to the bot. After the wizard, open @BotFather, send
-`/setdomain`, choose the shop's bot and send the shop's domain (the one in step
-2, without `https://`). Until then the widget shows Telegram's own "Bot domain
-invalid" and customers can still sign in from the bot with «Открыть кабинет».
+The landing page's «Войти» uses Telegram Login over OpenID Connect
+(core.telegram.org/widgets/login). Telegram only signs a visitor in on a page
+the bot allows. After the wizard, open @BotFather, open its mini app, choose the
+shop's bot → **Login Widget** and add the shop's origin as an Allowed URL:
+`https://<domain>` (the domain of step 2). Nothing else is needed: the Client ID
+is the bot's id, which the API reads from the bot token, and the Client Secret
+is not used (the page receives a signed `id_token`, which the API checks
+against Telegram's public keys). Until the URL is allowed, the Telegram popup
+refuses the login; customers can still sign in from the bot with «Открыть
+кабинет».
 
 ## Resuming
 

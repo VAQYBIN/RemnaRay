@@ -66,47 +66,52 @@ describe('accessibility invariants', () => {
     expect(link?.className).toContain('inline-flex');
   });
 
-  it('names the login container and the widget iframe the script injects', async () => {
+  it("names the login group and loads Telegram's OIDC login library once", async () => {
     Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true });
+    const previousFetch = globalThis.fetch;
+    globalThis.fetch = vi
+      .fn()
+      .mockResolvedValue(Response.json({ clientId: '8521897198', nonce: 'n.1.m' }));
     const container = document.createElement('div');
     document.body.append(container);
     const root = createRoot(container);
-    await act(async () => {
-      root.render(
-        <LoginWidget
-          botUsername="manta_bot"
-          errorLabel="Ошибка входа"
-          label="Войти"
-          locale="ru"
-          unavailableLabel="—"
-        />,
+    try {
+      await act(async () => {
+        root.render(
+          <LoginWidget
+            botUsername="manta_bot"
+            errorLabel="Ошибка входа"
+            label="Войти"
+            locale="ru"
+            unavailableLabel="—"
+          />,
+        );
+        await new Promise((resolve) => setTimeout(resolve, 0));
+      });
+
+      const host = container.querySelector('#login');
+      expect(host?.getAttribute('role')).toBe('group');
+      expect(host?.getAttribute('aria-label')).toBe('Войти');
+      expect(
+        document.head.querySelectorAll(
+          'script[src="https://oauth.telegram.org/js/telegram-login.js?6"]',
+        ),
+      ).toHaveLength(1);
+      // The nonce is asked for before the button is pressed: the popup must
+      // open inside the click, which an awaited request would break.
+      expect(globalThis.fetch).toHaveBeenCalledWith(
+        '/api/v1/auth/telegram/nonce',
+        expect.objectContaining({ credentials: 'include' }),
       );
-      await Promise.resolve();
-    });
-
-    const host = container.querySelector('#login');
-    expect(host?.getAttribute('role')).toBe('group');
-    expect(host?.getAttribute('aria-label')).toBe('Войти');
-
-    // The widget script puts its iframe where its own `<script>` is, so the
-    // script must be inside the container the landing's «Войти» points at.
-    const script = host?.querySelector('script[data-telegram-login="manta_bot"]');
-    expect(script?.getAttribute('src')).toBe('https://telegram.org/js/telegram-widget.js?22');
-    expect(script?.getAttribute('data-onauth')).toBe('onRemnaRayTelegramAuth(user)');
-    const iframe = document.createElement('iframe');
-    iframe.id = 'telegram-login-manta_bot';
-    await act(async () => {
-      script?.before(iframe);
-      await new Promise((done) => setTimeout(done, 0));
-    });
-    expect(iframe.getAttribute('title')).toBe('Войти');
-    iframe.remove();
-
-    await act(async () => {
-      root.unmount();
-      await Promise.resolve();
-    });
-    container.remove();
+      expect(host?.querySelector('button')?.hasAttribute('disabled')).toBe(false);
+    } finally {
+      await act(async () => {
+        root.unmount();
+        await Promise.resolve();
+      });
+      container.remove();
+      globalThis.fetch = previousFetch;
+    }
   });
 
   it('only navigates after the Telegram auth endpoint accepts the callback', async () => {
@@ -114,16 +119,16 @@ describe('accessibility invariants', () => {
     const container = document.createElement('div');
     document.body.append(container);
     const root = createRoot(container);
-    const payload = {
-      id: 123,
-      first_name: 'Manta',
-      auth_date: 1,
-      hash: 'a'.repeat(64),
-    };
 
     try {
       navigationRouter.replace.mockClear();
-      globalThis.fetch = vi.fn().mockResolvedValue(new Response(null, { status: 401 }));
+      globalThis.fetch = vi.fn((url: string) =>
+        Promise.resolve(
+          url === '/api/v1/auth/telegram/nonce'
+            ? Response.json({ clientId: '8521897198', nonce: 'n.1.m' })
+            : new Response(null, { status: 401 }),
+        ),
+      ) as unknown as typeof fetch;
       await act(async () => {
         root.render(
           <LoginWidget
@@ -137,7 +142,7 @@ describe('accessibility invariants', () => {
         await Promise.resolve();
       });
       await act(async () => {
-        window.onRemnaRayTelegramAuth?.(payload);
+        window.onRemnaRayTelegramOidc?.({ id_token: 'a.b.c' });
         await new Promise((resolve) => setTimeout(resolve, 0));
       });
 

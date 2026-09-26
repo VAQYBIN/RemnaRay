@@ -24,6 +24,7 @@ export default async function globalSetup() {
         // The seeded bot's token: the landing's Telegram Login callback is
         // signed with it (section 13.3).
         botToken: stack.botToken,
+        oidcPrivateKey: stack.oidcPrivateKey,
         brand: stack.brand,
         admin: stack.admin,
         plan: stack.plan,

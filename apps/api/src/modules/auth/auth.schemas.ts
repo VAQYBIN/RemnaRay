@@ -16,3 +16,6 @@ export type TelegramWidgetInput = z.infer<typeof telegramWidgetSchema>;
 export const issueTokenSchema = z.object({
   telegramId: z.union([z.string().regex(/^\d+$/), z.number().int().refine(Number.isSafeInteger)]),
 });
+
+/** Telegram Login over OIDC: the `id_token` the page's popup received. */
+export const telegramOidcSchema = z.object({ idToken: z.string().min(20).max(8192) });

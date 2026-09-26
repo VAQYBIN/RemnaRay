@@ -13,9 +13,11 @@ test.describe('public site', () => {
     await expect(
       page.getByRole('link', { name: /t\.me|Открыть в Telegram/u }).first(),
     ).toBeVisible();
-    // «Войти» points at #login; the widget draws its button where its script
-    // is, so the script has to be inside that block.
-    await expect(page.locator('#login script[data-telegram-login]')).toHaveCount(1);
+    // «Войти» points at #login, where the Telegram OIDC button is (F29).
+    await expect(page.locator('#login').getByRole('button')).toBeVisible();
+    await expect(
+      page.locator('script[src="https://oauth.telegram.org/js/telegram-login.js?6"]'),
+    ).toHaveCount(1);
   });
 
   test('the footer switches language and remembers it in a secure cookie', async ({

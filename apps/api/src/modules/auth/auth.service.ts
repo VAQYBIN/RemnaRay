@@ -3,7 +3,13 @@ import { Injectable } from '@nestjs/common';
 import { SettingsService } from '../settings/settings.service';
 import { UsersService } from '../users/users.service';
 import { verifyJwt, verifyTelegramWidget, signJwt, AuthFailure } from './auth.crypto';
-import { issueTokenSchema, telegramWidgetSchema, type TelegramWidgetInput } from './auth.schemas';
+import {
+  issueTokenSchema,
+  telegramOidcSchema,
+  telegramWidgetSchema,
+  type TelegramWidgetInput,
+} from './auth.schemas';
+import { NONCE_TTL_SECONDS, TelegramOidcVerifier, checkNonce, issueNonce } from './telegram-oidc';
 import type { SessionStorePort } from './auth.session';
 
 @Injectable()
@@ -13,6 +19,7 @@ export class AuthService {
     private readonly users: UsersService,
     private readonly sessions: SessionStorePort,
     private readonly appKey: string,
+    private readonly oidc = new TelegramOidcVerifier(),
   ) {}
 
   /**
@@ -32,6 +39,52 @@ export class AuthService {
       firstName: input.first_name,
       ...(input.username ? { username: input.username } : {}),
       ...(input.language_code ? { languageCode: input.language_code } : {}),
+      ...(requestMeta?.referralCode ? { startPayload: `ref_${requestMeta.referralCode}` } : {}),
+    });
+    const sessionId = await this.sessions.create({
+      userId: user.user.id,
+      user: user.user,
+      ...(requestMeta?.userAgent ? { userAgent: requestMeta.userAgent } : {}),
+      ...(requestMeta?.ip ? { ip: requestMeta.ip } : {}),
+    });
+    return { user: user.user, sessionId };
+  }
+
+  /** The Client ID of Telegram's OIDC login: the bot's id, its token's prefix. */
+  async telegramClientId(): Promise<string | null> {
+    const botToken = await this.settings.get('bot.token');
+    const id = typeof botToken === 'string' ? botToken.split(':')[0] : undefined;
+    return id && /^\d+$/u.test(id) ? id : null;
+  }
+
+  /** A login nonce for one browser (see `issueNonce`). */
+  telegramNonce(): string {
+    return issueNonce(this.appKey);
+  }
+
+  /**
+   * Telegram Login over OIDC: the `id_token` the page's popup received, and
+   * the nonce cookie of the browser that asked for it. The token must carry
+   * that nonce, and a nonce signs in once.
+   */
+  async authenticateTelegramOidc(
+    value: unknown,
+    nonce: string | undefined,
+    requestMeta?: { userAgent?: string; ip?: string; referralCode?: string },
+  ) {
+    const input = telegramOidcSchema.parse(value);
+    const clientId = await this.telegramClientId();
+    if (!clientId) throw new AuthFailure('AUTH_UNAVAILABLE');
+    const random = nonce ? checkNonce(this.appKey, nonce) : null;
+    if (!nonce || !random) throw new AuthFailure('AUTH_EXPIRED');
+    const claims = await this.oidc.verify(input.idToken, { clientId, nonce });
+    if (!(await this.sessions.claimOnce(`oidc-nonce:${random}`, NONCE_TTL_SECONDS)))
+      throw new AuthFailure('AUTH_EXPIRED');
+    const firstName = claims.given_name ?? claims.name;
+    const user = await this.users.upsert({
+      telegramId: String(claims.id),
+      ...(firstName ? { firstName } : {}),
+      ...(claims.preferred_username ? { username: claims.preferred_username } : {}),
       ...(requestMeta?.referralCode ? { startPayload: `ref_${requestMeta.referralCode}` } : {}),
     });
     const sessionId = await this.sessions.create({

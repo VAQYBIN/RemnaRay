@@ -1,33 +1,39 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
+
+import { Button } from '@remnaray/ui';
 
 import { useRouter } from '../../i18n/navigation';
 import type { Locale } from '../../i18n/routing';
 
-type TelegramAuth = {
-  id: number;
-  first_name: string;
-  last_name?: string;
-  username?: string;
-  photo_url?: string;
-  auth_date: number;
-  hash: string;
-};
+/** What `telegram-login.js` hands the callback (core.telegram.org/widgets/login). */
+type TelegramLoginResult = { id_token?: string; error?: string };
 
 declare global {
   interface Window {
-    onRemnaRayTelegramAuth?: (payload: TelegramAuth) => void;
+    Telegram?: {
+      Login?: {
+        auth: (
+          options: { client_id: number; nonce: string; lang?: string },
+          callback: (result: TelegramLoginResult) => void,
+        ) => void;
+      };
+    };
+    onRemnaRayTelegramOidc?: (result: TelegramLoginResult) => void;
   }
 }
 
+const LIBRARY = 'https://oauth.telegram.org/js/telegram-login.js?6';
+
 /**
- * Telegram Login Widget (section 13.3). The bot username comes from
- * `GET /api/v1/public/config`, so changing it in settings needs no rebuild.
- * The widget only renders once `/setdomain` has been configured for the bot.
+ * Telegram Login over OpenID Connect (owner decision F29). The API hands this
+ * browser a nonce (and the bot's Client ID) before the button is pressed, so
+ * the popup opens inside the click; Telegram returns an `id_token` carrying
+ * the nonce, and the API checks both before it opens the session. The site's
+ * origin must be an Allowed URL of the bot in the BotFather mini app.
  */
 export default function LoginWidget({
-  botUsername,
   unavailableLabel,
   label,
   errorLabel,
@@ -41,51 +47,46 @@ export default function LoginWidget({
 }) {
   const router = useRouter();
   const [error, setError] = useState(false);
-  const host = useRef<HTMLDivElement>(null);
+  const [login, setLogin] = useState<{ clientId: string; nonce: string } | null | undefined>(
+    undefined,
+  );
 
-  /**
-   * The widget script renders its `<iframe>` where its own `<script>` element
-   * is. `next/script` appends to `document.body`, which put the button at the
-   * very bottom of the page, outside the `#login` block the landing's «Войти»
-   * points at; the element is therefore created inside the block. The iframe
-   * arrives without a title, which fails the WCAG frame-title check
-   * (NFR-010), so it is named as soon as it appears.
-   */
-  useEffect(() => {
-    const container = host.current;
-    if (!container || !botUsername) return;
-    const script = document.createElement('script');
-    script.src = 'https://telegram.org/js/telegram-widget.js?22';
-    script.async = true;
-    script.dataset.telegramLogin = botUsername;
-    script.dataset.size = 'large';
-    script.dataset.userpic = 'false';
-    script.dataset.requestAccess = 'write';
-    script.dataset.onauth = 'onRemnaRayTelegramAuth(user)';
-    container.prepend(script);
-    const title = () => {
-      for (const frame of container.querySelectorAll('iframe[id^="telegram-login-"]:not([title])'))
-        frame.setAttribute('title', label);
-    };
-    const observer = new MutationObserver(title);
-    observer.observe(container, { childList: true, subtree: true });
-    return () => {
-      observer.disconnect();
-      for (const node of container.querySelectorAll(
-        'script[data-telegram-login], iframe[id^="telegram-login-"]',
-      ))
-        node.remove();
-    };
-  }, [botUsername, label]);
+  const prepare = useCallback(() => {
+    void fetch('/api/v1/auth/telegram/nonce', { credentials: 'include', cache: 'no-store' })
+      .then((response) => (response.ok ? response.json() : null))
+      .then((body: { clientId?: string | null; nonce?: string } | null) => {
+        setLogin(
+          body?.clientId && body.nonce ? { clientId: body.clientId, nonce: body.nonce } : null,
+        );
+      })
+      .catch(() => {
+        setLogin(null);
+      });
+  }, []);
 
   useEffect(() => {
-    window.onRemnaRayTelegramAuth = (payload) => {
+    prepare();
+    if (!document.querySelector(`script[src="${LIBRARY}"]`)) {
+      const script = document.createElement('script');
+      script.src = LIBRARY;
+      script.async = true;
+      document.head.append(script);
+    }
+  }, [prepare]);
+
+  useEffect(() => {
+    window.onRemnaRayTelegramOidc = (result) => {
       setError(false);
-      void fetch('/api/v1/auth/telegram', {
+      if (!result.id_token) {
+        if (result.error) setError(true);
+        prepare();
+        return;
+      }
+      void fetch('/api/v1/auth/telegram/oidc', {
         method: 'POST',
         headers: { 'content-type': 'application/json', 'X-Requested-With': 'RemnaRay' },
         credentials: 'include',
-        body: JSON.stringify(payload),
+        body: JSON.stringify({ idToken: result.id_token }),
       })
         .then((response) => {
           if (!response.ok) throw new Error('telegram-auth-failed');
@@ -93,17 +94,37 @@ export default function LoginWidget({
         })
         .catch(() => {
           setError(true);
+          // The nonce is spent; the next attempt needs a new one.
+          prepare();
         });
     };
     return () => {
-      delete window.onRemnaRayTelegramAuth;
+      delete window.onRemnaRayTelegramOidc;
     };
-  }, [errorLabel, locale, router]);
+  }, [locale, prepare, router]);
 
-  if (!botUsername) return <p className="text-sm text-muted-foreground">{unavailableLabel}</p>;
+  if (login === null) return <p className="text-sm text-muted-foreground">{unavailableLabel}</p>;
 
   return (
-    <div aria-label={label} id="login" ref={host} role="group">
+    <div aria-label={label} id="login" role="group">
+      <Button
+        disabled={!login}
+        onClick={() => {
+          const auth = window.Telegram?.Login?.auth;
+          if (!login || !auth) {
+            setError(true);
+            return;
+          }
+          auth(
+            { client_id: Number(login.clientId), nonce: login.nonce, lang: locale },
+            (result) => {
+              window.onRemnaRayTelegramOidc?.(result);
+            },
+          );
+        }}
+      >
+        {label}
+      </Button>
       {error ? (
         <p className="mt-2 text-sm text-destructive" role="alert">
           {errorLabel}

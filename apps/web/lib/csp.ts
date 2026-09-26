@@ -7,11 +7,13 @@
 export function contentSecurityPolicy(nonce: string): string {
   return [
     "default-src 'self'",
-    `script-src 'self' https://telegram.org 'nonce-${nonce}'`,
+    // F29: Telegram Login over OIDC loads `telegram-login.js` from
+    // oauth.telegram.org and asks it for a token when opened inside Telegram.
+    `script-src 'self' https://telegram.org https://oauth.telegram.org 'nonce-${nonce}'`,
     "style-src 'self' 'unsafe-inline'",
     "img-src 'self' data: https://t.me https://telegram.org",
     'frame-src https://oauth.telegram.org',
-    "connect-src 'self'",
+    "connect-src 'self' https://oauth.telegram.org",
     "font-src 'self'",
     "frame-ancestors 'none'",
   ].join('; ');

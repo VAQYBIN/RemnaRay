@@ -1,4 +1,4 @@
-import { createHash, createHmac } from 'node:crypto';
+import { createHmac, createSign } from 'node:crypto';
 
 import { expect, test, type BrowserContext } from '@playwright/test';
 
@@ -21,22 +21,14 @@ async function signIn(context: BrowserContext, baseURL: string): Promise<string>
   return location;
 }
 
-function telegramWidgetPayload(state: ReturnType<typeof stackState>) {
-  const payload = {
-    id: Number(state.user.telegramId),
-    first_name: state.user.firstName,
-    username: state.user.username,
-    auth_date: Math.floor(Date.now() / 1000),
-  };
-  const checkString = Object.entries(payload)
-    .sort(([left], [right]) => left.localeCompare(right))
-    .map(([key, value]) => `${key}=${String(value)}`)
-    .join('\n');
-  const secret = createHash('sha256').update(state.botToken).digest();
-  return {
-    ...payload,
-    hash: createHmac('sha256', secret).update(checkString).digest('hex'),
-  };
+/**
+ * An id_token as Telegram's OIDC login returns it (F29), signed with the key
+ * the stand's local JWKS publishes under `oidc-1`.
+ */
+function oidcToken(privateKey: string, claims: Record<string, unknown>): string {
+  const encode = (value: unknown) => Buffer.from(JSON.stringify(value)).toString('base64url');
+  const body = `${encode({ alg: 'RS256', kid: 'oidc-1', typ: 'JWT' })}.${encode(claims)}`;
+  return `${body}.${createSign('RSA-SHA256').update(body).sign(privateKey, 'base64url')}`;
 }
 
 test.describe('customer account', () => {
@@ -45,26 +37,43 @@ test.describe('customer account', () => {
     await expect(page).toHaveURL(/\/ru\?login=1$/u);
   });
 
-  test('redirects the successful landing Telegram callback into the localized account', async ({
+  test('signs in with Telegram OIDC on the landing into the localized account (F29)', async ({
     page,
   }) => {
     const state = stackState();
-    test.skip(!state.botToken, 'the external stand does not expose a test Telegram bot token');
+    test.skip(!state.oidcPrivateKey, 'the external stand does not publish local OIDC keys');
     await page.goto('/ru');
     await page.waitForFunction(
       () =>
-        typeof (globalThis as unknown as { onRemnaRayTelegramAuth?: unknown })
-          .onRemnaRayTelegramAuth === 'function',
+        typeof (globalThis as unknown as { onRemnaRayTelegramOidc?: unknown })
+          .onRemnaRayTelegramOidc === 'function',
     );
-    await page.evaluate((payload) => {
-      const callback = (
+    // The nonce this browser holds (the page asked for one too; the cookie
+    // keeps the latest), as the Telegram popup would carry it.
+    const { clientId, nonce } = await page.evaluate(async () => {
+      const response = await fetch('/api/v1/auth/telegram/nonce', { credentials: 'include' });
+      return (await response.json()) as { clientId: string; nonce: string };
+    });
+    const now = Math.floor(Date.now() / 1000);
+    const idToken = oidcToken(state.oidcPrivateKey ?? '', {
+      iss: 'https://oauth.telegram.org',
+      aud: clientId,
+      sub: 'opaque-subject',
+      iat: now,
+      exp: now + 300,
+      nonce,
+      id: Number(state.user.telegramId),
+      name: state.user.firstName,
+      given_name: state.user.firstName,
+      preferred_username: state.user.username,
+    });
+    await page.evaluate((token) => {
+      (
         globalThis as unknown as {
-          onRemnaRayTelegramAuth?: (value: typeof payload) => void;
+          onRemnaRayTelegramOidc?: (result: { id_token: string }) => void;
         }
-      ).onRemnaRayTelegramAuth;
-      if (!callback) throw new Error('Telegram auth callback was not installed');
-      callback(payload);
-    }, telegramWidgetPayload(state));
+      ).onRemnaRayTelegramOidc?.({ id_token: token });
+    }, idToken);
     await page.waitForURL(/\/ru\/account$/u);
   });
 

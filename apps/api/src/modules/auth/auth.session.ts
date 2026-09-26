@@ -15,6 +15,8 @@ export interface SessionStorePort {
   create(record: Omit<SessionRecord, 'createdAt'>): Promise<string>;
   get(id: string): Promise<SessionRecord | undefined>;
   delete(id: string): Promise<void>;
+  /** True the first time `key` is claimed within `ttlSeconds` (a one-time use). */
+  claimOnce(key: string, ttlSeconds: number): Promise<boolean>;
   close(): Promise<void>;
 }
 
@@ -41,6 +43,10 @@ export class RedisSessionStore implements SessionStorePort {
 
   async delete(id: string): Promise<void> {
     await this.redis.del(`rr:sess:${id}`);
+  }
+
+  async claimOnce(key: string, ttlSeconds: number): Promise<boolean> {
+    return (await this.redis.set(`rr:once:${key}`, '1', 'EX', ttlSeconds, 'NX')) === 'OK';
   }
 
   async close(): Promise<void> {

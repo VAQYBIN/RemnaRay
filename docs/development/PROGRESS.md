@@ -319,34 +319,25 @@ panel users yet).
   service test red → green, migration test, 25/25 integration, web 54, API
   317, E2E 37 (console creates with a squad and edits).
 
-- **F29 In progress — move the site login to Telegram's OIDC (owner decision
-  2026-09-26).** Contract (core.telegram.org/widgets/login and the library
-  `https://oauth.telegram.org/js/telegram-login.js?6`, both read 2026-09-26;
-  live discovery and JWKS): `Telegram.Login.auth({client_id, nonce, lang},
-cb)` opens a popup (`response_type=post_message`, `redirect_uri` = the
-  page's origin + path, which must be an Allowed URL in the BotFather mini
-  app → Login Widget); default scope `openid profile`; `cb` gets `{id_token,
-user}` or `{error}`; `id_token` is signed RS256 (`kid oidc-1`) or ES256
-  (`oidc-es256-1`), `iss https://oauth.telegram.org`, `aud` = Client ID = the
-  bot id, `exp`, our `nonce`; the Telegram id is the `id` claim (profile scope,
-  shown in the documented example but absent from `claims_supported`:
-  `[verify]` on the first live login). COOP `same-origin` would break the
-  popup (none is set). Done: `auth/telegram-oidc.ts` — `TelegramOidcVerifier`
-  (JWKS cached 1 h, refetched for an unknown kid, `node:crypto`, no new
-  dependency; `RR_TELEGRAM_OAUTH_URL` overrides the base for tests) and the
-  signed, expiring nonce (`issueNonce`/`checkNonce`), 11 tests. Remaining:
-  `GET /api/v1/auth/telegram/nonce` (nonce in JSON + HttpOnly cookie
-  `rr_oidc_nonce`, Path `/api/v1/auth`, 10 min) and `POST
-/api/v1/auth/telegram/oidc {idToken}` (cookie nonce must match the token's,
-  single use via Valkey `SET NX` until expiry, `clientId` = bot token prefix,
-  upsert user with id/given_name/preferred_username, session cookie, same
-  throttle as the widget route); public config `loginClientId`; the landing
-  `LoginWidget` → own button calling `Telegram.Login.auth` with a prefetched
-  nonce (popup must open inside the click); CSP `script-src` and
-  `connect-src` add `https://oauth.telegram.org`; E2E with a local JWKS mock
-  (stack sets `RR_TELEGRAM_OAUTH_URL`); docs (setup.md: Allowed URLs
-  instead of `/setdomain`; account.md); keep the section 13.3 HMAC route for
-  compatibility.
+- **F29 Done — the site login moved to Telegram's OIDC (owner decision
+  2026-09-26).** Contract read 2026-09-26 from core.telegram.org/widgets/login,
+  the library `oauth.telegram.org/js/telegram-login.js?6` and the live
+  discovery/JWKS: popup via `Telegram.Login.auth({client_id, nonce, lang})`,
+  `redirect_uri` = the page, which must be an Allowed URL (BotFather mini app →
+  Login Widget); callback `{id_token, user}` | `{error}`; `id_token` RS256
+  (`oidc-1`) or ES256 (`oidc-es256-1`), `iss https://oauth.telegram.org`, `aud`
+  = the bot id. API: `TelegramOidcVerifier` (JWKS cached 1 h, `node:crypto`),
+  `GET /api/v1/auth/telegram/nonce` (signed 10-minute nonce + HttpOnly cookie
+  `rr_oidc_nonce`, Path `/api/v1/auth`), `POST /api/v1/auth/telegram/oidc`
+  (cookie nonce must match the token's, one use via Valkey `SET NX`, same
+  throttle as the widget route, referral cookie honoured); the section 13.3
+  HMAC route stays. Site: an own button that opens the popup inside the click
+  with a prefetched nonce; CSP `script-src`/`connect-src` add
+  `https://oauth.telegram.org`. `[verify]`: the Telegram id is the `id` claim
+  (profile scope; in the documented example, not in `claims_supported`) —
+  confirm on the first live login. Evidence: verifier tests (11), service
+  tests, web widget/CSP tests, E2E sign-in with a locally published JWKS
+  (38 passed). Stand: add `https://<domain>` as an Allowed URL before testing.
 
 **P2 — usability**
 
@@ -439,7 +430,7 @@ tests, 25/25 integration, E2E 38 passed.
 ### Next
 
 1. P0, P1 except F9/F17, and P2 — done (F1–F8, F10–F16, F18–F28).
-2. F9 and F17 — done. Owner decisions of 2026-09-26: F9 — the full profile (Telegram id,
+2. F9, F17, F29 — done. Owner decisions of 2026-09-26: F9 — the full profile (Telegram id,
    language, balance, subscription status and term, referral code, receipt
    email; «Открыть кабинет», «Язык», «Email для чеков»). F17 — separate sign-in
    from the console: 5 r/m only on the sign-in and TOTP `POST`s, `auth/me` in

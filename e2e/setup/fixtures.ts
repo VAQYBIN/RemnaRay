@@ -9,6 +9,8 @@ export type StackState = {
   apiUrl: string;
   internalToken: string;
   botToken: string;
+  /** The key the stand's local Telegram OIDC JWKS publishes (F29). */
+  oidcPrivateKey?: string;
   brand: { name: string };
   admin: { email: string; password: string; totpSecret: string };
   plan: { id: string; slug: string; name: string };

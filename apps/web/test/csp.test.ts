@@ -2,14 +2,14 @@ import { describe, expect, it } from 'vitest';
 
 import { contentSecurityPolicy } from '../lib/csp';
 
-/** The policy section 19.3 writes out, directive by directive. */
+/** Section 19.3's policy, directive by directive, plus oauth.telegram.org for the OIDC login (F29). */
 const SECTION_19_3 = [
   "default-src 'self'",
-  "script-src 'self' https://telegram.org 'nonce-N0NCE'",
+  "script-src 'self' https://telegram.org https://oauth.telegram.org 'nonce-N0NCE'",
   "style-src 'self' 'unsafe-inline'",
   "img-src 'self' data: https://t.me https://telegram.org",
   'frame-src https://oauth.telegram.org',
-  "connect-src 'self'",
+  "connect-src 'self' https://oauth.telegram.org",
   "font-src 'self'",
   "frame-ancestors 'none'",
 ];
