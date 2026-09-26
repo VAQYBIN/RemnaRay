@@ -315,14 +315,21 @@ export class MeService {
       const invoice = await this.payments.createInvoice({
         ...request,
         ...(reservation
-          ? { discountMinor: reservation.discountMinor, promocodeId: reservation.promocodeId }
+          ? {
+              discountMinor: reservation.discountMinor,
+              promocodeId: reservation.promocodeId,
+              promocodeRedemptionId: reservation.redemptionId,
+            }
           : {}),
       });
       if (!invoice) throw new ApiError('NOT_FOUND', HttpStatus.NOT_FOUND);
+      // The reservation was linked when the invoice was created. A concurrent
+      // request with the same key created the invoice instead; this
+      // reservation then names no invoice and is given back.
       if (reservation)
-        await this.infra.db.promocodeRedemption.update({
-          where: { id: reservation.redemptionId },
-          data: { invoiceId: invoice.id, appliedValueMinor: reservation.discountMinor },
+        await this.infra.db.promocodeRedemption.updateMany({
+          where: { id: reservation.redemptionId, invoiceId: null, status: 'reserved' },
+          data: { status: 'released' },
         });
       return await this.invoiceView(invoice);
     } catch (error) {

@@ -70,15 +70,21 @@ panel users yet).
   payment integration 6/6, lint/typecheck clean. Stand: the seven fake
   payments remain until the redeploy; existing pending balance invoices now
   expire instead of being paid.
-- **F25 Promocode on a balance payment is never applied (found while fixing
-  F1; code reading, no test yet).** `MeService.createInvoice` links the
-  reserved redemption to the invoice (`redemption.invoice_id`) only after
-  `PaymentsService.createInvoice` returns, but a balance invoice is settled
-  inside that call, so `applyReservedPromocode` finds no redemption: it stays
-  `reserved` for good (no `used_count`, no `promo.applied`, never released by
-  expiry). Provider invoices are linked before any webhook in practice, but
-  the same ordering gap exists. Repair: pass the redemption into invoice
-  creation (link inside the creating transaction). `$remnaray-financial-safety`.
+- **F25 Done — a promocode on a balance payment was never applied.**
+  `MeService.createInvoice` linked the reserved redemption to the invoice
+  after `PaymentsService.createInvoice` returned, but a balance invoice is
+  settled inside that call, so `applyReservedPromocode` found nothing: the
+  redemption stayed `reserved` for good (no `used_count`, no `promo.applied`,
+  never released by expiry). The redemption is now linked (`invoice_id`,
+  `applied_value_minor`) in the transaction that creates the invoice — before
+  `settleBalance` for the balance — and a reservation that names no invoice
+  afterwards (a concurrent request with the same key created the invoice) is
+  released instead of being linked to that invoice as a second redemption.
+  Invariants: one redemption per invoice; `used_count` moves once at
+  settlement; the balance debit is the discounted amount. Evidence:
+  `m4.rewards` integration (balance purchase with 10 % → redemption
+  `applied`, `applied_value_minor` 2990, `used_count` 1, balance −26910) red
+  → green; M2/M4 payment integration 6/6; API 313; E2E 37 passed.
 - **F26 Lava, Platega and CryptoBot healthchecks always answer ok (found while
   fixing F1).** `builtin-providers.ts` `healthcheck()` returns
   `{ ok: true }` without calling the provider, so AC-061 offers them with any
@@ -326,7 +332,7 @@ panel users yet).
 2. F2, F3, F4 — done.
 3. F5–F8 — done. Then the rest of P1 with F27/F28; F17 only after the
    discussion.
-4. F25 (money) and F26 alongside P1; then P2.
+4. F25 — done. F26 alongside P1; then P2.
 5. Redeploy the stand, re-run the acceptance walk, then the M5-004 gates.
 
 ## Code review repair queue — 2026-09-24

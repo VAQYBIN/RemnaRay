@@ -38,6 +38,12 @@ export type InvoiceInput = {
   currency: string;
   discountMinor?: bigint | undefined;
   promocodeId?: string | undefined;
+  /**
+   * Section 15.5: the reservation the discount comes from, linked to the
+   * invoice in the transaction that creates it — a balance invoice is settled
+   * there too, and settlement applies the reservation it finds.
+   */
+  promocodeRedemption?: { id: string; appliedValueMinor: bigint } | undefined;
   idempotencyKey: string;
   expiresAt: Date;
   providerInvoiceId?: string | undefined;
@@ -73,6 +79,18 @@ function invoiceData(input: InvoiceInput) {
     providerCurrency: input.providerCurrency ?? null,
     fxRate: input.fxRate ?? null,
   };
+}
+
+async function linkRedemption(
+  tx: Prisma.TransactionClient,
+  invoiceId: string,
+  input: InvoiceInput,
+): Promise<void> {
+  if (!input.promocodeRedemption) return;
+  await tx.promocodeRedemption.updateMany({
+    where: { id: input.promocodeRedemption.id, status: 'reserved', invoiceId: null },
+    data: { invoiceId, appliedValueMinor: input.promocodeRedemption.appliedValueMinor },
+  });
 }
 
 /** Money formatting for notification parameters, in exact minor units. */
@@ -144,7 +162,11 @@ export class PaymentsRepository {
   async createInvoice(input: InvoiceInput) {
     try {
       invoicesTotal.inc({ provider: input.provider, status: 'pending' });
-      return await this.prisma.invoice.create({ data: invoiceData(input) });
+      return await this.prisma.$transaction(async (tx) => {
+        const invoice = await tx.invoice.create({ data: invoiceData(input) });
+        await linkRedemption(tx, invoice.id, input);
+        return invoice;
+      });
     } catch (error) {
       if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002')
         return this.prisma.invoice.findUniqueOrThrow({
@@ -165,6 +187,7 @@ export class PaymentsRepository {
     try {
       const invoice = await this.prisma.$transaction(async (tx) => {
         const created = await tx.invoice.create({ data: invoiceData(input) });
+        await linkRedemption(tx, created.id, input);
         await this.settleBalance(tx, created.id);
         return created;
       });

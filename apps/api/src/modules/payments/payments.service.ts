@@ -30,6 +30,8 @@ export class PaymentsService {
     amountMinor?: bigint;
     discountMinor?: bigint;
     promocodeId?: string;
+    /** Section 15.5: the reservation behind `discountMinor`. */
+    promocodeRedemptionId?: string;
     idempotencyKey: string;
   }) {
     if (!input.idempotencyKey) throw new PaymentError('IDEMPOTENCY_REQUIRED');
@@ -142,6 +144,14 @@ export class PaymentsService {
       currency: 'RUB',
       ...(discount > 0n ? { discountMinor: discount } : {}),
       ...(input.promocodeId ? { promocodeId: input.promocodeId } : {}),
+      ...(input.promocodeRedemptionId
+        ? {
+            promocodeRedemption: {
+              id: input.promocodeRedemptionId,
+              appliedValueMinor: discount,
+            },
+          }
+        : {}),
       idempotencyKey: input.idempotencyKey,
       expiresAt: created.expiresAt,
       providerInvoiceId: created.providerInvoiceId,

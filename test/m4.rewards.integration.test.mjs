@@ -338,6 +338,41 @@ test(
           error.getStatus() === 422 && error.response.error.code === 'IDEMPOTENCY_KEY_REUSED',
       );
 
+      // Section 15.5 through the balance (FR-070): the invoice is settled while
+      // it is created, so the reservation must already name it — linked
+      // afterwards, it stayed `reserved` for good, used_count never moved and
+      // expiry never released it.
+      const balanceCode = await prisma.promocode.create({
+        data: { code: 'BALANCE1', type: 'discount_percent', value: 10n, maxUses: 5 },
+      });
+      const wallet = await prisma.user.create({
+        data: { telegramId: 995100200n, language: 'ru', referralCode: 'PROMOW01' },
+      });
+      await prisma.account.create({
+        data: { kind: 'user', userId: wallet.id, currency: 'RUB', balanceMinor: 50000n },
+      });
+      const fromBalance = await me.createInvoice(
+        wallet.id,
+        { kind: 'purchase', planId: plan.id, provider: 'balance', promocode: 'BALANCE1' },
+        'promo-balance',
+      );
+      assert.equal(fromBalance.status, 'paid');
+      const redemption = await prisma.promocodeRedemption.findFirst({
+        where: { promocodeId: balanceCode.id },
+      });
+      assert.equal(redemption.status, 'applied');
+      assert.equal(redemption.invoiceId, fromBalance.id);
+      assert.equal(redemption.appliedValueMinor, 2990n);
+      assert.equal(
+        (await prisma.promocode.findUnique({ where: { id: balanceCode.id } })).usedCount,
+        1,
+      );
+      assert.equal(
+        (await prisma.account.findFirst({ where: { kind: 'user', userId: wallet.id } }))
+          .balanceMinor,
+        50000n - 26910n,
+      );
+
       await prisma.$disconnect();
     } finally {
       await postgres.stop();
