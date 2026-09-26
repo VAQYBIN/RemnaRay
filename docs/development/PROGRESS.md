@@ -145,10 +145,14 @@ panel users yet).
 
 **P2 — usability**
 
-- **F18 Worker jobs fail before setup.** Every scheduled job gets 503
-  `SETUP_NOT_COMPLETED` until the wizard finishes (61 failed jobs on the
-  stand, all this reason, none after 12:45). Skip quietly while setup is
-  incomplete instead of recording failures.
+- **F18 Done — worker jobs failed before setup.** Every scheduled job got
+  `503 SETUP_NOT_COMPLETED` while the wizard ran and was recorded as failed
+  (61 on the stand), with a warning every 30 s. The worker now recognises that
+  answer (`setupPending`) and completes such a job as skipped
+  (`skipWhileSetup` around every queue's processor); any other failure still
+  fails. A daily check skipped this way is not recorded, so it is asked again
+  within `CHECK_RETRY_MS` after setup. Evidence: `setup-pending.test.ts`;
+  worker 28 tests; `m1.worker-cron` integration.
 - **F19 «Последняя сверка с панелью»** shows `max(panel_users.synced_at)`
   (`system.service.ts:124`), not the last reconcile run; «Не выполнялась»
   with no panel users however often it runs.

@@ -69,14 +69,15 @@ export class WorkerService implements OnModuleInit, OnModuleDestroy {
     this.workers.push(
       new Worker(
         'payments',
-        async (job: Job<{ eventId?: string }>) => this.call(paymentCall(job)),
+        async (job: Job<{ eventId?: string }>) => skipWhileSetup(() => this.call(paymentCall(job))),
         { ...options, concurrency: CONCURRENCY.payments },
       ),
     );
     this.workers.push(
       new Worker(
         'notify',
-        async (job: Job<Record<string, unknown>>) => this.call(notifyCall(job)),
+        async (job: Job<Record<string, unknown>>) =>
+          skipWhileSetup(() => this.call(notifyCall(job))),
         { ...options, concurrency: CONCURRENCY.notify },
       ),
     );
@@ -84,15 +85,22 @@ export class WorkerService implements OnModuleInit, OnModuleDestroy {
       new Worker(
         'broadcast',
         async (job: Job<Record<string, unknown>>) =>
-          this.call({ path: '/api/internal/v1/broadcasts/chunk', body: job.data }),
+          skipWhileSetup(() =>
+            this.call({ path: '/api/internal/v1/broadcasts/chunk', body: job.data }),
+          ),
         { ...options, concurrency: CONCURRENCY.broadcast },
       ),
     );
     this.workers.push(
-      new Worker('panel', async (job: Job<Record<string, unknown>>) => this.call(panelCall(job)), {
-        ...options,
-        concurrency: CONCURRENCY.panel,
-      }),
+      new Worker(
+        'panel',
+        async (job: Job<Record<string, unknown>>) =>
+          skipWhileSetup(() => this.call(panelCall(job))),
+        {
+          ...options,
+          concurrency: CONCURRENCY.panel,
+        },
+      ),
     );
     // Section 9.8. Up to ten seconds a delivery on a recipient's answer, so
     // several at once; the retry schedule is the queue package's.
@@ -100,13 +108,15 @@ export class WorkerService implements OnModuleInit, OnModuleDestroy {
       new Worker(
         'webhooks',
         async (job: Job<Record<string, unknown>>) =>
-          this.call({
-            path:
-              job.name === 'webhooks.deliver'
-                ? '/api/internal/v1/webhooks/deliver'
-                : '/api/internal/v1/webhooks/dispatch',
-            body: job.data,
-          }),
+          skipWhileSetup(() =>
+            this.call({
+              path:
+                job.name === 'webhooks.deliver'
+                  ? '/api/internal/v1/webhooks/deliver'
+                  : '/api/internal/v1/webhooks/dispatch',
+              body: job.data,
+            }),
+          ),
         { ...options, concurrency: CONCURRENCY.webhooks, settings: { backoffStrategy } },
       ),
     );
@@ -114,15 +124,17 @@ export class WorkerService implements OnModuleInit, OnModuleDestroy {
       new Worker(
         'maintenance',
         async (job: Job<Record<string, unknown>>) =>
-          job.name === 'maintenance.tls-check'
-            ? await this.tlsCheck()
-            : job.name === 'maintenance.backup-check'
-              ? await this.backupCheck()
-              : job.name === 'maintenance.disk-check'
-                ? await this.diskCheck()
-                : job.name === 'maintenance.update-check'
-                  ? await this.updateCheck()
-                  : await this.call(maintenanceCall(job)),
+          skipWhileSetup(() =>
+            job.name === 'maintenance.tls-check'
+              ? this.tlsCheck()
+              : job.name === 'maintenance.backup-check'
+                ? this.backupCheck()
+                : job.name === 'maintenance.disk-check'
+                  ? this.diskCheck()
+                  : job.name === 'maintenance.update-check'
+                    ? this.updateCheck()
+                    : this.call(maintenanceCall(job)),
+          ),
         { ...options, concurrency: CONCURRENCY.maintenance },
       ),
     );
@@ -335,10 +347,47 @@ export class WorkerService implements OnModuleInit, OnModuleDestroy {
     });
     if (!response.ok) {
       const text = await response.text();
+      if (setupPending(response.status, text)) throw new SetupPendingError(path);
       this.logger.warn(`${path} failed with ${String(response.status)}`);
       throw new Error(`job failed: ${String(response.status)} ${text.slice(0, 200)}`);
     }
     return response.json();
+  }
+}
+
+/** The API refused the call because the setup wizard has not finished. */
+export class SetupPendingError extends Error {
+  constructor(path: string) {
+    super(`${path}: SETUP_NOT_COMPLETED`);
+    this.name = 'SetupPendingError';
+  }
+}
+
+/** Section 17.4: until the wizard finishes, every internal call is this 503. */
+export function setupPending(status: number, body: string): boolean {
+  if (status !== 503) return false;
+  try {
+    const parsed = JSON.parse(body) as { error?: { code?: unknown }; code?: unknown };
+    return (parsed.error?.code ?? parsed.code) === 'SETUP_NOT_COMPLETED';
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * A job that runs while the shop is still being set up has nothing to act on
+ * (there are no users, plans or payments yet): it completes as skipped rather
+ * than failing, so the failed queue shows real failures. A daily check skipped
+ * this way is not recorded, so it is asked again minutes after setup.
+ */
+export async function skipWhileSetup<T>(
+  task: () => Promise<T>,
+): Promise<T | { skipped: 'SETUP_NOT_COMPLETED' }> {
+  try {
+    return await task();
+  } catch (error) {
+    if (error instanceof SetupPendingError) return { skipped: 'SETUP_NOT_COMPLETED' };
+    throw error;
   }
 }
 
