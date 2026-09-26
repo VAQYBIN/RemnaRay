@@ -915,6 +915,17 @@
         }
       }
     },
+    "/api/admin/v1/panel/squads": {
+      "get": {
+        "operationId": "listAdminPanelSquads",
+        "summary": "The panel's internal squads a plan can grant (FR-145)",
+        "responses": {
+          "200": {
+            "description": "{ items: [{ uuid, name }] }"
+          }
+        }
+      }
+    },
     "/api/admin/v1/panel/test": {
       "post": {
         "operationId": "testPanel",
