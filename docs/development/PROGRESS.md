@@ -199,12 +199,20 @@ panel users yet).
   inside `#login`) red → green; E2E landing asserts it; E2E 36 passed, 0
   skipped. Contract: core.telegram.org/widgets/login-legacy (2026-09-26) —
   `/setdomain`, HMAC-SHA256 with SHA256(bot token), no sunset notice.
-- **F12 Payment providers: JSON config and no editing after setup.** Wizard
-  step 7 and console «Платежи» take raw JSON with no field list; the console
-  cannot enable/disable, reorder or edit a provider although
-  `PUT /api/admin/v1/providers/:code` and `/reorder` exist (spec 9.x
-  `/providers`). One provider form driven by each `configSchema` (fields,
-  hints, docs link, masked secrets), used by both.
+- **F12 Done — payment providers took raw JSON and could not be edited.**
+  `providerFields(configSchema)` (`z.toJSONSchema`, input side) describes each
+  provider's fields (type, required, secret, default, format); the wizard's
+  state and `GET /api/admin/v1/providers` carry them, and one shared form
+  (`apps/web/app/_components/provider-fields.tsx`, labels/hints in
+  `setup.json` and `admin.json`) replaces the JSON box in step 7 and gives the
+  console «Настроить» (enabled, customer-facing name, fields), ↑/↓ reorder and
+  «Проверить». The API checks a configuration against the schema on check and
+  save (a refused field is 400 `VALIDATION_ERROR` with its path) and stores it
+  parsed, with defaults; in the console the fields sent replace the stored
+  ones and an empty secret keeps its stored value (`mergeProviderConfig`).
+  Evidence: API provider-fields/setup/providers tests red → green, web form
+  helper tests, E2E wizard (ЮKassa form, «Далее» disabled until complete) and
+  console (configure → saved, check ok); API 309, web 54, E2E 37 passed.
 - **F13 Bot referral screen.** Shows only the site link; FR-151 asks for
   link, invited, paid **and earned**; the Telegram link
   `t.me/<bot>?start=ref_<code>` (US-G-03, already in the API's `botLink`) is

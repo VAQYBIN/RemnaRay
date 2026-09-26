@@ -55,6 +55,17 @@ test.describe('administration console', () => {
     await expect(page.getByText('mock')).toBeVisible();
   });
 
+  test('configures a provider through its form and checks it (FR-061)', async ({ page }) => {
+    await page.goto('/admin/settings');
+    await page.getByRole('tab', { name: 'Платежи' }).click();
+    await page.getByRole('button', { name: 'Настроить' }).first().click();
+
+    await expect(page.getByText('Настройки: Mock')).toBeVisible();
+    await expect(page.getByLabel('Название для покупателей (ru)')).toHaveValue('Тест');
+    await page.getByRole('button', { name: 'Сохранить и проверить' }).click();
+    await expect(page.getByText('Сохранено, проверка: ok')).toBeVisible();
+  });
+
   test('system page lists the queues and the health endpoint', async ({ page }) => {
     await page.goto('/admin/system');
 

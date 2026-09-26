@@ -1,7 +1,9 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { HttpException } from '@nestjs/common';
 import * as OTPAuth from 'otpauth';
+import { z, ZodError } from 'zod';
 
+import { decryptSetting } from '../settings/settings.crypto';
 import { SetupService } from './setup.service';
 
 const APP_KEY = Buffer.alloc(32, 7).toString('base64');
@@ -106,9 +108,16 @@ function build() {
     has: () => true,
     get: () => ({
       capabilities: { receipts: false, kind: 'redirect' },
+      configSchema: z.looseObject({}) as z.ZodType,
       healthcheck: vi.fn().mockResolvedValue({ ok: true, latencyMs: 3 }),
     }),
-    list: () => [{ code: 'mock', capabilities: { receipts: false, kind: 'redirect' } }],
+    list: () => [
+      {
+        code: 'mock',
+        capabilities: { receipts: false, kind: 'redirect' },
+        configSchema: z.looseObject({}) as z.ZodType,
+      },
+    ],
   };
   const notify = { alert: vi.fn().mockResolvedValue({ delivered: 1, deduplicated: false }) };
   const service = new SetupService(
@@ -315,14 +324,70 @@ describe('SetupService finish (step 8)', () => {
 });
 
 describe('SetupService payment providers (section 17.4 step 7)', () => {
+  it('describes each provider form and stores a configuration its schema accepts (FR-061)', async () => {
+    const test = build();
+    const healthcheck = vi.fn().mockResolvedValue({ ok: true, latencyMs: 1 });
+    const provider = {
+      code: 'mock',
+      capabilities: { receipts: false, kind: 'redirect' },
+      configSchema: z.object({
+        shopId: z.string().min(1),
+        secretKey: z.string().min(1),
+        baseUrl: z.url().default('https://api.provider.test'),
+      }) as z.ZodType,
+      healthcheck,
+    };
+    test.registry.get = () => provider;
+    test.registry.list = () => [provider];
+    const { sessionId } = await test.service.token({ token: 'wizard-token' }, '10.0.0.7');
+
+    const state = (await test.service.state(sessionId)) as {
+      providers: { code: string; fields: { key: string; secret: boolean }[] }[];
+    };
+    expect(state.providers[0]?.fields.map((field) => [field.key, field.secret])).toEqual([
+      ['shopId', false],
+      ['secretKey', true],
+      ['baseUrl', false],
+    ]);
+
+    await expect(
+      test.service.checkProvider({ code: 'mock', config: { shopId: '1' } }, sessionId),
+    ).rejects.toBeInstanceOf(ZodError);
+    await expect(
+      test.service.submit(
+        '7',
+        { providers: [{ code: 'mock', config: { shopId: '1' } }] },
+        sessionId,
+      ),
+    ).rejects.toBeInstanceOf(ZodError);
+    expect(test.store.providers).toHaveLength(0);
+
+    await test.service.submit(
+      '7',
+      { providers: [{ code: 'mock', config: { shopId: '1', secretKey: 's' } }] },
+      sessionId,
+    );
+    const stored = decryptSetting({ enc: String(test.store.providers[0]?.['configEnc']) }, APP_KEY);
+    expect(stored).toEqual({ shopId: '1', secretKey: 's', baseUrl: 'https://api.provider.test' });
+  });
+
   it('neither offers nor saves the built-in balance as a provider (FR-070)', async () => {
     const test = build();
     test.registry.list = () => [
-      { code: 'mock', capabilities: { receipts: false, kind: 'redirect' } },
-      { code: 'balance', capabilities: { receipts: false, kind: 'balance' } },
+      {
+        code: 'mock',
+        capabilities: { receipts: false, kind: 'redirect' },
+        configSchema: z.looseObject({}),
+      },
+      {
+        code: 'balance',
+        capabilities: { receipts: false, kind: 'balance' },
+        configSchema: z.object({}),
+      },
     ];
     test.registry.get = (code?: string) => ({
       capabilities: { receipts: false, kind: code === 'balance' ? 'balance' : 'redirect' },
+      configSchema: z.looseObject({}),
       healthcheck: vi.fn().mockResolvedValue({ ok: true, latencyMs: 1 }),
     });
     const { sessionId } = await test.service.token({ token: 'wizard-token' }, '10.0.0.8');
@@ -345,6 +410,7 @@ describe('SetupService payment providers (section 17.4 step 7)', () => {
     const healthcheck = vi.fn().mockResolvedValue({ ok: true, latencyMs: 1 });
     test.registry.get = () => ({
       capabilities: { receipts: false, kind: 'stars' },
+      configSchema: z.object({ starsPerRub: z.number() }),
       healthcheck,
     });
     await test.config.set({ bot: { token: '123:bot' } });

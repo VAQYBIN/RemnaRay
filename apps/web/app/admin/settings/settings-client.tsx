@@ -5,7 +5,6 @@ import { useTranslations } from 'next-intl';
 import { z } from 'zod';
 
 import {
-  Badge,
   Button,
   Card,
   CardContent,
@@ -30,6 +29,7 @@ import { adminApi, errorCode } from '../../../lib/admin-client';
 import { invalidate, useResource } from '../../../lib/resource';
 import { AdminShell } from '../admin-shell';
 import { AdminSection, useAdminErrorMessage } from '../admin-states';
+import { ProvidersTab, providersSchema } from './providers-tab';
 
 const schemaSchema = z.object({
   version: z.literal(1),
@@ -45,20 +45,6 @@ const schemaSchema = z.object({
   ),
 });
 const flatSchema = z.record(z.string(), z.unknown());
-const providersSchema = z.object({
-  items: z.array(
-    z.object({
-      code: z.string(),
-      enabled: z.boolean(),
-      sortOrder: z.number(),
-      kind: z.string(),
-      lastHealthcheckAt: z.string().nullable(),
-      lastHealthcheckOk: z.boolean().nullable(),
-      lastHealthcheckError: z.string().nullable(),
-      offeredToUsers: z.boolean(),
-    }),
-  ),
-});
 const themesSchema = z.object({
   items: z.array(z.object({ slug: z.string(), name: z.string(), builtin: z.boolean() })),
   active: z.string(),
@@ -233,90 +219,15 @@ export default function SettingsAdminClient() {
             <TabsContent value="providers">
               <AdminSection refresh={resource.refresh} state={resource.state}>
                 {(data) => (
-                  <div className="flex flex-col gap-3">
-                    <p className="text-sm text-muted-foreground">
-                      {t('providers.needsHealthcheck')}
-                    </p>
-                    <DataTable
-                      columns={[
-                        { key: 'code', header: t('providers.code'), cell: (row) => row.code },
-                        {
-                          key: 'enabled',
-                          header: t('providers.enabled'),
-                          cell: (row) => (row.enabled ? '✓' : '✗'),
-                        },
-                        {
-                          key: 'health',
-                          header: t('providers.health'),
-                          cell: (row) => (
-                            <Badge
-                              variant={
-                                row.lastHealthcheckOk === true
-                                  ? 'success'
-                                  : row.lastHealthcheckOk === false
-                                    ? 'danger'
-                                    : 'secondary'
-                              }
-                            >
-                              {row.lastHealthcheckOk === null
-                                ? '—'
-                                : row.lastHealthcheckOk
-                                  ? 'ok'
-                                  : 'fail'}
-                            </Badge>
-                          ),
-                        },
-                        {
-                          key: 'offered',
-                          header: t('providers.offered'),
-                          cell: (row) => (row.offeredToUsers ? '✓' : '✗'),
-                        },
-                        {
-                          key: 'lastCheck',
-                          header: t('providers.lastCheck'),
-                          cell: (row) =>
-                            row.lastHealthcheckAt
-                              ? new Date(row.lastHealthcheckAt).toLocaleString('ru')
-                              : '—',
-                        },
-                        {
-                          key: 'actions',
-                          header: '',
-                          cell: (row) => (
-                            <Button
-                              disabled={pending}
-                              size="sm"
-                              variant="secondary"
-                              onClick={() => {
-                                setPending(true);
-                                adminApi()
-                                  .send(
-                                    'POST',
-                                    `api/admin/v1/providers/${row.code}/healthcheck`,
-                                    z.unknown(),
-                                  )
-                                  .then(() => {
-                                    invalidate('admin:settings');
-                                  }, fail)
-                                  .finally(() => {
-                                    setPending(false);
-                                  });
-                              }}
-                            >
-                              {t('providers.healthcheck')}
-                            </Button>
-                          ),
-                        },
-                      ]}
-                      labels={{
-                        loadMore: t('more'),
-                        emptyTitle: t('empty'),
-                        errorTitle: t('errorTitle'),
-                      }}
-                      rowKey={(row) => row.code}
-                      rows={data.providers.items}
-                    />
-                  </div>
+                  <ProvidersTab
+                    fail={fail}
+                    notify={(title) => {
+                      toast({ title });
+                    }}
+                    pending={pending}
+                    providers={data.providers.items}
+                    setPending={setPending}
+                  />
                 )}
               </AdminSection>
             </TabsContent>

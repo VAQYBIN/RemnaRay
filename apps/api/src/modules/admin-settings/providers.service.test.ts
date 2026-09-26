@@ -1,5 +1,8 @@
-import { describe, expect, it, vi } from 'vitest';
+import { randomBytes } from 'node:crypto';
+import { afterEach, describe, expect, it, vi } from 'vitest';
+import { z, ZodError } from 'zod';
 
+import { decryptSetting, encryptSetting } from '../settings/settings.crypto';
 import { ProvidersService } from './providers.service';
 
 function service(
@@ -30,6 +33,7 @@ function service(
     has: () => true,
     get: () => ({
       capabilities: { receipts: true, kind: 'redirect' },
+      configSchema: z.object({ shopId: z.string().min(1), secretKey: z.string().min(1) }),
       healthcheck: vi.fn().mockResolvedValue(health),
     }),
   };
@@ -47,6 +51,47 @@ const row = {
   lastHealthcheckOk: null,
   lastHealthcheckError: null,
 };
+
+describe('ProvidersService provider forms (FR-061)', () => {
+  const appKey = randomBytes(32).toString('base64');
+  afterEach(() => vi.unstubAllEnvs());
+
+  it('lists the fields of each provider and keeps a secret the form left empty', async () => {
+    vi.stubEnv('RR_APP_KEY', appKey);
+    const test = service(
+      [
+        {
+          ...row,
+          configEnc: encryptSetting({ shopId: '1', secretKey: 'live_abc' }, appKey).enc,
+        },
+      ],
+      { ok: true, latencyMs: 5 },
+    );
+
+    const listed = await test.instance.list();
+    expect(listed.items[0]?.fields.map((field) => [field.key, field.secret])).toEqual([
+      ['shopId', false],
+      ['secretKey', true],
+    ]);
+    expect(listed.items[0]?.config).toMatchObject({ shopId: '1', secretKey: '••••_abc' });
+
+    await test.instance.update('mock', { config: { shopId: '2', secretKey: '' } });
+    expect(decryptSetting({ enc: String(test.stored[0]?.['configEnc']) }, appKey)).toEqual({
+      shopId: '2',
+      secretKey: 'live_abc',
+    });
+  });
+
+  it('refuses a configuration the provider schema does not accept', async () => {
+    vi.stubEnv('RR_APP_KEY', appKey);
+    const test = service([{ ...row }], { ok: true, latencyMs: 5 });
+
+    await expect(test.instance.update('mock', { config: { shopId: '' } })).rejects.toBeInstanceOf(
+      ZodError,
+    );
+    expect(test.stored[0]?.['configEnc']).toBeNull();
+  });
+});
 
 describe('ProvidersService (AC-061)', () => {
   it('does not list a row for the built-in balance, which is no provider (FR-070)', async () => {

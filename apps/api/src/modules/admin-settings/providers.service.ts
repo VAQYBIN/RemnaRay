@@ -5,6 +5,7 @@ import { Infrastructure } from '../../infra/infra.module';
 import { Audited } from '../admin/audit.interceptor';
 import { PaymentProviderRegistry } from '../payments/payments.registry';
 import { withStarsRuntime } from '../payments/payments.service';
+import { mergeProviderConfig, providerFields } from '../payments/provider-fields';
 import { decryptSetting, encryptSetting } from '../settings/settings.crypto';
 import { SettingsService } from '../settings/settings.service';
 
@@ -57,6 +58,8 @@ export class ProvidersService {
           displayName: row.displayName,
           supportsReceipts: provider?.capabilities.receipts ?? row.supportsReceipts,
           kind: provider?.capabilities.kind ?? 'redirect',
+          /** FR-061: the form the console draws for this provider. */
+          fields: provider ? providerFields(provider.configSchema) : [],
           config: mask(this.config(row.configEnc)),
           lastHealthcheckAt: row.lastHealthcheckAt?.toISOString() ?? null,
           lastHealthcheckOk: row.lastHealthcheckOk,
@@ -71,7 +74,16 @@ export class ProvidersService {
   async update(code: string, body: unknown) {
     const input = providerPatchSchema.parse(body);
     const before = await this.require(code);
-    const config = input.config ?? this.config(before.configEnc);
+    // FR-061: the fields sent replace the stored ones, a secret left empty
+    // keeps its stored value, and the result must satisfy the provider's
+    // schema (a refusal is a VALIDATION_ERROR naming the field).
+    let config = this.config(before.configEnc);
+    if (input.config !== undefined) {
+      if (!this.registry.has(code)) throw new NotFoundException('NOT_FOUND');
+      config = this.registry
+        .get(code)
+        .configSchema.parse(mergeProviderConfig(config, input.config)) as Record<string, unknown>;
+    }
     const updated = await this.infra.db.paymentProvider.update({
       where: { code },
       data: {

@@ -34,6 +34,7 @@ import {
   setupTokenSchema,
   type SetupStep,
 } from './setup.schemas';
+import { providerFields } from '../payments/provider-fields';
 
 /** FR-171: the wizard session lives one hour after the token is accepted. */
 const SESSION_TTL = 60 * 60;
@@ -120,6 +121,7 @@ export class SetupService {
           code: provider.code,
           kind: provider.capabilities.kind,
           receipts: provider.capabilities.receipts,
+          fields: providerFields(provider.configSchema),
         })),
       steps: SETUP_STEPS,
     };
@@ -205,11 +207,17 @@ export class SetupService {
     await this.session(sessionId);
     const input = setupProviderCheckSchema.parse(body);
     if (!this.configurable(input.code)) throw new SetupFailure('NOT_FOUND', 404);
+    // FR-061: a configuration the provider's schema refuses is a
+    // VALIDATION_ERROR naming the field, not a failed healthcheck.
+    const config = this.providers.get(input.code).configSchema.parse(input.config) as Record<
+      string,
+      unknown
+    >;
     const started = Date.now();
     try {
       return await this.providers
         .get(input.code)
-        .healthcheck(await this.providerRuntime(input.code, input.config));
+        .healthcheck(await this.providerRuntime(input.code, config));
     } catch (error) {
       return { ok: false, latencyMs: Date.now() - started, error: this.reason(error) };
     }
@@ -434,10 +442,20 @@ export class SetupService {
     const results: { code: string; ok: boolean; error?: string }[] = [];
     for (const provider of input.providers)
       if (!this.configurable(provider.code)) throw new SetupFailure('NOT_FOUND', 404);
-    for (const provider of input.providers) {
+    // Every configuration is checked against its schema before any is saved,
+    // and saved as parsed, with the schema's defaults.
+    const configs = input.providers.map(
+      (provider) =>
+        this.providers.get(provider.code).configSchema.parse(provider.config) as Record<
+          string,
+          unknown
+        >,
+    );
+    for (const [index, provider] of input.providers.entries()) {
       const definition = this.providers.get(provider.code);
+      const config = configs[index] ?? {};
       const health = await definition
-        .healthcheck(await this.providerRuntime(provider.code, provider.config))
+        .healthcheck(await this.providerRuntime(provider.code, config))
         .catch((error: unknown) => ({ ok: false, latencyMs: 0, error: this.reason(error) }));
       await this.infra.db.paymentProvider.upsert({
         where: { code: provider.code },
@@ -447,7 +465,7 @@ export class SetupService {
           displayName: provider.displayName ?? { ru: provider.code, en: provider.code },
           supportsReceipts: definition.capabilities.receipts,
           sortOrder: (results.length + 1) * 10,
-          configEnc: encryptSetting(provider.config, this.appKey).enc,
+          configEnc: encryptSetting(config, this.appKey).enc,
           lastHealthcheckAt: new Date(),
           lastHealthcheckOk: health.ok,
           lastHealthcheckError: health.error ?? null,
@@ -455,7 +473,7 @@ export class SetupService {
         update: {
           enabled: provider.enabled,
           ...(provider.displayName ? { displayName: provider.displayName } : {}),
-          configEnc: encryptSetting(provider.config, this.appKey).enc,
+          configEnc: encryptSetting(config, this.appKey).enc,
           lastHealthcheckAt: new Date(),
           lastHealthcheckOk: health.ok,
           lastHealthcheckError: health.error ?? null,

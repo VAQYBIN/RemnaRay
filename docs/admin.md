@@ -166,6 +166,19 @@ and answers with `applied`, `restartRequired` and `reconfigured`. The site
 revalidates config, catalogs and theme every five seconds; the bot caches
 catalogs for sixty seconds and drops them immediately on `rr:i18n.changed`.
 
+### FR-061 — provider forms
+
+Each provider's form is drawn from its `configSchema`: `GET /api/setup/v1/state`
+and `GET /api/admin/v1/providers` list `fields` (`key`, `type` string, number,
+boolean or list, `required`, `secret`, `default`), and the setup wizard and the
+console's «Платежи» tab render the same fields, with labels and hints from the
+locales. A configuration is checked against the schema when it is checked or
+saved, and a refused field is `400 VALIDATION_ERROR` with its path; it is stored
+with the schema's defaults. In the console «Настроить» edits a provider: enabled,
+the name customers see, and the fields. The fields sent replace the stored ones
+and a secret left empty keeps its stored value; saving runs the healthcheck.
+↑/↓ reorder the providers (`POST /providers/reorder`).
+
 ### AC-146 — system page
 
 `GET /api/admin/v1/system` reports the application version, image tags, the last

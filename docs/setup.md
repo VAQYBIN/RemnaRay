@@ -34,7 +34,7 @@ and the brand, so it is only served to a wizard session.
 | 4   | Bot                 | `getMe`; the webhook itself is set on the last step                                                                         |
 | 5   | Brand               | the theme must load from the mounted `themes/` directory                                                                    |
 | 6   | Plan and trial      | creates the first `plans` row and writes `settings.trial.*`                                                                 |
-| 7   | Payments and fiscal | healthchecks each provider, or the step is skipped                                                                          |
+| 7   | Payments and fiscal | a form per provider from its `configSchema` (see admin.md, FR-061), healthchecks each, or the step is skipped               |
 | 8   | Ready               | flips `setup.completed` and launches the shop                                                                               |
 
 Step 1 is posted twice: without `code` the server generates the TOTP secret and

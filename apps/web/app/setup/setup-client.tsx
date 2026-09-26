@@ -18,6 +18,14 @@ import {
 } from '@remnaray/ui';
 
 import { browserApi } from '../../lib/api';
+import {
+  complete,
+  initialValues,
+  ProviderFields,
+  providerFieldSchema,
+  toConfig,
+  type ProviderValues,
+} from '../_components/provider-fields';
 
 const squadSchema = z.object({ uuid: z.string(), name: z.string() });
 const stateSchema = z.object({
@@ -35,7 +43,15 @@ const stateSchema = z.object({
     })
     .optional(),
   themes: z.array(z.object({ slug: z.string(), name: z.string() })).optional(),
-  providers: z.array(z.object({ code: z.string(), kind: z.string() })).optional(),
+  providers: z
+    .array(
+      z.object({
+        code: z.string(),
+        kind: z.string(),
+        fields: z.array(providerFieldSchema).default([]),
+      }),
+    )
+    .optional(),
 });
 const tokenSchema = z.object({ accepted: z.boolean(), state: stateSchema });
 const adminStepSchema = z.object({
@@ -955,7 +971,7 @@ function PaymentsStep({ pending, state, run, refresh, setStep }: StepProps) {
   const t = useTranslations('setup');
   const [status, setStatus] = useState<'none' | 'self_employed' | 'company'>('none');
   const [selected, setSelected] = useState<string[]>([]);
-  const [configs, setConfigs] = useState<Record<string, string>>({});
+  const [configs, setConfigs] = useState<Record<string, ProviderValues>>({});
   const [checks, setChecks] = useState<Record<string, { ok: boolean; error?: string | undefined }>>(
     {},
   );
@@ -969,16 +985,15 @@ function PaymentsStep({ pending, state, run, refresh, setStep }: StepProps) {
     fallback_email: '',
   };
 
-  const parsed = (code: string): Record<string, unknown> | null => {
-    try {
-      const value: unknown = JSON.parse(configs[code] ?? '{}');
-      return value && typeof value === 'object' && !Array.isArray(value)
-        ? (value as Record<string, unknown>)
-        : null;
-    } catch {
-      return null;
-    }
-  };
+  const fieldsOf = (code: string) =>
+    providers.find((provider) => provider.code === code)?.fields ?? [];
+  const valuesOf = (code: string) => configs[code] ?? initialValues(fieldsOf(code));
+  const parsed = (code: string): Record<string, unknown> | null =>
+    complete(fieldsOf(code), valuesOf(code)) ? toConfig(fieldsOf(code), valuesOf(code)) : null;
+  const label = (key: string) =>
+    t.has(`payments.field.${key}`) ? t(`payments.field.${key}`) : key;
+  const hint = (key: string) =>
+    t.has(`payments.hint.${key}`) ? t(`payments.hint.${key}`) : undefined;
 
   const save = (skipped: boolean) =>
     void run(async () => {
@@ -986,7 +1001,11 @@ function PaymentsStep({ pending, state, run, refresh, setStep }: StepProps) {
         skipped,
         providers: skipped
           ? []
-          : selected.map((code) => ({ code, enabled: true, config: parsed(code) ?? {} })),
+          : selected.map((code) => ({
+              code,
+              enabled: true,
+              config: toConfig(fieldsOf(code), valuesOf(code)),
+            })),
         fiscal,
       });
       return refresh();
@@ -1030,20 +1049,22 @@ function PaymentsStep({ pending, state, run, refresh, setStep }: StepProps) {
                   );
                 }}
               />
-              {provider.code}
+              {t.has(`payments.providerName.${provider.code}`)
+                ? t(`payments.providerName.${provider.code}`)
+                : provider.code}
             </label>
             {selected.includes(provider.code) ? (
               <>
-                <Label htmlFor={`setup-provider-${provider.code}`}>{t('payments.config')}</Label>
-                <textarea
-                  className="min-h-20 rounded-md border border-border bg-background p-3 font-mono text-sm"
-                  id={`setup-provider-${provider.code}`}
-                  value={configs[provider.code] ?? '{}'}
-                  onChange={(event) => {
-                    setConfigs((current) => ({ ...current, [provider.code]: event.target.value }));
+                <ProviderFields
+                  fields={provider.fields}
+                  hint={hint}
+                  idPrefix={`setup-provider-${provider.code}`}
+                  label={label}
+                  values={valuesOf(provider.code)}
+                  onChange={(values) => {
+                    setConfigs((current) => ({ ...current, [provider.code]: values }));
                   }}
                 />
-                <p className="text-xs text-muted-foreground">{t('payments.configHint')}</p>
                 <div className="flex items-center gap-2">
                   <Button
                     disabled={pending || !parsed(provider.code)}
@@ -1091,7 +1112,9 @@ function PaymentsStep({ pending, state, run, refresh, setStep }: StepProps) {
           {t('skip')}
         </Button>
         <Button
-          disabled={pending || selected.length === 0}
+          disabled={
+            pending || selected.length === 0 || selected.some((code) => parsed(code) === null)
+          }
           onClick={() => {
             save(false);
           }}

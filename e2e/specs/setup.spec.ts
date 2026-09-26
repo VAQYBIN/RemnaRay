@@ -69,8 +69,14 @@ test.describe('setup wizard', () => {
     await page.getByLabel('Цена, ₽').fill('299');
     await page.getByRole('button', { name: 'Далее' }).click();
 
-    // Step 10: payments may be skipped.
+    // Step 10: each provider is a form of its own fields (FR-061), not JSON;
+    // payments may be skipped.
     await expect(page.getByRole('heading', { name: 'Платежи и чеки' })).toBeVisible();
+    await page.getByRole('checkbox', { name: 'ЮKassa' }).check();
+    await expect(page.getByLabel('ID магазина (shopId) *')).toBeVisible();
+    await expect(page.getByLabel('Секретный ключ *')).toHaveAttribute('type', 'password');
+    await expect(page.getByRole('button', { name: 'Далее' })).toBeDisabled();
+    await page.getByRole('checkbox', { name: 'ЮKassa' }).uncheck();
     await page.getByRole('button', { name: 'Пропустить' }).click();
 
     // Step 11: the summary and the launch.
