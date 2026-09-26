@@ -341,5 +341,6 @@
   "admin.plans.squadsColumn": "Сквады",
   "admin.plans.squadsHint": "Покупатель тарифа получает доступ к отмеченным внутренним сквадам панели; нужен хотя бы один.",
   "admin.plans.noSquads": "Нет сквадов",
-  "admin.plans.squadsUnavailable": "Не удалось загрузить сквады с панели. Проверьте подключение на странице «Панель»."
+  "admin.plans.squadsUnavailable": "Не удалось загрузить сквады с панели. Проверьте подключение на странице «Панель».",
+  "admin.system.panelSyncResult": "Проверено: {checked}, расхождений: {drifted}"
 }

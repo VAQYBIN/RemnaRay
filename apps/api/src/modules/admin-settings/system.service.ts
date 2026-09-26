@@ -17,6 +17,7 @@ import {
   TLS_STATUS_KEY,
   UPDATE_STATUS_KEY,
 } from './proxy.controller';
+import { lastReconcile } from '../remnawave/reconcile-record';
 
 /** FR-146 health page. */
 @Injectable()
@@ -122,6 +123,8 @@ export class SystemService {
       },
       panel: {
         lastSyncedAt: panelSync._max.syncedAt?.toISOString() ?? null,
+        // AC-146: the last reconciliation run, not the last user it wrote.
+        lastReconcile: await lastReconcile(this.infra.redis),
         baseUrl: String(await this.settings.get('panel.base_url')),
       },
       bot: { mode: botMode, username: botUsername },

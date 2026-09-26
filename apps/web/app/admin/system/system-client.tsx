@@ -20,7 +20,14 @@ const overviewSchema = z.object({
     web: z.string().nullable(),
     proxy: z.string().nullable(),
   }),
-  panel: z.object({ lastSyncedAt: z.string().nullable(), baseUrl: z.string() }),
+  panel: z.object({
+    lastSyncedAt: z.string().nullable(),
+    lastReconcile: z
+      .object({ at: z.string(), checked: z.number(), drifted: z.number() })
+      .nullable()
+      .default(null),
+    baseUrl: z.string(),
+  }),
   bot: z.object({ mode: z.unknown(), username: z.unknown() }),
   outboxPending: z.number(),
   database: z.object({
@@ -114,10 +121,18 @@ export default function SystemClient() {
                     <Stat
                       label={t('system.panelSync')}
                       value={
-                        data.overview.panel.lastSyncedAt
-                          ? new Date(data.overview.panel.lastSyncedAt).toLocaleString('ru')
+                        data.overview.panel.lastReconcile
+                          ? new Date(data.overview.panel.lastReconcile.at).toLocaleString('ru')
                           : t('dashboard.never')
                       }
+                      {...(data.overview.panel.lastReconcile
+                        ? {
+                            hint: t('system.panelSyncResult', {
+                              checked: data.overview.panel.lastReconcile.checked,
+                              drifted: data.overview.panel.lastReconcile.drifted,
+                            }),
+                          }
+                        : {})}
                     />
                     <Stat label={t('system.outbox')} value={data.overview.outboxPending} />
                     <Stat

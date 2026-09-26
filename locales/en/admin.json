@@ -341,5 +341,6 @@
   "admin.plans.squadsColumn": "Squads",
   "admin.plans.squadsHint": "A customer of the plan gets the checked internal squads of the panel; at least one is needed.",
   "admin.plans.noSquads": "No squads",
-  "admin.plans.squadsUnavailable": "The panel's squads could not be loaded. Check the connection on the «Panel» page."
+  "admin.plans.squadsUnavailable": "The panel's squads could not be loaded. Check the connection on the «Panel» page.",
+  "admin.system.panelSyncResult": "Checked: {checked}, drifted: {drifted}"
 }

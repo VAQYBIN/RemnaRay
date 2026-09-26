@@ -10,6 +10,7 @@ import {
 import { Infrastructure } from '../../infra/infra.module';
 import { SettingsService } from '../settings/settings.service';
 import { emitWebhook, subscriptionData } from '../webhooks/outgoing';
+import { recordReconcile } from './reconcile-record';
 
 /** EX-01: how long a subscription may stay `provisioning`. */
 const PROVISIONING_DEADLINE_MS = 24 * 60 * 60 * 1000;
@@ -283,7 +284,9 @@ export class RemnawaveService {
           drifted += 1;
         } else await this.saveSnapshot(row.userId, current, false);
       }
-      return { checked: rows.length, drifted, ...provisioning };
+      const result = { checked: rows.length, drifted, ...provisioning };
+      await recordReconcile(this.infra.redis, result).catch(() => undefined);
+      return result;
     } finally {
       await client.close();
     }

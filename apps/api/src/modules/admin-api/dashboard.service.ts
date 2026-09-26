@@ -2,6 +2,7 @@ import { Injectable } from '@nestjs/common';
 import { z } from 'zod';
 
 import { Infrastructure } from '../../infra/infra.module';
+import { lastReconcile } from '../remnawave/reconcile-record';
 
 export const dashboardQuerySchema = z.object({
   from: z.iso.datetime().optional(),
@@ -197,6 +198,7 @@ export class DashboardService {
       lateInvoicePayments: paidExpiredInvoices,
       stuckJobs: failedJobs,
       panelLastSyncedAt: panel._max.syncedAt?.toISOString() ?? null,
+      panelLastReconciledAt: (await lastReconcile(this.infra.redis))?.at ?? null,
     };
   }
 }

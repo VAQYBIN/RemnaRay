@@ -48,6 +48,7 @@ const attentionSchema = z.object({
   lateInvoicePayments: z.number(),
   stuckJobs: z.number(),
   panelLastSyncedAt: z.string().nullable(),
+  panelLastReconciledAt: z.string().nullable().default(null),
 });
 
 type Data = {
@@ -184,8 +185,8 @@ export default function DashboardClient() {
                         {t('dashboard.panelSynced')}
                       </dt>
                       <dd className="text-lg font-semibold">
-                        {data.attention.panelLastSyncedAt
-                          ? new Date(data.attention.panelLastSyncedAt).toLocaleString('ru')
+                        {data.attention.panelLastReconciledAt
+                          ? new Date(data.attention.panelLastReconciledAt).toLocaleString('ru')
                           : t('dashboard.never')}
                       </dd>
                     </div>

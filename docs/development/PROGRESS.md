@@ -153,9 +153,13 @@ panel users yet).
   fails. A daily check skipped this way is not recorded, so it is asked again
   within `CHECK_RETRY_MS` after setup. Evidence: `setup-pending.test.ts`;
   worker 28 tests; `m1.worker-cron` integration.
-- **F19 «Последняя сверка с панелью»** shows `max(panel_users.synced_at)`
-  (`system.service.ts:124`), not the last reconcile run; «Не выполнялась»
-  with no panel users however often it runs.
+- **F19 Done — «Последняя сверка с панелью» showed the last user write.** It
+  was `max(panel_users.synced_at)`, so a reconciliation over no users (or one
+  with no drift) never showed. `RemnawaveService.reconcile` now records its
+  time and outcome in Valkey (`rr:panel:reconcile:last`); `/admin/system`
+  shows it with «Проверено N, расхождений M» and the dashboard's attention
+  block shows its time. Evidence: `reconcile-record.test.ts`; API and web
+  tests.
 - **F20 `./scripts/rr up` does not pull.** A leftover `app:dev` image from
   2026-09-23 ran with the new `compose.yaml` → migrate
   `DATABASE_URL is required` (the pre-`56168cb` message). Pull before `up`,
