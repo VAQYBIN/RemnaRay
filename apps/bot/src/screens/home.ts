@@ -44,9 +44,10 @@ export async function showAccount(ctx: RrContext, api: ApiClient): Promise<void>
 
 export async function showHome(ctx: RrContext, api: ApiClient): Promise<void> {
   if (!ctx.from) return;
-  const [state, subscriptionState] = await Promise.all([
+  const [state, subscriptionState, config] = await Promise.all([
     api.getMe(ctx.from.id),
     api.getSubscription(ctx.from.id),
+    api.getConfig(),
   ]);
   const subscription = subscriptionState.subscription;
   const status = subscription
@@ -54,17 +55,25 @@ export async function showHome(ctx: RrContext, api: ApiClient): Promise<void> {
     : ctx.t('bot.screen.home.noSubscription');
   await show(
     ctx,
-    `${ctx.t('bot.screen.home.welcome', { brand: 'RemnaRay' })}\n\n${status}`,
+    `${ctx.t('bot.screen.home.welcome', { brand: config.brandName })}\n\n${status}`,
     homeKeyboard(ctx, state, subscription),
   );
 }
 
-export async function showTrialConfirm(ctx: RrContext): Promise<void> {
+export async function showTrialConfirm(ctx: RrContext, api: ApiClient): Promise<void> {
+  const { trial } = await api.getConfig();
   const keyboard = new InlineKeyboard()
     .text(ctx.t('bot.btn.trial'), 'trial:go')
     .row()
     .text(ctx.t('bot.btn.back'), 'home');
-  await show(ctx, ctx.t('bot.screen.trial.confirm', { days: 3, traffic: '10 GB' }), keyboard);
+  await show(
+    ctx,
+    ctx.t('bot.screen.trial.confirm', {
+      days: trial.days,
+      traffic: trial.trafficGb > 0 ? `${String(trial.trafficGb)} GB` : '∞',
+    }),
+    keyboard,
+  );
 }
 
 export function profileKeyboard(ctx: RrContext): InlineKeyboard {

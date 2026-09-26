@@ -39,7 +39,7 @@ function configure(): Promise<void> {
   configuring = configuring
     .then(async () => {
       if (stopping) return;
-      const config = await api.getConfig();
+      const config = await api.getConfig({ fresh: true });
       if (config.token !== activeToken) {
         await ingress?.stop();
         runtime?.redis.disconnect();

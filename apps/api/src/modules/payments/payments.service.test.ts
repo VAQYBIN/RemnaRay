@@ -327,6 +327,56 @@ describe('PaymentsService.createInvoice URLs handed to the provider', () => {
   });
 });
 
+describe('PaymentsService.createInvoice payer-visible description', () => {
+  it("names a top-up after the shop's brand", async () => {
+    const registry = createPaymentProviderRegistry({ RR_PAYMENTS_MOCK: 'true' });
+    const create = vi.spyOn(registry.get('mock'), 'createInvoice');
+    const db = {
+      user: {
+        findUniqueOrThrow: vi
+          .fn()
+          .mockResolvedValue({ id: 'user-1', telegramId: 42n, email: null, language: 'ru' }),
+      },
+      paymentProvider: { findUnique: vi.fn().mockResolvedValue(null) },
+      $queryRaw: vi.fn().mockResolvedValue([{ id: 'invoice-1' }]),
+      outboxJob: { create: vi.fn() },
+    };
+    const repository = {
+      findByIdempotencyKey: vi.fn().mockResolvedValue(null),
+      createInvoice: vi
+        .fn()
+        .mockImplementation((input: Record<string, unknown>) =>
+          Promise.resolve({ ...input, status: 'pending' }),
+        ),
+      findInvoice: vi.fn().mockResolvedValue({ id: 'invoice-1' }),
+    };
+    const service = new PaymentsService(
+      { db } as unknown as Infrastructure,
+      repository as unknown as PaymentsRepository,
+      registry,
+      {
+        get: (key: string) =>
+          Promise.resolve(
+            ({ 'brand.name': 'Manta VPN', 'fiscal.mode': 'none' } as Record<string, unknown>)[key],
+          ),
+      } as never,
+    );
+
+    await service.createInvoice({
+      userId: 'user-1',
+      kind: 'topup',
+      provider: 'mock',
+      amountMinor: 10000n,
+      idempotencyKey: 'key-1',
+    });
+
+    expect(create).toHaveBeenCalledWith(
+      expect.objectContaining({ description: 'Manta VPN' }),
+      expect.anything(),
+    );
+  });
+});
+
 describe('PaymentsService.createInvoice Idempotency-Key (sections 9.2, 9.3)', () => {
   const stored = {
     id: 'invoice-a',

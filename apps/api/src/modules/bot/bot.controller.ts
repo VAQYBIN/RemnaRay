@@ -160,6 +160,11 @@ export class BotInternalController {
       adminCommands,
       supportForwardChatId,
       supportContact,
+      brandName: String(await this.settings.get('brand.name')),
+      trial: {
+        days: Number(await this.settings.get('trial.days')),
+        trafficGb: Number(await this.settings.get('trial.traffic_gb')),
+      },
       admins: admins.flatMap((admin) =>
         admin.telegramId === null ? [] : [admin.telegramId.toString()],
       ),

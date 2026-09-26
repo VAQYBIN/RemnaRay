@@ -175,13 +175,19 @@ panel users yet).
   to `showHome`, re-rendering the same message. FR-122 names the button,
   not its contents. Proposal for the owner: Telegram id, language, balance,
   subscription status/expiry, referral code, «Открыть кабинет».
-- **F10 Bot hard-coded values.** Welcome uses `brand: 'RemnaRay'`
-  (`home.ts:57`) instead of `brand.name`; trial confirm always says
-  «3 дня, 10 GB» (`home.ts:67`). Also review `'RemnaRay'` fallbacks in
-  `payments.service.ts:40`, `builtin-providers.ts:706`, `stars.service.ts:77`
-  (payer-visible titles) and the TOTP issuer in `admin.crypto.ts:23,34`
-  (check the spec: product or brand). `x-requested-with: RemnaRay` is a
-  protocol constant — leave it.
+- **F10 Done — hard-coded brand and trial.** The bot's welcome said
+  «RemnaRay» and the trial confirmation always «3 дня, 10 GB». The bot
+  configuration (`/api/internal/v1/bot/config`) now carries `brandName` and
+  `trial {days, trafficGb}`; the home screen and the trial confirmation use
+  them (0 GB → ∞). `ApiClient.getConfig` keeps the answer 30 s (it assembles
+  every locale's commands), and `main.ts` reads it afresh on each
+  reconfigure. A top-up's payer-visible description is `brand.name`, no
+  longer «RemnaRay». Kept deliberately: `x-requested-with: RemnaRay` (a
+  protocol constant), the Stars title fallbacks (unreachable once the
+  description is the brand or plan), and the console TOTP issuer «RemnaRay»
+  (the spec names none; it labels the console, not the shop). Evidence: bot
+  home/api-client tests, API bot-config and payment-description tests red →
+  green; API 303, bot 39 tests.
 - **F11 Landing «Войти» shows no login widget.** `#login` anchor
   (`[locale]/page.tsx:99`) points at `LoginWidget`, whose `next/script`
   appends the Telegram script to `<body>`, so the widget iframe is created

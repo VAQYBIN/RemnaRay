@@ -40,6 +40,9 @@ describe('bot ingress boundary', () => {
       'bot.webhook_secret_path': 'path-secret',
       'bot.webhook_secret_token': 'header-secret',
       'brand.support_forward_chat_id': null,
+      'brand.name': 'Manta VPN',
+      'trial.days': 7,
+      'trial.traffic_gb': 25,
     };
     const catalogs: Record<string, Record<string, string>> = {
       en: { 'bot.btn.buy': '🛒 Buy', 'bot.commands.start': 'Start the bot' },
@@ -60,6 +63,8 @@ describe('bot ingress boundary', () => {
       webUrl: 'https://shop.example.test',
       webhookUrl: 'https://shop.example.test/tg/webhook/path-secret',
       admins: ['123'],
+      brandName: 'Manta VPN',
+      trial: { days: 7, trafficGb: 25 },
     });
     expect(config.commands.en?.[0]).toEqual({ command: 'start', description: 'Start the bot' });
   });

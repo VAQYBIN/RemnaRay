@@ -61,6 +61,23 @@ describe('ApiClient', () => {
     expect(requests[0]?.headers.get('x-acting-user')).toBe('123');
   });
 
+  it('reuses the bot configuration for a while, and fetches it afresh on request', async () => {
+    let calls = 0;
+    const api = new ApiClient({
+      baseUrl: 'http://api.test',
+      internalToken: 'internal-secret',
+      fetchImpl: () => {
+        calls += 1;
+        return Promise.resolve(Response.json({ brandName: `Shop ${String(calls)}` }));
+      },
+    });
+
+    expect((await api.getConfig()).brandName).toBe('Shop 1');
+    expect((await api.getConfig()).brandName).toBe('Shop 1');
+    expect((await api.getConfig({ fresh: true })).brandName).toBe('Shop 2');
+    expect((await api.getConfig()).brandName).toBe('Shop 2');
+  });
+
   it('turns structured API errors into ApiClientError', async () => {
     const api = new ApiClient({
       fetchImpl: () =>

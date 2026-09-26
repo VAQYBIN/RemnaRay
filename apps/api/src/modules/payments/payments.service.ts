@@ -38,7 +38,9 @@ export class PaymentsService {
     await this.requireOffered(input.provider, input.kind);
     const user = await this.infra.db.user.findUniqueOrThrow({ where: { id: input.userId } });
     let amount = input.amountMinor ?? 0n;
-    let description = 'RemnaRay';
+    // What the payer sees at the provider: the shop's brand, or the plan below.
+    const brand = this.settings ? String(await this.settings.get('brand.name')) : '';
+    let description = brand || 'RemnaRay';
     let listPrice: { priceMinor: bigint; priceOverrides: unknown } | undefined;
     if (input.kind !== 'topup') {
       if (!input.planId) throw new PaymentError('PLAN_UNAVAILABLE');

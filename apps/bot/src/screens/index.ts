@@ -57,7 +57,7 @@ export function registerScreens(bot: Bot<RrContext>, api: ApiClient): void {
   bot.callbackQuery(/^inv:check:([0-9a-f-]+)$/u, (ctx) =>
     checkPayment(ctx, api, capture(ctx.match, 1)),
   );
-  bot.callbackQuery('trial:confirm', (ctx) => showTrialConfirm(ctx));
+  bot.callbackQuery('trial:confirm', (ctx) => showTrialConfirm(ctx, api));
   bot.callbackQuery('trial:go', async (ctx) => {
     await api.startTrial(ctx.from.id);
     await showSubscription(ctx, api);

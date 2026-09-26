@@ -109,7 +109,10 @@ export type ApiClientOptions = {
   fetchImpl?: typeof fetch;
 };
 
+const CONFIG_TTL_MS = 30_000;
+
 export class ApiClient {
+  private config: { value: import('./types.js').BotConfig; at: number } | undefined;
   private readonly baseUrl: string;
   private readonly internalToken: string;
   private readonly fetchImpl: typeof fetch;
@@ -175,8 +178,17 @@ export class ApiClient {
     });
   }
 
-  getConfig() {
-    return this.request<import('./types.js').BotConfig>('/api/internal/v1/bot/config');
+  /**
+   * The bot's configuration. Screens read it for the brand and the trial, and
+   * the answer assembles every locale's commands, so it is kept for 30 s;
+   * `main.ts` asks for it afresh on every `rr:bot.reconfigure`.
+   */
+  async getConfig(options: { fresh?: boolean } = {}) {
+    if (!options.fresh && this.config && Date.now() - this.config.at < CONFIG_TTL_MS)
+      return this.config.value;
+    const value = await this.request<import('./types.js').BotConfig>('/api/internal/v1/bot/config');
+    this.config = { value, at: Date.now() };
+    return value;
   }
 
   getMessages(lang: Locale) {

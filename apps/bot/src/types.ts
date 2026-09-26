@@ -29,6 +29,10 @@ export const ALLOWED_UPDATES = [
 
 export type BotConfig = {
   token: string;
+  /** `settings.brand.name`: the shop's own name in customer-facing texts. */
+  brandName: string;
+  /** `settings.trial.days` and `settings.trial.traffic_gb` (0 = unlimited). */
+  trial: { days: number; trafficGb: number };
   defaultLocale: Locale;
   mode: 'webhook' | 'polling';
   webUrl: string;
