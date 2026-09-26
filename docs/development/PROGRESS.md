@@ -204,13 +204,57 @@ panel users yet).
   repository test. Evidence: domain client test and web page test red →
   green; API 320, web, E2E 38.
 
+### Review of the repairs (2026-09-26)
+
+An independent read-only review of the money, secret and trust-boundary
+commits (F1, F4, F6, F8, F12, F14, F25, F26, F28) found no critical or high
+defect; five findings were confirmed and repaired, one commit each:
+
+- F4 follow-up (`b15f467`): `/open` launched the client by itself with any
+  http(s) link in the fragment — a crafted shop URL could import someone
+  else's servers. Now tap-only, https-only, and it shows the server's host.
+- F28 follow-up (`2454135`): a `NOT VALID` check is still checked on every
+  update, so a legacy plan without squads could not be deleted, deactivated
+  or reordered and stayed on sale. Migration 0009 takes such plans off sale
+  (slugs printed by `migrate`) and allows empty squads only on inactive or
+  deleted plans; activating one without squads is a 400 field error.
+  Deliberate deviation from section 8's plain `CHECK cardinality(squads) > 0`,
+  for upgrades only: a plan on sale always has squads.
+- F14 follow-up (`1f9c549`): relayed answers arrived with HTML entities; now
+  sent as HTML.
+- F25 follow-up (`04a85a6`): a failure after the invoice was created released
+  a reservation the invoice already named; now only an unlinked one is
+  released (integration test with a failing outbox insert, red → green).
+- F8 follow-up (`ea05722`): validation refusals are logged with request id,
+  route and field paths (never values).
+
+Checks after the repairs: format, lint, typecheck, 30 turbo test tasks, root
+tests, 25/25 integration, E2E 38 passed.
+
 ### Next
 
-1. F1 — done.
-2. F2, F3, F4 — done.
-3. F5–F8, F10–F16, F27, F28 — done; F9 and F17 wait for the owner.
-4. F25, F26 — done; P2 (F18–F24) — done.
-5. Redeploy the stand, re-run the acceptance walk, then the M5-004 gates.
+1. P0, P1 except F9/F17, and P2 — done (F1–F8, F10–F16, F18–F28).
+2. Owner decisions: F9 (contents of the bot «Профиль»), F17 (rate limits —
+   inventory below), F29 (whether to plan the move to Telegram's OIDC login).
+3. Redeploy the stand (fresh data; the seven fake payments go with it), check
+   in the panel whether the owner's own user lost its squads to the MONTH plan
+   (F28), re-run the acceptance walk including support topics (F14) and the
+   bot screens (F9, F13, F15, F16, F27), then the M5-004 gates.
+
+F17 inventory (for the discussion): nginx zones per IP — `rr_general` 20 r/s
+(burst 50, site pages), `rr_api` 10 r/s (burst 30, `/api/`), `rr_auth` 5 r/m
+(burst 10 on `/api/v1/auth/` and `/api/admin/v1/auth/`, 20 on `/api/setup/`,
+30 on `/setup`), `rr_admin` 30 r/m (burst 60 on `/api/admin/`, 100 on
+`/admin`), `rr_webhooks` 30 r/s; `limit_conn` 50. These are exactly the
+section 21.3 template. API throttler (section 9.1): 60/min per IP without a
+session, 300/min per user with one, 10/min per IP on `POST /api/v1/auth/*`,
+600/min per webhook provider. The 429s the owner hit: every console page loads
+`GET /api/admin/v1/auth/me`, which the template puts in `rr_auth` (5 r/m) —
+section 9.1 limits only `POST` login, so the template and 9.1 disagree; and
+`rr_admin` 30 r/m is below what one console page makes (several calls per
+screen). The Caddy profile renders the same zones with `caddy-ratelimit`
+(sliding windows sized `rate × window + burst`: auth 15/1 m, admin 90/1 m, api
+130/10 s, general 250/10 s, webhooks 360/10 s, `proxy-render.ts`).
 
 ## Code review repair queue — 2026-09-24
 
