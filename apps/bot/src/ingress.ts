@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import { setTimeout as delay } from 'node:timers/promises';
-import type { Bot } from 'grammy';
+import { BotError, type Bot } from 'grammy';
 import { run, type RunnerHandle } from '@grammyjs/runner';
 import type { Update } from 'grammy/types';
 import type Redis from 'ioredis';
@@ -132,8 +132,11 @@ export class BotIngress {
         for (const [, messages] of batches ?? []) {
           for (const [id, fields] of messages) await this.processMessage(id, fields);
         }
-      } catch {
+      } catch (error) {
         // Keep PEL entries for retry; never print the update payload or token.
+        console.error('Telegram update stream failed', {
+          error: error instanceof Error ? error.message : 'unknown',
+        });
         await delay(500);
       }
     }
@@ -150,10 +153,29 @@ export class BotIngress {
     botUpdatesTotal.inc({ type: updateType(update) });
     try {
       await this.bot.handleUpdate(update);
-      await this.redis.xack(TELEGRAM_UPDATES_STREAM, GROUP, id);
-    } catch {
-      // Leave failed updates in the PEL while allowing the rest of the batch
-      // to proceed. Domain mutations carry their own idempotency keys.
+    } catch (error) {
+      // grammY calls `bot.catch` only from `bot.start()` and the runner;
+      // `handleUpdate` throws the `BotError` to its caller. FR-127: the error
+      // handler logs it and answers `error.generic` with an incident id.
+      // Anything else (the bot is not initialised) stays in the PEL for
+      // `XAUTOCLAIM`.
+      if (!(error instanceof BotError)) throw error;
+      await this.report(error as BotError<RrContext>);
+    }
+    // A handled update, failed or not, is done: redelivering it would run the
+    // handler's side effects and the error reply again.
+    await this.redis.xack(TELEGRAM_UPDATES_STREAM, GROUP, id);
+  }
+
+  private async report(error: BotError<RrContext>): Promise<void> {
+    try {
+      await this.bot.errorHandler(error);
+    } catch (failure) {
+      // Never the update payload or the token: the id and the error class only.
+      console.error('Telegram error handler failed', {
+        updateId: error.ctx.update.update_id,
+        error: failure instanceof Error ? failure.name : 'unknown',
+      });
     }
   }
 }

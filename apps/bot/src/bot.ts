@@ -3,11 +3,11 @@ import { limit } from '@grammyjs/ratelimiter';
 import { RedisAdapter } from '@grammyjs/storage-redis';
 import { sequentialize } from '@grammyjs/runner';
 import { Bot, session } from 'grammy';
-import { GrammyError, HttpError, type Transformer } from 'grammy';
+import { GrammyError, HttpError, type BotError, type Transformer } from 'grammy';
 import { randomBytes } from 'node:crypto';
 import Redis from 'ioredis';
 
-import { ApiClient } from './api-client.js';
+import { ApiClient, ApiClientError } from './api-client.js';
 import { BotI18n } from './i18n.js';
 import { registerScreens } from './screens/index.js';
 import { isPaymentUpdate, registerStars } from './screens/stars.js';
@@ -57,6 +57,50 @@ export function incidentId(): string {
 }
 
 const initialSession = (): BotSession => ({ lang: 'ru' });
+
+/**
+ * FR-127: an unhandled handler error is logged with its full context — never a
+ * token or the update's text — and answered with `error.generic` carrying the
+ * same incident id, so a customer's report can be found in the log. Telegram
+ * 403 is EX-04 (the user blocked the bot); 429 is left to auto-retry.
+ */
+export function botErrorHandler(
+  api: Pick<ApiClient, 'markBlocked'>,
+): (error: BotError<RrContext>) => Promise<void> {
+  return async (error) => {
+    const ctx = error.ctx;
+    const cause = error.error;
+    const telegram =
+      cause instanceof GrammyError
+        ? { code: cause.error_code, description: cause.description, method: cause.method }
+        : cause instanceof HttpError
+          ? { description: 'http_error' }
+          : cause instanceof ApiClientError
+            ? { description: 'api_error', status: cause.status, apiCode: cause.code }
+            : {
+                description: 'handler_error',
+                error: cause instanceof Error ? cause.name : typeof cause,
+                message: cause instanceof Error ? cause.message : undefined,
+                stack: cause instanceof Error ? cause.stack : undefined,
+              };
+    const id = incidentId();
+    console.error('Telegram update failed', {
+      incidentId: id,
+      updateId: ctx.update.update_id,
+      chatId: ctx.chat?.id,
+      updateType: Object.keys(ctx.update).find((key) => key !== 'update_id'),
+      callbackData: ctx.callbackQuery?.data,
+      ...telegram,
+    });
+    if (cause instanceof GrammyError && cause.error_code === 403 && ctx.from) {
+      await api.markBlocked(ctx.from.id).catch(() => undefined);
+      return;
+    }
+    if (cause instanceof GrammyError && cause.error_code === 429) return;
+    if (ctx.from)
+      await ctx.reply(ctx.t('bot.error.generic', { incidentId: id })).catch(() => undefined);
+  };
+}
 
 export function createBot(options: {
   token: string;
@@ -124,31 +168,7 @@ export function createBot(options: {
   // Before conversations: an open dialog must not swallow `successful_payment`.
   registerStars(bot, api);
   installConversations(bot, redis, api);
-  bot.catch(async (error) => {
-    const updateId = error.ctx.update.update_id;
-    const chatId = error.ctx.chat?.id;
-    const telegramError =
-      error.error instanceof GrammyError
-        ? {
-            code: error.error.error_code,
-            description: error.error.description,
-          }
-        : error.error instanceof HttpError
-          ? { code: undefined, description: 'http_error' }
-          : { code: undefined, description: 'handler_error' };
-    console.error('Telegram update failed', { updateId, chatId, ...telegramError });
-    if (telegramError.code === 403 && error.ctx.from) {
-      await api.markBlocked(error.ctx.from.id).catch(() => undefined);
-      return;
-    }
-    if (telegramError.code === 429) return;
-    if (error.ctx.from) {
-      const id = incidentId();
-      await error.ctx
-        .reply(error.ctx.t('bot.error.generic', { incidentId: id }))
-        .catch(() => undefined);
-    }
-  });
+  bot.catch(botErrorHandler(api));
   registerScreens(bot, api);
   return { bot, api, redis, i18n };
 }

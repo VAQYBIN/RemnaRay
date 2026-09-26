@@ -88,15 +88,19 @@ panel users yet).
 
 **P1 — broken core flows**
 
-- **F2 Bot errors are invisible (FR-127).** `bot.catch` in
-  `apps/bot/src/bot.ts:127` should log «Telegram update failed» and reply
-  `bot.error.generic` with an incident id; on the stand the bot container
-  logged nothing for 30 minutes that included several failing handlers, and
-  users saw nothing ("button blinks, nothing happens"). Telegram webhooks
-  hit the API (`/tg/webhook/*`, always 200 in ~5 ms) and reach the bot some
-  other way — trace that path, find where errors are swallowed, verify the
-  grammY error-handling contract (Context7/official docs; not from memory).
-  Fix before the bot items below: it is how they will be diagnosed.
+- **F2 Done — bot errors were invisible (FR-127).** Cause (verified in the
+  installed grammY 1.46.0 `out/bot.js`): `bot.catch` runs only from
+  `handleUpdates` (`bot.start()`/runner); `bot.handleUpdate`, which
+  `BotIngress.processMessage` calls for every stream entry, rethrows a
+  `BotError`, and the ingress swallowed it with an empty `catch` — no log, no
+  reply, and the entry stayed in the PEL, so `XAUTOCLAIM` re-ran the handler
+  every 60 s. Repair: the ingress passes a `BotError` to `bot.errorHandler`
+  and `XACK`s the update (a non-`BotError` still stays in the PEL);
+  `botErrorHandler` logs the incident id the customer sees, update type,
+  callback data and the cause (Telegram code/method, API status/code, or the
+  error name/message/stack); stream read failures are logged. Evidence:
+  `ingress.test.ts` red → green, `errors.test.ts` handler cases; bot
+  lint/typecheck/tests green; `docs/troubleshooting.md` explains the search.
 - **F3 Bot calls `getPaymentMethods()` without the Telegram id.**
   `apps/bot/src/api-client.ts:295` sends no `x-acting-user`, but
   `GET /api/internal/v1/me/payment-methods` resolves the user from it
@@ -213,7 +217,7 @@ contracts/plans.ts:10`) → client parse error, "Не удалось загру�
 ### Next
 
 1. F1 — done.
-2. F2, then F3/F4 with the error path visible.
+2. F2 — done. F3/F4 next.
 3. F5–F8, then the rest of P1; F17 only after the discussion.
 4. F25 (money) and F26 alongside P1; then P2.
 5. Redeploy the stand, re-run the acceptance walk, then the M5-004 gates.

@@ -76,6 +76,22 @@ docker compose logs bot --tail 50
 docker compose exec -T api wget -qO- http://127.0.0.1:3000/api/v1/health/ready
 ```
 
+## A bot button does nothing or answers «Произошла ошибка»
+
+Every failed update is logged by the bot as `Telegram update failed` with the
+incident id the customer was shown (FR-127), the update type, the button's
+callback data and the cause: a Telegram error with its code and method, an
+API error with its HTTP status and code, or the handler's own error. Search by
+the code from the customer's screenshot:
+
+```sh
+docker compose logs bot | grep -F '<incident id>'
+```
+
+The failed update is acknowledged after the error reply; it is not delivered
+again. `Telegram update stream failed` means the bot could not read the update
+stream in Valkey and retries every half second.
+
 ## The panel answers 401
 
 Settings → Panel → **Check** says what the panel said.
