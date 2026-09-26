@@ -7,6 +7,7 @@ import { Infrastructure } from '../../infra/infra.module';
 import { PaymentError } from '../payments/payments.errors';
 import { PaymentsService } from '../payments/payments.service';
 import { PlansService } from '../plans/plans.service';
+import { planTexts } from '../plans/plans.schemas';
 import { RemnawaveService, RevokeRateLimitError } from '../remnawave/remnawave.service';
 import { SettingsService } from '../settings/settings.service';
 import { SubscriptionsService } from '../subscriptions/subscriptions.service';
@@ -654,8 +655,7 @@ export class MeService {
     return {
       id: plan.id,
       slug: plan.slug,
-      name: plan.name,
-      description: plan.description,
+      ...planTexts(plan),
       durationDays: plan.durationDays,
       trafficLimitBytes: Number(plan.trafficLimitBytes),
       deviceLimit: plan.deviceLimit,

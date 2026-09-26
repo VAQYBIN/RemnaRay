@@ -26,7 +26,7 @@ const mutablePlanFields = {
 export const planInputSchema = z.object({
   slug: z.string().regex(/^[a-z0-9][a-z0-9_-]{0,63}$/),
   name: mutablePlanFields.name,
-  description: description.default({} as Record<'ru' | 'en', string>),
+  description: description.default({ ru: '', en: '' }),
   durationDays: z.number().int().min(1).max(3650),
   trafficLimitBytes: integerString.default(0n),
   trafficResetStrategy: trafficResetStrategy.default('NO_RESET'),
@@ -51,4 +51,29 @@ export function jsonNumber(value: bigint): number {
   const number = Number(value);
   if (!Number.isSafeInteger(number)) throw new Error('Plan amount exceeds JSON safe integer range');
   return number;
+}
+
+/**
+ * Section 9.4 `PlanPublic`: `name` and `description` reach the site and the bot
+ * with both locales. `plans.description` defaults to `{}`, and a name may carry
+ * one locale only; a missing name falls back to the other locale, a missing
+ * description to an empty text.
+ */
+export function planTexts(plan: { name: unknown; description: unknown }) {
+  const name = localeText(plan.name);
+  return {
+    name: { ru: name.ru || name.en, en: name.en || name.ru },
+    description: localeText(plan.description),
+  };
+}
+
+function localeText(value: unknown): { ru: string; en: string } {
+  const record =
+    value && typeof value === 'object' && !Array.isArray(value)
+      ? (value as Record<string, unknown>)
+      : {};
+  return {
+    ru: typeof record.ru === 'string' ? record.ru : '',
+    en: typeof record.en === 'string' ? record.en : '',
+  };
 }

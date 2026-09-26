@@ -123,13 +123,16 @@ panel users yet).
   template (the Happ hard-code is gone). Evidence: bot
   `subscription.test.ts`, web `open-client.test.tsx`, E2E `site.spec.ts`
   (34 passed, 1 skipped as before).
-- **F5 A plan without a description breaks `/account/plans`.**
-  `plans.description` defaults to `{}` (`schema.prisma` Plan), the API passes
-  it through, the web schema requires `{ru,en}` (`packages/domain/src/
-contracts/plans.ts:10`) → client parse error, "Не удалось загрузить
-  страницу" with an empty incident code. The console plan form has no
-  description fields. Fix: API always returns `{ru,en}`, a migration
-  normalises `{}`, description fields in the console (and wizard).
+- **F5 Done — a plan without a description broke `/account/plans`.** Section
+  8 gives `plans.description` `DEFAULT '{}'` and 9.4 `description{}`, while
+  the site's contract reads `{ru,en}`. The API now serialises `name` and
+  `description` of every plan view (`PlansRepository` views for the public
+  and admin lists, `MeService.publicPlan` for subscriptions and invoices)
+  as `{ru,en}` (`planTexts`: a missing name locale falls back to the other,
+  a missing description is `''`), and a plan created without a description
+  stores `{ru:'',en:''}`. No migration: the read path covers existing rows.
+  The console's description fields belong to F28. Evidence:
+  `plans.repository.test.ts` red → green; API 293 tests, lint, typecheck.
 - **F6 A second `balance` payment method.** The wizard's payments step lists
   `balance` and `stars` as ordinary providers with JSON config; enabling
   `balance` created a `payment_providers` row, so `/me/payment-methods`
@@ -207,6 +210,17 @@ contracts/plans.ts:10`) → client parse error, "Не удалось загру�
   of the three (no handlers either). Implement against FR-041/FR-023 and the
   locale guide keys.
 
+- **F28 Console plan editor falls short of FR-145, and plans can grant
+  nothing (found while fixing F5).** `admin/plans/plans-client.tsx` can only
+  create and delete: no editing, no description, no traffic reset strategy,
+  and it always sends `squads: []`. Section 8 requires
+  `CHECK cardinality(squads) > 0`, which no migration creates, so a console
+  plan sells a subscription with no Remnawave squads. Repair: a full FR-145
+  editor (squads multiselect from the panel, description, reset strategy,
+  edit), the API refusing an empty squad list, and a migration adding the
+  CHECK (check existing rows first; the E2E/integration fixtures use
+  `squads: []`). `$remnaray-financial-safety` for the paid-for-nothing path.
+
 **P2 — usability**
 
 - **F18 Worker jobs fail before setup.** Every scheduled job gets 503
@@ -234,7 +248,8 @@ contracts/plans.ts:10`) → client parse error, "Не удалось загру�
 
 1. F1 — done.
 2. F2, F3, F4 — done.
-3. F5–F8, then the rest of P1; F17 only after the discussion.
+3. F5 — done. F6–F8, then the rest of P1 with F27/F28; F17 only after the
+   discussion.
 4. F25 (money) and F26 alongside P1; then P2.
 5. Redeploy the stand, re-run the acceptance walk, then the M5-004 gates.
 

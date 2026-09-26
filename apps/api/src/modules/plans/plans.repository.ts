@@ -1,13 +1,13 @@
 import type { PrismaClient } from '@remnaray/db';
 import type Redis from 'ioredis';
 
-import { jsonNumber, type PlanInput, type PlanPatch } from './plans.schemas';
+import { jsonNumber, planTexts, type PlanInput, type PlanPatch } from './plans.schemas';
 
 export type PlanView = {
   id: string;
   slug: string;
-  name: unknown;
-  description: unknown;
+  name: { ru: string; en: string };
+  description: { ru: string; en: string };
   durationDays: number;
   trafficLimitBytes: number;
   trafficResetStrategy: string;
@@ -169,8 +169,7 @@ function toView(plan: {
   return {
     id: plan.id,
     slug: plan.slug,
-    name: plan.name,
-    description: plan.description,
+    ...planTexts(plan),
     durationDays: plan.durationDays,
     trafficLimitBytes: jsonNumber(plan.trafficLimitBytes),
     trafficResetStrategy: plan.trafficResetStrategy,
