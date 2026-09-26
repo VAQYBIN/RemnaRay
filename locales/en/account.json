@@ -134,5 +134,10 @@
   "account.pay.cancel": "Cancel",
   "account.pay.goToSubscription": "Go to subscription",
   "account.pay.underpaidHint": "The received amount was credited to your balance. Pay the rest or use the balance.",
-  "account.pay.toBalance": "A payment made after the invoice expires is credited to your balance."
+  "account.pay.toBalance": "A payment made after the invoice expires is credited to your balance.",
+  "account.open.title": "Connect in {client}",
+  "account.open.button": "Open {client}",
+  "account.open.hint": "If the app did not open, install it, or copy the link and add the subscription in the app by hand.",
+  "account.open.missing": "The subscription link is missing. Open «Clients» in the bot again.",
+  "account.open.install": "Install ({platform})"
 }

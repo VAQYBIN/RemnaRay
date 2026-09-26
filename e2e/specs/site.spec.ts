@@ -102,6 +102,20 @@ test.describe('public site', () => {
     for (const item of body.items) expect(item).not.toHaveProperty('squads');
   });
 
+  test("the bot's client button opens the client with the link from the fragment", async ({
+    page,
+  }) => {
+    const subscription = 'https://sub.example.test/abc?x=1';
+    await page.goto(`/ru/open/happ#${encodeURIComponent(subscription)}`);
+    await expect(page.getByRole('link', { name: 'Открыть Happ' })).toHaveAttribute(
+      'href',
+      `happ://add/${encodeURIComponent(subscription)}`,
+    );
+
+    const unknown = await page.goto('/ru/open/no-such-client#x');
+    expect(unknown?.status()).toBe(404);
+  });
+
   test('a referral link stores the code and returns to the landing', async ({ page, context }) => {
     await page.goto('/r/E2EUSER1');
     await expect(page).toHaveURL(/\/(ru|en)$/u);

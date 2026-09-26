@@ -108,12 +108,21 @@ panel users yet).
   sends it from all three callers. Audit: every other `/me/*` call that the
   API resolves a user for already passes it; `plans` and `topup-config` need
   none. Evidence: `api-client.test.ts` red → green; bot lint/typecheck/tests.
-- **F4 Bot «Клиенты» sends a `happ://` URL button.** `subscription.ts:55`;
-  Telegram inline URL buttons accept only http/https/tg (verify in Bot API
-  docs), so the whole screen fails (swallowed by F2). Happ is hard-coded;
-  the client list the API already returns (`api-client.ts:73`, `clients[]`
-  with `deepLink`) is unused. Show the list; custom schemes via an https
-  bridge page or the copyable link. Check the spec's client section.
+- **F4 Done — bot «Клиенты» sent a `happ://` URL button.** Bot API 10.3
+  (core.telegram.org, 2026-08-24): `InlineKeyboardButton.url` is an "HTTP or
+  tg:// URL", so the button was refused and the screen failed. The spec's
+  `sub:clients` row ("one URL button per client, deep link with a caption")
+  cannot be met with a custom scheme directly; each button now opens
+  `https://<domain>/<locale>/open/<clientId>#<subscription URL>`, a page
+  that hands the link to the client's configured `deepLinkTemplate` (at
+  once, plus an «Открыть <client>» button, copy, store links). The link is in
+  the fragment, so it never reaches the server or proxy logs; the page opens
+  only a configured template (never `javascript:`/`data:`/`vbscript:`/
+  `file:`/`blob:`) and only with an http(s) link, so it is no redirector;
+  unknown client → 404; `noindex`. One button per configured client with a
+  template (the Happ hard-code is gone). Evidence: bot
+  `subscription.test.ts`, web `open-client.test.tsx`, E2E `site.spec.ts`
+  (34 passed, 1 skipped as before).
 - **F5 A plan without a description breaks `/account/plans`.**
   `plans.description` defaults to `{}` (`schema.prisma` Plan), the API passes
   it through, the web schema requires `{ru,en}` (`packages/domain/src/
@@ -192,6 +201,12 @@ contracts/plans.ts:10`) → client parse error, "Не удалось загру�
   (nginx + Caddy) and throttler limit vs spec 9.1/21.3/26, measured requests
   per console/account page, and a proposal per zone marking spec deviations.
 
+- **F27 Bot `sub` screen lacks spec buttons (found while fixing F4).** The
+  section 12 screen table gives `sub` the buttons `sub:devices`,
+  `plan:change` and `sub:clients` → `sub:guide:<platform>`; the bot has none
+  of the three (no handlers either). Implement against FR-041/FR-023 and the
+  locale guide keys.
+
 **P2 — usability**
 
 - **F18 Worker jobs fail before setup.** Every scheduled job gets 503
@@ -218,7 +233,7 @@ contracts/plans.ts:10`) → client parse error, "Не удалось загру�
 ### Next
 
 1. F1 — done.
-2. F2 — done. F3/F4 next.
+2. F2, F3, F4 — done.
 3. F5–F8, then the rest of P1; F17 only after the discussion.
 4. F25 (money) and F26 alongside P1; then P2.
 5. Redeploy the stand, re-run the acceptance walk, then the M5-004 gates.

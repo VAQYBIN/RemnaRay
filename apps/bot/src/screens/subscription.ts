@@ -51,10 +51,18 @@ export async function showClients(ctx: RrContext, api: ApiClient): Promise<void>
     await show(ctx, ctx.t('bot.screen.sub.empty'), backButton(ctx, 'sub'));
     return;
   }
-  const keyboard = new InlineKeyboard()
-    .url(ctx.t('bot.btn.clients'), `happ://add/${encodeURIComponent(link)}`)
-    .row()
-    .text(ctx.t('bot.btn.back'), 'sub');
+  // Telegram URL buttons take only http(s) and tg:// links (Bot API
+  // InlineKeyboardButton.url), and a client's deep link is its own scheme, so
+  // each button opens the site's page for that client, which hands the link
+  // to the app. The subscription link travels in the fragment, which the
+  // browser never sends to the server.
+  const { webUrl } = await api.getConfig();
+  const keyboard = new InlineKeyboard();
+  for (const client of state.clients.filter((item) => item.deepLink)) {
+    const page = new URL(`/${ctx.locale}/open/${encodeURIComponent(client.id)}`, webUrl);
+    keyboard.url(client.name, `${page.href}#${encodeURIComponent(link)}`).row();
+  }
+  keyboard.text(ctx.t('bot.btn.back'), 'sub');
   await show(ctx, `<code>${link}</code>`, keyboard);
 }
 

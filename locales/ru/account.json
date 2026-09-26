@@ -134,5 +134,10 @@
   "account.pay.cancel": "Отменить",
   "account.pay.goToSubscription": "Перейти к подписке",
   "account.pay.underpaidHint": "Полученная сумма зачислена на баланс. Доплатите или используйте баланс.",
-  "account.pay.toBalance": "Оплата после истечения счёта зачисляется на баланс."
+  "account.pay.toBalance": "Оплата после истечения счёта зачисляется на баланс.",
+  "account.open.title": "Подключение в {client}",
+  "account.open.button": "Открыть {client}",
+  "account.open.hint": "Если приложение не открылось, установите его или скопируйте ссылку и добавьте подписку в приложении вручную.",
+  "account.open.missing": "Ссылки на подписку нет. Откройте «Клиенты» в боте ещё раз.",
+  "account.open.install": "Установить ({platform})"
 }
