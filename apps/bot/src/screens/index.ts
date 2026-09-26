@@ -7,6 +7,7 @@ import { showAccount, showHome, showTrialConfirm } from './home.js';
 import { createPayment, checkPayment, showInvoice } from './payments.js';
 import { STARS_START_PAYLOAD, sendStarsInvoice } from './stars.js';
 import { showPlan, showPlans } from './plans.js';
+import { showReferralList, showReferrals } from './referrals.js';
 import { showSubscription, showClients, showQr, confirmRevoke } from './subscription.js';
 import { backButton, formatMinor, show } from './common.js';
 
@@ -71,6 +72,7 @@ export function registerScreens(bot: Bot<RrContext>, api: ApiClient): void {
     createTopup(ctx, api, Number(capture(ctx.match, 1)), capture(ctx.match, 2)),
   );
   bot.callbackQuery('ref', (ctx) => showReferrals(ctx, api));
+  bot.callbackQuery('ref:list', (ctx) => showReferralList(ctx, api));
   bot.callbackQuery('lang', (ctx) => showLanguage(ctx));
   bot.callbackQuery(/^lang:(ru|en)$/u, (ctx) =>
     setLanguage(ctx, api, capture(ctx.match, 1) as 'ru' | 'en'),
@@ -178,12 +180,6 @@ async function createTopup(
   );
   ctx.session.lastInvoiceId = invoice.id;
   await showInvoice(ctx, invoice);
-}
-
-async function showReferrals(ctx: RrContext, api: ApiClient): Promise<void> {
-  if (!ctx.from) return;
-  const state = await api.getReferrals(ctx.from.id);
-  await show(ctx, ctx.t('bot.screen.ref.details', state), backButton(ctx));
 }
 
 async function showLanguage(ctx: RrContext): Promise<void> {

@@ -98,9 +98,21 @@ export type StarsInvoice = {
 export type ReferralState = {
   code: string;
   link: string;
+  botLink: string;
   invited: number;
   converted: number;
   earned: { amountMinor: number; currency: string };
+  program: {
+    mode: string;
+    percent: number;
+    fixedMinor: number;
+    inviteeBonus: { type: 'none' | 'days' | 'balance'; value: number };
+  };
+};
+
+export type ReferralListPage = {
+  items: { maskedName: string; joinedAt: string; status: string; rewardMinor: number }[];
+  nextCursor: string | null;
 };
 
 export type ApiClientOptions = {
@@ -284,6 +296,12 @@ export class ApiClient {
       }>;
       nextCursor: string | null;
     }>('/api/internal/v1/me/transactions', { userId: telegramId });
+  }
+
+  getReferralList(telegramId: number) {
+    return this.request<ReferralListPage>('/api/internal/v1/me/referrals/list?limit=10', {
+      userId: telegramId,
+    });
   }
 
   getReferrals(telegramId: number) {

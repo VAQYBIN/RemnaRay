@@ -213,12 +213,17 @@ panel users yet).
   Evidence: API provider-fields/setup/providers tests red → green, web form
   helper tests, E2E wizard (ЮKassa form, «Далее» disabled until complete) and
   console (configure → saved, check ok); API 309, web 54, E2E 37 passed.
-- **F13 Bot referral screen.** Shows only the site link; FR-151 asks for
-  link, invited, paid **and earned**; the Telegram link
-  `t.me/<bot>?start=ref_<code>` (US-G-03, already in the API's `botLink`) is
-  missing. Optional «Поделиться» (`t.me/share/url`). The link preview is in
-  English although the shop default is `ru` — check metadata for requests
-  without `Accept-Language`.
+- **F13 Done — bot referral screen.** The screen showed only the site link
+  and two counts. It now follows the section 12 `ref` row: the bot link
+  `t.me/<bot>?start=ref_<code>` (`botLink`), invited, paid and earned
+  (FR-151), the programme's terms per mode and the invitee's bonus;
+  `ref:share` is `switch_inline_query` with «Присоединяйся к <brand>: <link>»
+  (Bot API: it asks for a chat and inserts `@bot <text>`, no inline mode
+  needed), and `ref:list` shows the last ten invited (masked names, date,
+  status, reward). The English link preview: section 13.1 picks the locale
+  from `rr_lang`, then `Accept-Language`, then `ru`, so a preview fetched with
+  an English `Accept-Language` is English by design — no change. Evidence: bot
+  `referrals.test.ts` (red → green), 41 bot tests.
 - **F14 Support (FR-124).** With no `support_forward_chat_id` the API returns
   204 silently (`bot.controller.ts:185`) and the bot says «передано»; it
   should show `support_contact`. Operator reply-through is not implemented
