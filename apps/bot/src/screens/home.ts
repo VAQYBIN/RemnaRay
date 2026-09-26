@@ -2,7 +2,7 @@ import { InlineKeyboard } from 'grammy';
 
 import type { ApiClient, HomeState, SubscriptionState } from '../api-client.js';
 import type { RrContext } from '../types.js';
-import { backButton, button, formatDate, show } from './common.js';
+import { button, formatDate, show } from './common.js';
 
 export function homeKeyboard(
   ctx: RrContext,
@@ -76,10 +76,6 @@ export async function showTrialConfirm(ctx: RrContext, api: ApiClient): Promise<
     }),
     keyboard,
   );
-}
-
-export function profileKeyboard(ctx: RrContext): InlineKeyboard {
-  return backButton(ctx);
 }
 
 export function homeButton(ctx: RrContext): InlineKeyboard {

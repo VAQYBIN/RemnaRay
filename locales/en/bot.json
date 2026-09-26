@@ -142,5 +142,16 @@
   "bot.guide.android": "<b>Android</b>\n1. Install a client from Google Play (buttons above).\n2. Press the client's button: the subscription is added.\n3. If it is not: copy the link from «Subscription» and import it from the clipboard in the client.\n4. Connect and allow the VPN request.",
   "bot.guide.windows": "<b>Windows</b>\n1. Install a client (for example Hiddify).\n2. Copy the link from «Subscription».\n3. In the client: «New profile» → «Add from clipboard».\n4. Connect.",
   "bot.guide.macos": "<b>macOS</b>\n1. Install a client (for example Hiddify).\n2. Copy the link from «Subscription».\n3. Add a profile from the clipboard in the client.\n4. Connect and allow the VPN configuration.",
-  "bot.guide.linux": "<b>Linux</b>\n1. Install a client that takes subscription links (for example Hiddify).\n2. Copy the link from «Subscription» and add it as a new profile.\n3. Connect."
+  "bot.guide.linux": "<b>Linux</b>\n1. Install a client that takes subscription links (for example Hiddify).\n2. Copy the link from «Subscription» and add it as a new profile.\n3. Connect.",
+  "bot.screen.profile.details": "👤 Profile\n\nTelegram ID: <code>{telegramId}</code>\nLanguage: {language}\nBalance: {balance}\nReferral code: <code>{referralCode}</code>\nReceipt email: {email}",
+  "bot.screen.profile.subscription": "Subscription: {status}, until {until} ({days, plural, one {# day} other {# days}} left)",
+  "bot.screen.profile.noSubscription": "No subscription.",
+  "bot.screen.profile.noEmail": "not set",
+  "bot.screen.profile.status.active": "active",
+  "bot.screen.profile.status.grace": "grace period",
+  "bot.screen.profile.status.provisioning": "being set up",
+  "bot.screen.profile.status.provisioning_failed": "setup failed",
+  "bot.screen.profile.status.expired": "expired",
+  "bot.screen.profile.status.canceled": "canceled",
+  "bot.btn.email": "✉️ Receipt email"
 }

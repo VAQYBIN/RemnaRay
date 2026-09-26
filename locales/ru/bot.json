@@ -142,5 +142,16 @@
   "bot.guide.android": "<b>Android</b>\n1. Установите клиент из Google Play (кнопки выше).\n2. Нажмите кнопку клиента — подписка добавится сама.\n3. Если не добавилась: скопируйте ссылку из «Подписка» и в клиенте выберите импорт из буфера обмена.\n4. Включите подключение и разрешите запрос VPN.",
   "bot.guide.windows": "<b>Windows</b>\n1. Установите клиент (например, Hiddify).\n2. Скопируйте ссылку из «Подписка».\n3. В клиенте нажмите «Новый профиль» → «Добавить из буфера».\n4. Подключитесь.",
   "bot.guide.macos": "<b>macOS</b>\n1. Установите клиент (например, Hiddify).\n2. Скопируйте ссылку из «Подписка».\n3. В клиенте добавьте профиль из буфера обмена.\n4. Подключитесь и разрешите добавление VPN-конфигурации.",
-  "bot.guide.linux": "<b>Linux</b>\n1. Установите клиент, поддерживающий ссылки подписки (например, Hiddify).\n2. Скопируйте ссылку из «Подписка» и добавьте её как новый профиль.\n3. Подключитесь."
+  "bot.guide.linux": "<b>Linux</b>\n1. Установите клиент, поддерживающий ссылки подписки (например, Hiddify).\n2. Скопируйте ссылку из «Подписка» и добавьте её как новый профиль.\n3. Подключитесь.",
+  "bot.screen.profile.details": "👤 Профиль\n\nTelegram ID: <code>{telegramId}</code>\nЯзык: {language}\nБаланс: {balance}\nРеферальный код: <code>{referralCode}</code>\nEmail для чеков: {email}",
+  "bot.screen.profile.subscription": "Подписка: {status}, до {until} (осталось {days, plural, one {# день} few {# дня} many {# дней} other {# дня}})",
+  "bot.screen.profile.noSubscription": "Подписки нет.",
+  "bot.screen.profile.noEmail": "не указан",
+  "bot.screen.profile.status.active": "активна",
+  "bot.screen.profile.status.grace": "льготный период",
+  "bot.screen.profile.status.provisioning": "подключается",
+  "bot.screen.profile.status.provisioning_failed": "ошибка подключения",
+  "bot.screen.profile.status.expired": "истекла",
+  "bot.screen.profile.status.canceled": "отменена",
+  "bot.btn.email": "✉️ Email для чеков"
 }

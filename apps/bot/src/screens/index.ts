@@ -7,6 +7,7 @@ import { showAccount, showHome, showTrialConfirm } from './home.js';
 import { createPayment, checkPayment, showInvoice } from './payments.js';
 import { STARS_START_PAYLOAD, sendStarsInvoice } from './stars.js';
 import { showHelp } from './help.js';
+import { showProfile } from './profile.js';
 import { showPlan, showPlans } from './plans.js';
 import { showReferralList, showReferrals } from './referrals.js';
 import {
@@ -45,7 +46,8 @@ export function registerScreens(bot: Bot<RrContext>, api: ApiClient): void {
   bot.command('admin_broadcast_status', (ctx) => adminBroadcastStatus(ctx, api));
   bot.callbackQuery('home', (ctx) => showHome(ctx, api));
   bot.callbackQuery('account', (ctx) => showAccount(ctx, api));
-  bot.callbackQuery('profile', (ctx) => showHome(ctx, api));
+  bot.callbackQuery('profile', (ctx) => showProfile(ctx, api));
+  bot.callbackQuery('profile:email', (ctx) => ctx.conversation.enter('emailAsk'));
   bot.callbackQuery('plans', (ctx) => showPlans(ctx, api));
   bot.callbackQuery('sub', (ctx) => showSubscription(ctx, api));
   bot.callbackQuery('sub:clients', (ctx) => showClients(ctx, api));
