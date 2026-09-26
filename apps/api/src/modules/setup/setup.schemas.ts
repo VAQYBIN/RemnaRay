@@ -40,8 +40,23 @@ export const setupDomainSchema = z.object({
 });
 
 /** Step 3, and the «Проверить» button next to it. */
+/**
+ * A panel address typed without a scheme ("panel.example.com") is taken as
+ * `https://`, the scheme a panel behind TLS answers on; one with a scheme is
+ * kept. The wizard refused the bare host with a URL error.
+ */
+export const panelUrlSchema = z.preprocess(
+  (value) =>
+    typeof value === 'string' && value.trim() && !/^[a-z][a-z0-9+.-]*:\/\//iu.test(value.trim())
+      ? `https://${value.trim()}`
+      : typeof value === 'string'
+        ? value.trim()
+        : value,
+  z.url({ protocol: /^https?$/u }).max(300),
+);
+
 export const setupPanelSchema = z.object({
-  baseUrl: z.url().max(300),
+  baseUrl: panelUrlSchema,
   apiToken: z.string().min(1).max(4096),
   webhookSecret: z.string().min(1).max(4096).optional(),
   extraHeaders: z.record(z.string().min(1).max(100), z.string().max(1000)).default({}),

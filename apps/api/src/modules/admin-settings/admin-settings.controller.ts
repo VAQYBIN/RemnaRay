@@ -24,6 +24,7 @@ import { SettingsService } from '../settings/settings.service';
 import { I18nAdminService } from './i18n-admin.service';
 import { ProvidersService } from './providers.service';
 import { SystemService } from './system.service';
+import { panelUrlSchema } from '../setup/setup.schemas';
 
 const auditQuerySchema = z.object({
   actorId: z.uuid().optional(),
@@ -41,7 +42,7 @@ const themeActiveSchema = z.object({
   reason: z.string().min(3).max(500).optional(),
 });
 const panelSchema = z.object({
-  base_url: z.url().optional(),
+  base_url: panelUrlSchema.optional(),
   api_token: z.string().min(1).optional(),
   webhook_secret: z.string().min(1).optional(),
   reason: z.string().min(3).max(500).optional(),

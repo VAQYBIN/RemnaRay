@@ -169,7 +169,11 @@ panel users yet).
   `rr up --pull`; `install.md` explains the `dev` case. Argument parsing takes
   `--pull` and `--wait-timeout` in any order. Evidence: `rr.test.mjs` (dev →
   pull before up; default and `1.2.3` → none; `--pull` → pull) red → green.
-- **F21 Wizard panel URL** needs `https://`; add a hint or prepend it.
+- **F21 Done — the wizard's panel URL needed `https://`.** `panelUrlSchema`
+  takes an address typed without a scheme as `https://…` (the scheme a panel
+  behind TLS answers on), keeps an explicit `http://`/`https://`, refuses
+  anything else; the wizard's step and the console's panel settings use it,
+  and the field has a hint. Evidence: `setup.schemas.test.ts` red → green.
 - **F22 Timezone** is a free text field; use an IANA list
   (`Intl.supportedValuesOf('timeZone')`) with server validation, wizard and
   console alike.

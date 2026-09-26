@@ -136,5 +136,6 @@
   "setup.payments.providerName.cryptobot": "CryptoBot",
   "setup.payments.providerName.stars": "Telegram Stars",
   "setup.payments.providerName.mock": "Mock",
-  "setup.plan.squadsMissing": "Панель не вернула ни одного сквада. Создайте внутренний сквад в панели и вернитесь к шагу «Панель»: тариф без сквадов не даёт доступа."
+  "setup.plan.squadsMissing": "Панель не вернула ни одного сквада. Создайте внутренний сквад в панели и вернитесь к шагу «Панель»: тариф без сквадов не даёт доступа.",
+  "setup.panel.baseUrlHint": "Адрес, по которому открывается панель, например https://panel.example.com. Без схемы подставляется https://."
 }

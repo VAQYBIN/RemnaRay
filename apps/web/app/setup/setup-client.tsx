@@ -487,6 +487,7 @@ function PanelStep({ pending, state, run, refresh, setStep }: StepProps) {
   return (
     <StepCard title={t('panel.title')} description={t('panel.description')}>
       <TextField
+        hint={t('panel.baseUrlHint')}
         id="setup-panel-url"
         label={t('panel.baseUrl')}
         value={baseUrl}
