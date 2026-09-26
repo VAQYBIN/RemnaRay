@@ -137,5 +137,6 @@
   "setup.payments.providerName.stars": "Telegram Stars",
   "setup.payments.providerName.mock": "Mock",
   "setup.plan.squadsMissing": "Панель не вернула ни одного сквада. Создайте внутренний сквад в панели и вернитесь к шагу «Панель»: тариф без сквадов не даёт доступа.",
-  "setup.panel.baseUrlHint": "Адрес, по которому открывается панель, например https://panel.example.com. Без схемы подставляется https://."
+  "setup.panel.baseUrlHint": "Адрес, по которому открывается панель, например https://panel.example.com. Без схемы подставляется https://.",
+  "setup.brand.timezoneHint": "Начните вводить город, например Europe/Moscow или Asia/Yekaterinburg; даты в боте и на сайте показываются в этом поясе."
 }

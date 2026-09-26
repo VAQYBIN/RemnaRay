@@ -30,6 +30,7 @@ import { invalidate, useResource } from '../../../lib/resource';
 import { AdminShell } from '../admin-shell';
 import { AdminSection, useAdminErrorMessage } from '../admin-states';
 import { ProvidersTab, providersSchema } from './providers-tab';
+import { TimeZoneOptions } from '../../_components/time-zones';
 
 const schemaSchema = z.object({
   version: z.literal(1),
@@ -182,6 +183,7 @@ export default function SettingsAdminClient() {
                             <Label htmlFor={key}>{key}</Label>
                             <Input
                               id={key}
+                              {...(key === 'locale.timezone' ? { list: 'admin-time-zones' } : {})}
                               placeholder={property.description}
                               value={
                                 draft[key] ??
@@ -191,6 +193,9 @@ export default function SettingsAdminClient() {
                                 setDraft({ ...draft, [key]: event.target.value });
                               }}
                             />
+                            {key === 'locale.timezone' ? (
+                              <TimeZoneOptions id="admin-time-zones" />
+                            ) : null}
                             {property['x-secret'] ? (
                               <span className="text-xs text-muted-foreground">
                                 {isSet(data.values[key])

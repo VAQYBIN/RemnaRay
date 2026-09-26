@@ -1,6 +1,7 @@
 import { z } from 'zod';
 
 import { planInputSchema } from '../plans/plans.schemas';
+import { ianaTimeZone } from '../settings/settings.schemas';
 
 const locale = z.enum(['ru', 'en']);
 const host = z
@@ -77,18 +78,7 @@ export const setupBrandSchema = z
     slogan: z.object({ ru: z.string().max(200), en: z.string().max(200) }),
     defaultLocale: locale,
     enabledLocales: z.array(locale).min(1),
-    timezone: z
-      .string()
-      .min(1)
-      .max(64)
-      .refine((value) => {
-        try {
-          new Intl.DateTimeFormat('en', { timeZone: value });
-          return true;
-        } catch {
-          return false;
-        }
-      }, 'Unknown IANA timezone'),
+    timezone: ianaTimeZone,
     themeSlug: z.string().regex(/^(?:_admin|[a-z0-9]+(?:-[a-z0-9]+)*)$/u),
     logo: z
       .string()

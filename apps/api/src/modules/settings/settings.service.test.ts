@@ -83,7 +83,11 @@ describe('SettingsService', () => {
     ]);
 
     await expect(service.set({ locale: { default: 'de' } })).rejects.toThrow();
+    // An unknown time zone would break every date the bot and the site format.
+    await expect(service.set({ locale: { timezone: 'Mars/Olympus' } })).rejects.toThrow();
     expect(repository.replaceCalls).toHaveLength(1);
+    await service.set({ locale: { timezone: 'Asia/Yekaterinburg' } });
+    expect(repository.replaceCalls).toHaveLength(2);
   });
 
   it('preserves a secret when an exported marker is imported', async () => {

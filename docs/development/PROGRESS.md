@@ -174,9 +174,14 @@ panel users yet).
   behind TLS answers on), keeps an explicit `http://`/`https://`, refuses
   anything else; the wizard's step and the console's panel settings use it,
   and the field has a hint. Evidence: `setup.schemas.test.ts` red → green.
-- **F22 Timezone** is a free text field; use an IANA list
-  (`Intl.supportedValuesOf('timeZone')`) with server validation, wizard and
-  console alike.
+- **F22 Done — the time zone was a free text field.** `settings.locale.timezone`
+  accepted any string (only the wizard checked it), and an unknown zone breaks
+  every date the bot and the site format. `ianaTimeZone` (known to `Intl`) now
+  guards the setting and the wizard alike; the wizard and the console offer
+  the browser's IANA zones as suggestions (`<datalist>`), with a hint. The
+  spec does not mandate a picker, so a typed zone still works if valid.
+  Evidence: settings service test (unknown zone refused, valid accepted) red
+  → green; web 54; E2E 37.
 - **F23 Promocode apply** button sits in each plan card; one «Применить» next
   to the field, previewing every plan (the API preview is per plan).
 - **F24 Class check:** find every page/bot screen whose schema can reject a

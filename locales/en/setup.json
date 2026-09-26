@@ -137,5 +137,6 @@
   "setup.payments.providerName.stars": "Telegram Stars",
   "setup.payments.providerName.mock": "Mock",
   "setup.plan.squadsMissing": "The panel returned no squads. Create an internal squad in the panel and return to the «Panel» step: a plan without squads gives no access.",
-  "setup.panel.baseUrlHint": "The address the panel opens at, such as https://panel.example.com. Without a scheme, https:// is assumed."
+  "setup.panel.baseUrlHint": "The address the panel opens at, such as https://panel.example.com. Without a scheme, https:// is assumed.",
+  "setup.brand.timezoneHint": "Start typing a city, such as Europe/Moscow or Asia/Yekaterinburg; the bot and the site show dates in this zone."
 }

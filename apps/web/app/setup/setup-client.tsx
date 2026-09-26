@@ -26,6 +26,7 @@ import {
   toConfig,
   type ProviderValues,
 } from '../_components/provider-fields';
+import { TimeZoneOptions } from '../_components/time-zones';
 
 const squadSchema = z.object({ uuid: z.string(), name: z.string() });
 const stateSchema = z.object({
@@ -244,6 +245,7 @@ function TextField({
   label,
   hint,
   type = 'text',
+  list,
   value,
   onChange,
 }: {
@@ -251,6 +253,8 @@ function TextField({
   label: string;
   hint?: string;
   type?: string;
+  /** The id of a `<datalist>` of suggestions. */
+  list?: string;
   value: string;
   onChange: (value: string) => void;
 }) {
@@ -259,6 +263,7 @@ function TextField({
       <Label htmlFor={id}>{label}</Label>
       <Input
         id={id}
+        list={list}
         type={type}
         value={value}
         onChange={(event) => {
@@ -752,11 +757,14 @@ function BrandStep({ pending, state, run, refresh, setStep }: StepProps) {
         ))}
       </fieldset>
       <TextField
+        hint={t('brand.timezoneHint')}
         id="setup-brand-timezone"
         label={t('brand.timezone')}
+        list="setup-time-zones"
         value={timezone}
         onChange={setTimezone}
       />
+      <TimeZoneOptions id="setup-time-zones" />
       <div className="flex flex-col gap-2">
         <Label htmlFor="setup-brand-theme">{t('brand.theme')}</Label>
         <select

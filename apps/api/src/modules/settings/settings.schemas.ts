@@ -5,6 +5,19 @@ import { OUTGOING_EVENTS } from '../webhooks/outgoing';
 const emptyOrUrl = z.union([z.url(), z.literal('')]);
 const minorAmount = z.string().regex(/^\d+$/, 'must be a non-negative integer in minor units');
 const locale = z.enum(['ru', 'en']);
+/** An IANA time zone this runtime knows (`Intl`), for display and scheduled work. */
+export const ianaTimeZone = z
+  .string()
+  .min(1)
+  .max(64)
+  .refine((value) => {
+    try {
+      new Intl.DateTimeFormat('en', { timeZone: value });
+      return true;
+    } catch {
+      return false;
+    }
+  }, 'Unknown IANA timezone');
 const clientLink = z.object({
   id: z.string().min(1),
   name: z.string().min(1),
@@ -130,7 +143,7 @@ export const settingRegistry: SettingDefinition[] = [
       description: 'Enabled locales.',
     },
     timezone: {
-      schema: z.string().min(1),
+      schema: ianaTimeZone,
       defaultValue: 'Europe/Moscow',
       description: 'IANA timezone for display and scheduled work.',
     },
