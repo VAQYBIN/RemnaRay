@@ -1,7 +1,6 @@
 'use client';
 
-import Script from 'next/script';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 
 import { useRouter } from '../../i18n/navigation';
 import type { Locale } from '../../i18n/routing';
@@ -42,24 +41,42 @@ export default function LoginWidget({
 }) {
   const router = useRouter();
   const [error, setError] = useState(false);
+  const host = useRef<HTMLDivElement>(null);
 
   /**
-   * The widget script injects its own `<iframe>` next to the `<script>` tag
-   * Next.js appends to `document.body`, and it arrives without a title, which
-   * fails the WCAG frame-title check (NFR-010). Name it as soon as it appears.
+   * The widget script renders its `<iframe>` where its own `<script>` element
+   * is. `next/script` appends to `document.body`, which put the button at the
+   * very bottom of the page, outside the `#login` block the landing's «Войти»
+   * points at; the element is therefore created inside the block. The iframe
+   * arrives without a title, which fails the WCAG frame-title check
+   * (NFR-010), so it is named as soon as it appears.
    */
   useEffect(() => {
+    const container = host.current;
+    if (!container || !botUsername) return;
+    const script = document.createElement('script');
+    script.src = 'https://telegram.org/js/telegram-widget.js?22';
+    script.async = true;
+    script.dataset.telegramLogin = botUsername;
+    script.dataset.size = 'large';
+    script.dataset.userpic = 'false';
+    script.dataset.requestAccess = 'write';
+    script.dataset.onauth = 'onRemnaRayTelegramAuth(user)';
+    container.prepend(script);
     const title = () => {
-      for (const frame of document.querySelectorAll('iframe[id^="telegram-login-"]:not([title])'))
+      for (const frame of container.querySelectorAll('iframe[id^="telegram-login-"]:not([title])'))
         frame.setAttribute('title', label);
     };
-    title();
     const observer = new MutationObserver(title);
-    observer.observe(document.body, { childList: true, subtree: true });
+    observer.observe(container, { childList: true, subtree: true });
     return () => {
       observer.disconnect();
+      for (const node of container.querySelectorAll(
+        'script[data-telegram-login], iframe[id^="telegram-login-"]',
+      ))
+        node.remove();
     };
-  }, [label]);
+  }, [botUsername, label]);
 
   useEffect(() => {
     window.onRemnaRayTelegramAuth = (payload) => {
@@ -86,16 +103,7 @@ export default function LoginWidget({
   if (!botUsername) return <p className="text-sm text-muted-foreground">{unavailableLabel}</p>;
 
   return (
-    <div aria-label={label} id="login" role="group">
-      <Script
-        data-onauth="onRemnaRayTelegramAuth(user)"
-        data-request-access="write"
-        data-size="large"
-        data-telegram-login={botUsername}
-        data-userpic="false"
-        src="https://telegram.org/js/telegram-widget.js?22"
-        strategy="afterInteractive"
-      />
+    <div aria-label={label} id="login" ref={host} role="group">
       {error ? (
         <p className="mt-2 text-sm text-destructive" role="alert">
           {errorLabel}

@@ -188,12 +188,17 @@ panel users yet).
   (the spec names none; it labels the console, not the shop). Evidence: bot
   home/api-client tests, API bot-config and payment-description tests red →
   green; API 303, bot 39 tests.
-- **F11 Landing «Войти» shows no login widget.** `#login` anchor
-  (`[locale]/page.tsx:99`) points at `LoginWidget`, whose `next/script`
-  appends the Telegram script to `<body>`, so the widget iframe is created
-  outside `#login` (`login-widget.tsx`). Also requires BotFather
-  `/setdomain` — show a clear hint when unavailable and document it in
-  `docs/setup.md`. Owner's DevTools check not yet reported.
+- **F11 Done — landing «Войти» showed no login widget.** The legacy Telegram
+  Login Widget draws its iframe where its `<script>` is; `next/script`
+  appended the script to `<body>`, so the button appeared at the very bottom,
+  outside `#login`. `LoginWidget` now creates the script inside `#login` (and
+  removes it and its iframe on unmount); the frame-title observer watches
+  the block. `docs/setup.md` explains `/setdomain`. The E2E harness never
+  passed the seeded bot token to the specs, so the widget-callback test was
+  always skipped; it runs now. Evidence: web accessibility test (script
+  inside `#login`) red → green; E2E landing asserts it; E2E 36 passed, 0
+  skipped. Contract: core.telegram.org/widgets/login-legacy (2026-09-26) —
+  `/setdomain`, HMAC-SHA256 with SHA256(bot token), no sunset notice.
 - **F12 Payment providers: JSON config and no editing after setup.** Wizard
   step 7 and console «Платежи» take raw JSON with no field list; the console
   cannot enable/disable, reorder or edit a provider although
@@ -245,6 +250,17 @@ panel users yet).
   edit), the API refusing an empty squad list, and a migration adding the
   CHECK (check existing rows first; the E2E/integration fixtures use
   `squads: []`). `$remnaray-financial-safety` for the paid-for-nothing path.
+
+- **F29 Telegram's site login moved to OIDC — owner decision (found while
+  fixing F11).** core.telegram.org/widgets/login (read 2026-09-26) now
+  documents OpenID Connect (authorization code + PKCE, `id_token` RS256 via
+  `https://oauth.telegram.org/.well-known/jwks.json`, Client ID/Secret and
+  allowed URLs in the BotFather mini app, `Telegram.Login.init/open`) and
+  calls the iframe widget "legacy", archived at `/widgets/login-legacy`
+  without a sunset date. RemnaRay (section 13.3, `POST /api/v1/auth/telegram`)
+  implements the legacy HMAC flow, which works today. Moving to OIDC changes
+  the spec's auth contract, the wizard (client id/secret) and the landing;
+  record as `[verify]` and ask the owner whether to plan it (not started).
 
 **P2 — usability**
 

@@ -60,6 +60,14 @@ through the outbox and publishes the section 17.6 channels: `rr:bot.reconfigure`
 administrators get the `setup.completed` alert, and the answer carries the bot
 link and the administration URL.
 
+### Site login through Telegram
+
+The landing page's «Войти» shows the Telegram Login Widget, which Telegram only
+draws for a domain linked to the bot. After the wizard, open @BotFather, send
+`/setdomain`, choose the shop's bot and send the shop's domain (the one in step
+2, without `https://`). Until then the widget shows Telegram's own "Bot domain
+invalid" and customers can still sign in from the bot with «Открыть кабинет».
+
 ## Resuming
 
 `setup_state.data` keeps a secret-free draft and `setup_state.current_step` the

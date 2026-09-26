@@ -88,12 +88,15 @@ describe('accessibility invariants', () => {
     expect(host?.getAttribute('role')).toBe('group');
     expect(host?.getAttribute('aria-label')).toBe('Войти');
 
-    // The widget script appends its iframe next to the injected `<script>`,
-    // which Next.js puts on `document.body` rather than inside the container.
+    // The widget script puts its iframe where its own `<script>` is, so the
+    // script must be inside the container the landing's «Войти» points at.
+    const script = host?.querySelector('script[data-telegram-login="manta_bot"]');
+    expect(script?.getAttribute('src')).toBe('https://telegram.org/js/telegram-widget.js?22');
+    expect(script?.getAttribute('data-onauth')).toBe('onRemnaRayTelegramAuth(user)');
     const iframe = document.createElement('iframe');
     iframe.id = 'telegram-login-manta_bot';
     await act(async () => {
-      document.body.append(iframe);
+      script?.before(iframe);
       await new Promise((done) => setTimeout(done, 0));
     });
     expect(iframe.getAttribute('title')).toBe('Войти');
