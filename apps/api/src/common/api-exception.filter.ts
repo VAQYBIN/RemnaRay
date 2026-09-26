@@ -46,6 +46,18 @@ export class ApiExceptionFilter implements ExceptionFilter {
     const reply = http.getResponse<FastifyReply>();
     const requestId = requestIdOf(request);
     const { status, error } = envelope(exception);
+    // A Zod failure is usually the client's, but may come from data the server
+    // itself stored (a provider configuration, a setting): it is logged with
+    // the fields — never their values — so the latter can be found.
+    if (exception instanceof ZodError)
+      this.logger.warn(
+        {
+          requestId,
+          route: request.routeOptions.url ?? request.url.split('?')[0],
+          fields: exception.issues.map((issue) => issue.path.map(String).join('.')),
+        },
+        'Request refused by validation',
+      );
     if (status >= 500) {
       error.incidentId = ulid();
       this.logger.error(

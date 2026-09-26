@@ -26,7 +26,7 @@ function answer(exception: unknown, headers: Record<string, string> = {}) {
   const host = {
     getType: () => 'http',
     switchToHttp: () => ({
-      getRequest: () => ({ id: 'req-9', headers }),
+      getRequest: () => ({ id: 'req-9', headers, url: '/api/v1/me', routeOptions: {} }),
       getResponse: () => reply,
     }),
   };
@@ -43,7 +43,14 @@ describe('ApiExceptionFilter (section 9.3)', () => {
       .safeParse({ panel: { url: 'panel.example' } });
     if (failure.success) throw new Error('expected a failure');
 
+    const warn = vi.spyOn(Logger.prototype, 'warn').mockImplementation(() => undefined);
     const sent = answer(failure.error, { 'x-request-id': 'proxy-1' });
+    // Logged with the field, so a failure on server-side data can be traced.
+    expect(warn).toHaveBeenCalledWith(
+      { requestId: 'proxy-1', route: '/api/v1/me', fields: ['panel.url'] },
+      'Request refused by validation',
+    );
+    expect(JSON.stringify(warn.mock.calls)).not.toContain('panel.example');
 
     expect(sent.status).toBe(400);
     expect(sent.body.error).toMatchObject({
