@@ -87,7 +87,10 @@ RR_REGISTRY=ghcr.io/<your github account, lowercase>
 RR_VERSION=dev
 ```
 
-Then `./scripts/rr up`. If the package is private, the server needs
+Then `./scripts/rr up`. A tag that is not a release's, such as `dev`, is rebuilt
+under the same name, so `up` pulls it every time before starting — otherwise an
+older copy left on the server would start instead. If the package is private,
+the server needs
 `docker login ghcr.io` once with a token carrying `read:packages`; making the
 package public at Packages → Package settings avoids that.
 

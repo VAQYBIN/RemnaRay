@@ -14,10 +14,13 @@ moves neither.
 ```sh
 git pull                      # the compose files and the proxy templates
 # read the CHANGELOG section for the version you are moving to
-docker compose pull
-./scripts/rr up
+./scripts/rr up --pull        # pulls the images of your profile, then starts
 docker compose ps
 ```
+
+`up` pulls on its own only for a tag that is not a release's (such as `dev`);
+for a release tag it starts whatever image is on the server, which is why the
+upgrade asks for `--pull` (or a `docker compose pull` of its own).
 
 `migrate` runs first and `api`, `bot` and `worker` wait for it. Downtime is the
 length of the migrations, usually seconds. `web` and the proxy are not

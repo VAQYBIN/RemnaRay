@@ -160,10 +160,15 @@ panel users yet).
   shows it with «Проверено N, расхождений M» and the dashboard's attention
   block shows its time. Evidence: `reconcile-record.test.ts`; API and web
   tests.
-- **F20 `./scripts/rr up` does not pull.** A leftover `app:dev` image from
-  2026-09-23 ran with the new `compose.yaml` → migrate
-  `DATABASE_URL is required` (the pre-`56168cb` message). Pull before `up`,
-  or document it in `install.md`/`upgrade.md`.
+- **F20 Done — `./scripts/rr up` did not pull.** A leftover `app:dev` image
+  started with the new `compose.yaml`. `up` now pulls the active profile's
+  images first when `RR_VERSION` is not a release tag (the images workflow's
+  `dev` is rebuilt under the same name) or when given `--pull`; a release tag
+  is not pulled on its own, because `rr build` tags a source checkout's images
+  with it and a pull would replace the local build. `docs/upgrade.md` now uses
+  `rr up --pull`; `install.md` explains the `dev` case. Argument parsing takes
+  `--pull` and `--wait-timeout` in any order. Evidence: `rr.test.mjs` (dev →
+  pull before up; default and `1.2.3` → none; `--pull` → pull) red → green.
 - **F21 Wizard panel URL** needs `https://`; add a hint or prepend it.
 - **F22 Timezone** is a free text field; use an IANA list
   (`Intl.supportedValuesOf('timeZone')`) with server validation, wizard and

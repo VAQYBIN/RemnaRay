@@ -246,3 +246,26 @@ test('up reloads a proxy it kept when the renderer was recreated with another TL
   // Nothing recreated: nothing to apply.
   assert.ok(!reloaded(up({ 'proxy-config': ['same'], 'proxy-nginx': ['same'] }, 'acme')));
 });
+
+test('up pulls a moving image tag before starting, never a release tag unless asked', () => {
+  const pulledBeforeUp = (command, values) => {
+    const calls = run(command, { RR_TLS_MODE: 'acme', ...values }).calls;
+    const pull = calls.findIndex((args) => args.at(-1) === 'pull');
+    const up = calls.findIndex((args) => args.includes('--wait'));
+    assert.ok(up >= 0, 'up ran');
+    if (pull < 0) return false;
+    assert.ok(pull < up, 'pull comes before up');
+    return true;
+  };
+
+  // A build from the images workflow (RR_VERSION=dev) is replaced under the
+  // same tag: a copy left from an older build would otherwise start.
+  assert.ok(pulledBeforeUp(['up'], { RR_VERSION: 'dev' }));
+  // A release tag is upgraded explicitly (docs/upgrade.md), and a source
+  // checkout builds its images under the release tag: pulling would replace
+  // the local build.
+  assert.ok(!pulledBeforeUp(['up'], {}));
+  assert.ok(!pulledBeforeUp(['up'], { RR_VERSION: '1.2.3' }));
+  assert.ok(pulledBeforeUp(['up', '--pull'], { RR_VERSION: '1.2.3' }));
+  assert.ok(pulledBeforeUp(['up', '--pull', '--wait-timeout', '60'], {}));
+});

@@ -28,8 +28,23 @@ if [ "$tls_mode" = "certbot" ]; then
   profiles="$profiles --profile certbot"
 fi
 ready_timeout=300
-if [ "${2:-}" = --wait-timeout ]; then ready_timeout=${3:-}; fi
+pull_images=0
+previous=''
+for argument in "$@"; do
+  if [ "$previous" = --wait-timeout ]; then ready_timeout=$argument; fi
+  if [ "$argument" = --pull ]; then pull_images=1; fi
+  previous=$argument
+done
+if [ "$previous" = --wait-timeout ]; then ready_timeout=''; fi
 case "$ready_timeout" in ''|*[!0-9]*|0) echo 'wait-timeout must be positive seconds' >&2; exit 2 ;; esac
+# A release tag (1, 1.2, 1.2.3, 1.2.3-rc.N) is upgraded on purpose
+# (docs/upgrade.md), and `build` tags a source checkout's images with it, so
+# `up` never pulls it on its own. Any other tag, such as the `dev` of the
+# images workflow, is rebuilt under the same name: `up` pulls it first, or an
+# older copy left on the server would start instead.
+if ! printf '%s' "${RR_VERSION:-1}" | grep -Eqx '[0-9]+(\.[0-9]+){0,2}(-rc\.[0-9]+)?'; then
+  pull_images=1
+fi
 case "$profile/$tls_mode" in nginx/acme|nginx/certbot|nginx/custom|caddy/acme|caddy/custom|external/none) ;;
   *) if [ "$command" != down ]; then echo 'Invalid RR_PROXY_PROFILE/RR_TLS_MODE combination' >&2; exit 2; fi ;;
 esac
@@ -41,6 +56,8 @@ Usage: ./scripts/rr {build|up|down|logs|ps|config|proxy:render|proxy:reload|tls:
 The proxy profile comes from RR_PROXY_PROFILE in .env (default: nginx), and
 RR_TLS_MODE=certbot adds the certbot profile.
 up and tls:issue accept --wait-timeout SECONDS (default 300 per readiness phase).
+up pulls the images first when RR_VERSION is not a release tag (such as dev),
+or when given --pull.
 down preserves volumes; down -v explicitly removes this project's volumes.
 
 `build` is only for running from a source checkout: a released deployment
@@ -184,6 +201,10 @@ sync_certbot() {
 }
 
 start_deployment() {
+  if [ "$pull_images" = 1 ]; then
+    echo "Pulling the ${RR_VERSION:-1} images."
+    compose pull
+  fi
   cleanup_stale_proxy
   if [ "$tls_mode" = certbot ]; then sync_certbot; fi
   if [ "$profile" != external ]; then
