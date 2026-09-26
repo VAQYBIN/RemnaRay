@@ -319,16 +319,34 @@ panel users yet).
   service test red → green, migration test, 25/25 integration, web 54, API
   317, E2E 37 (console creates with a squad and edits).
 
-- **F29 Telegram's site login moved to OIDC — owner decision (found while
-  fixing F11).** core.telegram.org/widgets/login (read 2026-09-26) now
-  documents OpenID Connect (authorization code + PKCE, `id_token` RS256 via
-  `https://oauth.telegram.org/.well-known/jwks.json`, Client ID/Secret and
-  allowed URLs in the BotFather mini app, `Telegram.Login.init/open`) and
-  calls the iframe widget "legacy", archived at `/widgets/login-legacy`
-  without a sunset date. RemnaRay (section 13.3, `POST /api/v1/auth/telegram`)
-  implements the legacy HMAC flow, which works today. Moving to OIDC changes
-  the spec's auth contract, the wizard (client id/secret) and the landing;
-  record as `[verify]` and ask the owner whether to plan it (not started).
+- **F29 In progress — move the site login to Telegram's OIDC (owner decision
+  2026-09-26).** Contract (core.telegram.org/widgets/login and the library
+  `https://oauth.telegram.org/js/telegram-login.js?6`, both read 2026-09-26;
+  live discovery and JWKS): `Telegram.Login.auth({client_id, nonce, lang},
+cb)` opens a popup (`response_type=post_message`, `redirect_uri` = the
+  page's origin + path, which must be an Allowed URL in the BotFather mini
+  app → Login Widget); default scope `openid profile`; `cb` gets `{id_token,
+user}` or `{error}`; `id_token` is signed RS256 (`kid oidc-1`) or ES256
+  (`oidc-es256-1`), `iss https://oauth.telegram.org`, `aud` = Client ID = the
+  bot id, `exp`, our `nonce`; the Telegram id is the `id` claim (profile scope,
+  shown in the documented example but absent from `claims_supported`:
+  `[verify]` on the first live login). COOP `same-origin` would break the
+  popup (none is set). Done: `auth/telegram-oidc.ts` — `TelegramOidcVerifier`
+  (JWKS cached 1 h, refetched for an unknown kid, `node:crypto`, no new
+  dependency; `RR_TELEGRAM_OAUTH_URL` overrides the base for tests) and the
+  signed, expiring nonce (`issueNonce`/`checkNonce`), 11 tests. Remaining:
+  `GET /api/v1/auth/telegram/nonce` (nonce in JSON + HttpOnly cookie
+  `rr_oidc_nonce`, Path `/api/v1/auth`, 10 min) and `POST
+/api/v1/auth/telegram/oidc {idToken}` (cookie nonce must match the token's,
+  single use via Valkey `SET NX` until expiry, `clientId` = bot token prefix,
+  upsert user with id/given_name/preferred_username, session cookie, same
+  throttle as the widget route); public config `loginClientId`; the landing
+  `LoginWidget` → own button calling `Telegram.Login.auth` with a prefetched
+  nonce (popup must open inside the click); CSP `script-src` and
+  `connect-src` add `https://oauth.telegram.org`; E2E with a local JWKS mock
+  (stack sets `RR_TELEGRAM_OAUTH_URL`); docs (setup.md: Allowed URLs
+  instead of `/setdomain`; account.md); keep the section 13.3 HMAC route for
+  compatibility.
 
 **P2 — usability**
 
