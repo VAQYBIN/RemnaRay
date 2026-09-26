@@ -253,15 +253,19 @@ export class MeService {
           balance: money(wallet.available),
         },
         // AC-061: a provider is offered only after a successful healthcheck.
-        ...providers.map((provider) => ({
-          code: provider.code,
-          displayName: provider.displayName,
-          kind: provider.code === 'stars' ? ('stars' as const) : ('redirect' as const),
-          available: provider.lastHealthcheckOk === true,
-          ...(provider.lastHealthcheckOk === true
-            ? {}
-            : { unavailableReason: 'PROVIDER_UNAVAILABLE' }),
-        })),
+        // The balance is listed once, above; a row an earlier wizard wrote for
+        // it is not a second payment method.
+        ...providers
+          .filter((provider) => provider.code !== 'balance')
+          .map((provider) => ({
+            code: provider.code,
+            displayName: provider.displayName,
+            kind: provider.code === 'stars' ? ('stars' as const) : ('redirect' as const),
+            available: provider.lastHealthcheckOk === true,
+            ...(provider.lastHealthcheckOk === true
+              ? {}
+              : { unavailableReason: 'PROVIDER_UNAVAILABLE' }),
+          })),
       ],
     };
   }

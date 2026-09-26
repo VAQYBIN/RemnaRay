@@ -49,6 +49,12 @@ const row = {
 };
 
 describe('ProvidersService (AC-061)', () => {
+  it('does not list a row for the built-in balance, which is no provider (FR-070)', async () => {
+    const test = service([{ ...row, code: 'balance' }, { ...row }], { ok: true, latencyMs: 5 });
+
+    expect((await test.instance.list()).items.map((item) => item.code)).toEqual(['mock']);
+  });
+
   it('reports a provider as offered only after a successful healthcheck', async () => {
     const test = service([{ ...row }], { ok: true, latencyMs: 5 });
 

@@ -275,6 +275,23 @@ describe('MeService', () => {
     expect(methods.items[2]).toMatchObject({ unavailableReason: 'PROVIDER_UNAVAILABLE' });
   });
 
+  it('lists the built-in balance once, even when a provider row names it (FR-070)', async () => {
+    const test = service({
+      paymentProvider: {
+        findMany: vi.fn().mockResolvedValue([
+          { code: 'balance', displayName: { ru: 'Баланс' }, lastHealthcheckOk: true },
+          { code: 'yookassa', displayName: { ru: 'ЮKassa' }, lastHealthcheckOk: true },
+        ]),
+      },
+    });
+    const methods = await test.instance.paymentMethods('user-1');
+
+    expect(methods.items.map((item) => [item.code, item.kind])).toEqual([
+      ['balance', 'balance'],
+      ['yookassa', 'redirect'],
+    ]);
+  });
+
   it('applies the section 15.5 promocode rules', async () => {
     const promocode = {
       id: 'promo-1',

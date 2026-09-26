@@ -113,11 +113,14 @@ export class SetupService {
         themeUpload: process.env.RR_THEME_UPLOAD === 'true',
       },
       themes: this.themes.list().filter((theme) => !theme.builtin),
-      providers: this.providers.list().map((provider) => ({
-        code: provider.code,
-        kind: provider.capabilities.kind,
-        receipts: provider.capabilities.receipts,
-      })),
+      providers: this.providers
+        .list()
+        .filter((provider) => provider.capabilities.kind !== 'balance')
+        .map((provider) => ({
+          code: provider.code,
+          kind: provider.capabilities.kind,
+          receipts: provider.capabilities.receipts,
+        })),
       steps: SETUP_STEPS,
     };
   }
@@ -188,11 +191,20 @@ export class SetupService {
     }
   }
 
+  /**
+   * A payment provider the owner configures. The built-in balance (FR-070,
+   * section 11.3.7) has no configuration and no row: one would be offered as
+   * a second payment method, and a top-up through it pays from the balance.
+   */
+  private configurable(code: string): boolean {
+    return this.providers.has(code) && this.providers.get(code).capabilities.kind !== 'balance';
+  }
+
   /** Step 7's per-provider «Проверить». */
   async checkProvider(body: unknown, sessionId: string) {
     await this.session(sessionId);
     const input = setupProviderCheckSchema.parse(body);
-    if (!this.providers.has(input.code)) throw new SetupFailure('NOT_FOUND', 404);
+    if (!this.configurable(input.code)) throw new SetupFailure('NOT_FOUND', 404);
     const started = Date.now();
     try {
       return await this.providers
@@ -420,8 +432,9 @@ export class SetupService {
 
   private async stepPayments(input: ReturnType<typeof setupPaymentsSchema.parse>) {
     const results: { code: string; ok: boolean; error?: string }[] = [];
+    for (const provider of input.providers)
+      if (!this.configurable(provider.code)) throw new SetupFailure('NOT_FOUND', 404);
     for (const provider of input.providers) {
-      if (!this.providers.has(provider.code)) throw new SetupFailure('NOT_FOUND', 404);
       const definition = this.providers.get(provider.code);
       const health = await definition
         .healthcheck(await this.providerRuntime(provider.code, provider.config))

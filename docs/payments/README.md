@@ -43,7 +43,13 @@ one transaction: the invoice is `paid` when the request returns, or it was
 never created and the request answers `409 INSUFFICIENT_FUNDS`, so the same
 request again is refused again rather than handed a pending invoice. A top-up
 cannot be paid from the balance itself (FR-071) and answers
-`PROVIDER_UNAVAILABLE`.
+`PROVIDER_UNAVAILABLE`; the site and the bot let the customer choose among the
+offered providers instead.
+
+The balance is built in and has nothing to configure, so it is never a
+`payment_providers` row: the setup wizard neither lists nor saves it, and a row
+an earlier wizard wrote is ignored by `GET /me/payment-methods` and the
+console, which list the balance once.
 
 «Проверить» (`POST /me/invoices/:id/check`, the console's recheck, FR-064)
 asks `fetchStatus` only of providers with status polling. The balance and

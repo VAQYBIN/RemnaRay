@@ -10,6 +10,8 @@ import { InlineKeyboard, type Bot, type Context } from 'grammy';
 import type Redis from 'ioredis';
 import { formatMessage, type Locale } from '@remnaray/i18n-core';
 import type { ApiClient } from './api-client.js';
+import { formatMinor } from './screens/common.js';
+import { topupProviderKeyboard, topupProviders } from './screens/index.js';
 import type { RrContext } from './types.js';
 
 export const conversationTtlSeconds = 600;
@@ -29,7 +31,8 @@ export function installConversations(bot: Bot<RrContext>, redis: Redis, api: Api
         const telegramId = ctx.from.id;
         const locale: Locale = await conversation.external((outside) => outside.session.lang);
         const catalog = await conversation.external(() => api.getMessages(locale));
-        const t = (key: string) => formatMessage(locale, catalog.messages, key);
+        const t = (key: string, values?: Record<string, unknown>) =>
+          formatMessage(locale, catalog.messages, key, values);
         const prompts = {
           promoEnter: 'bot.screen.promo.ask',
           topupCustom: 'bot.screen.topup.ask',
@@ -94,12 +97,19 @@ export function installConversations(bot: Bot<RrContext>, redis: Redis, api: Api
             );
             await reply.reply(t('bot.screen.support.sent'));
           } else {
-            const methods = await conversation.external(() => api.getPaymentMethods(telegramId));
-            const provider = methods.items.find(
-              (item) => item.available && item.kind !== 'balance',
-            )?.code;
+            const providers = topupProviders(
+              await conversation.external(() => api.getPaymentMethods(telegramId)),
+            );
+            const provider = providers[0]?.code;
             if (!provider || amount === undefined) {
               await reply.reply(t('bot.error.provider_unavailable'));
+              return;
+            }
+            if (providers.length > 1) {
+              await reply.reply(
+                t('bot.screen.topup.provider', { amount: formatMinor(Number(amount)) }),
+                { reply_markup: topupProviderKeyboard({ t, locale }, providers, Number(amount)) },
+              );
               return;
             }
             const key = await conversation.external(() => randomUUID());

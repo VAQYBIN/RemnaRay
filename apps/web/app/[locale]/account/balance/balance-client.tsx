@@ -48,6 +48,7 @@ export default function BalanceClient({ locale }: { locale: Locale }) {
   const message = useErrorMessage();
   const router = useRouter();
   const [custom, setCustom] = useState<bigint | null>(null);
+  const [chosen, setChosen] = useState('');
   const [pending, setPending] = useState(false);
   const [extra, setExtra] = useState<TransactionsView['items']>([]);
   const [cursor, setCursor] = useState<string | null>(null);
@@ -115,8 +116,11 @@ export default function BalanceClient({ locale }: { locale: Locale }) {
       <AccountHeading description={t('balance.description')} title={t('balance.title')} />
       <ResourceSection refresh={resource.refresh} state={resource.state}>
         {(data) => {
+          // FR-071: a top-up is paid through a provider, never from the balance.
+          const methods = data.methods.items.filter((item) => item.kind !== 'balance');
           const provider =
-            data.methods.items.find((item) => item.available && item.kind !== 'balance')?.code ??
+            methods.find((item) => item.available && item.code === chosen)?.code ??
+            methods.find((item) => item.available)?.code ??
             '';
           const rows = [...data.transactions.items, ...extra];
           const nextCursor = cursorLoaded ? cursor : data.transactions.nextCursor;
@@ -148,6 +152,28 @@ export default function BalanceClient({ locale }: { locale: Locale }) {
                   <CardTitle>{t('balance.topUp')}</CardTitle>
                 </CardHeader>
                 <CardContent className="flex flex-col gap-4">
+                  {methods.length > 0 ? (
+                    <fieldset className="flex flex-col gap-3">
+                      <legend className="text-sm font-semibold">{t('plans.provider')}</legend>
+                      <div className="flex flex-wrap gap-3">
+                        {methods.map((method) => (
+                          <label className="flex items-center gap-2 text-sm" key={method.code}>
+                            <input
+                              checked={provider === method.code}
+                              disabled={!method.available}
+                              name="topup-provider"
+                              type="radio"
+                              value={method.code}
+                              onChange={() => {
+                                setChosen(method.code);
+                              }}
+                            />
+                            <span>{method.displayName[locale]}</span>
+                          </label>
+                        ))}
+                      </div>
+                    </fieldset>
+                  ) : null}
                   <div className="flex flex-wrap gap-2">
                     {data.config.presetsMinor.map((amount) => (
                       <Button

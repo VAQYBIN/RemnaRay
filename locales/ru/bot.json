@@ -81,5 +81,6 @@
   "bot.admin.stats": "Статистика пока недоступна.",
   "bot.admin.user": "Пользователь: {id}",
   "bot.admin.extended": "Подписка продлена на {days} дн.",
-  "bot.admin.broadcast": "Активная рассылка не найдена."
+  "bot.admin.broadcast": "Активная рассылка не найдена.",
+  "bot.screen.topup.provider": "Пополнение на {amount}. Выберите способ оплаты:"
 }

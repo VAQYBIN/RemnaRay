@@ -315,6 +315,31 @@ describe('SetupService finish (step 8)', () => {
 });
 
 describe('SetupService payment providers (section 17.4 step 7)', () => {
+  it('neither offers nor saves the built-in balance as a provider (FR-070)', async () => {
+    const test = build();
+    test.registry.list = () => [
+      { code: 'mock', capabilities: { receipts: false, kind: 'redirect' } },
+      { code: 'balance', capabilities: { receipts: false, kind: 'balance' } },
+    ];
+    test.registry.get = (code?: string) => ({
+      capabilities: { receipts: false, kind: code === 'balance' ? 'balance' : 'redirect' },
+      healthcheck: vi.fn().mockResolvedValue({ ok: true, latencyMs: 1 }),
+    });
+    const { sessionId } = await test.service.token({ token: 'wizard-token' }, '10.0.0.8');
+
+    const state = (await test.service.state(sessionId)) as { providers: { code: string }[] };
+    expect(state.providers.map((provider) => provider.code)).toEqual(['mock']);
+    expect(
+      await failure(test.service.checkProvider({ code: 'balance', config: {} }, sessionId)),
+    ).toMatchObject({ status: 404 });
+    expect(
+      await failure(
+        test.service.submit('7', { providers: [{ code: 'balance', config: {} }] }, sessionId),
+      ),
+    ).toMatchObject({ status: 404 });
+    expect(test.store.providers).toHaveLength(0);
+  });
+
   it('checks Telegram Stars with the bot token saved in step 4 (ADR-012)', async () => {
     const test = build();
     const healthcheck = vi.fn().mockResolvedValue({ ok: true, latencyMs: 1 });

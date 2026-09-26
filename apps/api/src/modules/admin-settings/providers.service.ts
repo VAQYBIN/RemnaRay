@@ -42,7 +42,11 @@ export class ProvidersService {
   ) {}
 
   async list() {
-    const rows = await this.infra.db.paymentProvider.findMany({ orderBy: { sortOrder: 'asc' } });
+    // The built-in balance (FR-070) has nothing to configure; a row an earlier
+    // wizard wrote for it is not listed.
+    const rows = (
+      await this.infra.db.paymentProvider.findMany({ orderBy: { sortOrder: 'asc' } })
+    ).filter((row) => row.code !== 'balance');
     return {
       items: rows.map((row) => {
         const provider = this.registry.has(row.code) ? this.registry.get(row.code) : null;

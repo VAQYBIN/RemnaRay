@@ -178,4 +178,38 @@ describe('the balance page (section 15.2)', () => {
     const markup = await renderPage(BalanceClient, routes(0));
     expect(markup).not.toContain('В обработке:');
   });
+
+  it('lets the customer choose the provider of a top-up, never the balance (FR-071)', async () => {
+    const markup = await renderPage(BalanceClient, {
+      ...routes(0),
+      '/api/v1/me/payment-methods': {
+        body: {
+          items: [
+            {
+              code: 'balance',
+              displayName: { ru: 'Баланс', en: 'Balance' },
+              kind: 'balance',
+              available: true,
+              balance: { amountMinor: 20000, currency: 'RUB' },
+            },
+            {
+              code: 'yookassa',
+              displayName: { ru: 'ЮKassa', en: 'YooKassa' },
+              kind: 'redirect',
+              available: true,
+            },
+            {
+              code: 'stars',
+              displayName: { ru: 'Звёзды', en: 'Stars' },
+              kind: 'stars',
+              available: true,
+            },
+          ],
+        },
+      },
+    });
+    expect(markup).toContain('value="yookassa"');
+    expect(markup).toContain('value="stars"');
+    expect(markup).not.toContain('value="balance"');
+  });
 });

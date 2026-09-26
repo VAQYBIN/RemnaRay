@@ -133,14 +133,19 @@ panel users yet).
   stores `{ru:'',en:''}`. No migration: the read path covers existing rows.
   The console's description fields belong to F28. Evidence:
   `plans.repository.test.ts` red → green; API 293 tests, lint, typecheck.
-- **F6 A second `balance` payment method.** The wizard's payments step lists
-  `balance` and `stars` as ordinary providers with JSON config; enabling
-  `balance` created a `payment_providers` row, so `/me/payment-methods`
-  returned the built-in balance plus `{code:"balance",kind:"redirect"}`
-  (`me.service.ts:234`). Web top-up picks the first available non-balance
-  method (`balance-client.tsx:118`) → invoice paid from the balance itself →
-  `INSUFFICIENT_FUNDS`. Fix: `balance` is never a provider row / list entry;
-  top-up (web and bot) gets a real provider choice.
+- **F6 Done — a second `balance` payment method.** The wizard listed the
+  built-in balance as a configurable provider, and enabling it wrote a
+  `payment_providers` row that `/me/payment-methods` returned as a second,
+  `redirect` method; the site's top-up picked it and paid the top-up from the
+  balance itself. Repair: the wizard neither lists, checks nor saves a
+  provider of kind `balance` (404); `/me/payment-methods` and the console
+  list skip a `balance` row a stand already has (no migration needed); the
+  site's top-up offers a provider choice (radio, non-balance, available
+  only), and the bot asks for the provider after the amount (preset or
+  typed) when more than one is offered and goes straight on with one. With
+  F1, a balance top-up is refused by the API anyway. Evidence: API
+  me/providers/setup tests, web `account-pages.test.tsx` (red → green), bot
+  `balance.test.ts`; API 296, web 49, bot 37 tests; E2E 34 passed, 1 skipped.
 - **F7 `inviteeBonus: null` breaks `/account/referrals`.** `me.service.ts:440`
   does `Number(settings referral.invitee_bonus)`, but the setting is an
   object `{type,value}` (`settings.schemas.ts:333`) → `NaN` → JSON `null`;
@@ -248,7 +253,7 @@ panel users yet).
 
 1. F1 — done.
 2. F2, F3, F4 — done.
-3. F5 — done. F6–F8, then the rest of P1 with F27/F28; F17 only after the
+3. F5, F6 — done. F7, F8, then the rest of P1 with F27/F28; F17 only after the
    discussion.
 4. F25 (money) and F26 alongside P1; then P2.
 5. Redeploy the stand, re-run the acceptance walk, then the M5-004 gates.

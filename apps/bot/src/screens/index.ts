@@ -64,6 +64,9 @@ export function registerScreens(bot: Bot<RrContext>, api: ApiClient): void {
   });
   bot.callbackQuery('balance', (ctx) => showBalance(ctx, api));
   bot.callbackQuery('topup:open', (ctx) => showTopup(ctx, api));
+  bot.callbackQuery(/^topup:(\d+)$/u, (ctx) =>
+    showTopupProviders(ctx, api, Number(capture(ctx.match, 1))),
+  );
   bot.callbackQuery(/^topup:(\d+):([a-z-]+)$/u, (ctx) =>
     createTopup(ctx, api, Number(capture(ctx.match, 1)), capture(ctx.match, 2)),
   );
@@ -108,20 +111,57 @@ export async function showBalance(ctx: RrContext, api: ApiClient): Promise<void>
 }
 
 async function showTopup(ctx: RrContext, api: ApiClient): Promise<void> {
-  if (!ctx.from) return;
-  const [config, methods] = await Promise.all([
-    api.getTopupConfig(),
-    api.getPaymentMethods(ctx.from.id),
-  ]);
-  const provider = methods.items.find((item) => item.available && item.kind !== 'balance')?.code;
+  const config = await api.getTopupConfig();
   const keyboard = new InlineKeyboard();
-  for (const amount of config.presetsMinor) {
-    keyboard
-      .text(formatMinor(amount), provider ? `topup:${String(amount)}:${provider}` : 'topup:custom')
-      .row();
-  }
+  for (const amount of config.presetsMinor)
+    keyboard.text(formatMinor(amount), `topup:${String(amount)}`).row();
   keyboard.text(ctx.t('bot.btn.back'), 'balance');
   await show(ctx, ctx.t('bot.screen.topup.title'), keyboard);
+}
+
+/** FR-071: the providers a top-up can be paid through — never the balance. */
+export function topupProviders(methods: Awaited<ReturnType<ApiClient['getPaymentMethods']>>) {
+  return methods.items.filter((item) => item.available && item.kind !== 'balance');
+}
+
+/** The customer's provider choice for a top-up, as `pay:<slug>:<provider>` is for a plan. */
+export function topupProviderKeyboard(
+  ctx: { t: (key: string) => string; locale: RrContext['locale'] },
+  providers: ReturnType<typeof topupProviders>,
+  amountMinor: number,
+): InlineKeyboard {
+  const keyboard = new InlineKeyboard();
+  for (const provider of providers)
+    keyboard
+      .text(
+        provider.displayName[ctx.locale] ?? provider.code,
+        `topup:${String(amountMinor)}:${provider.code}`,
+      )
+      .row();
+  return keyboard.text(ctx.t('bot.btn.back'), 'topup:open');
+}
+
+export async function showTopupProviders(
+  ctx: RrContext,
+  api: ApiClient,
+  amountMinor: number,
+): Promise<void> {
+  if (!ctx.from) return;
+  const providers = topupProviders(await api.getPaymentMethods(ctx.from.id));
+  const [only] = providers;
+  if (!only) {
+    await show(ctx, ctx.t('bot.error.provider_unavailable'), backButton(ctx, 'balance'));
+    return;
+  }
+  if (providers.length === 1) {
+    await createTopup(ctx, api, amountMinor, only.code);
+    return;
+  }
+  await show(
+    ctx,
+    ctx.t('bot.screen.topup.provider', { amount: formatMinor(amountMinor) }),
+    topupProviderKeyboard(ctx, providers, amountMinor),
+  );
 }
 
 async function createTopup(

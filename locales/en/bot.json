@@ -81,5 +81,6 @@
   "bot.admin.stats": "Statistics are unavailable.",
   "bot.admin.user": "User: {id}",
   "bot.admin.extended": "Subscription extended by {days} days.",
-  "bot.admin.broadcast": "No active broadcast found."
+  "bot.admin.broadcast": "No active broadcast found.",
+  "bot.screen.topup.provider": "Top-up of {amount}. Choose how to pay:"
 }
