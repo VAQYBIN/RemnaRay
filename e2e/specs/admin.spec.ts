@@ -63,7 +63,7 @@ test.describe('administration console', () => {
     await expect(page.getByText('Настройки: Mock')).toBeVisible();
     await expect(page.getByLabel('Название для покупателей (ru)')).toHaveValue('Тест');
     await page.getByRole('button', { name: 'Сохранить и проверить' }).click();
-    await expect(page.getByText('Сохранено, проверка: ok')).toBeVisible();
+    await expect(page.getByText('Сохранено, проверка: ok', { exact: true })).toBeVisible();
   });
 
   test('system page lists the queues and the health endpoint', async ({ page }) => {
