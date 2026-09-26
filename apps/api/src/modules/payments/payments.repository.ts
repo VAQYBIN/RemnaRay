@@ -51,6 +51,30 @@ export type InvoiceInput = {
 
 export type StoredEvent = { id: string; duplicate: boolean };
 
+function invoiceData(input: InvoiceInput) {
+  return {
+    ...(input.id ? { id: input.id } : {}),
+    ...(input.numericId === undefined ? {} : { numericId: input.numericId }),
+    userId: input.userId,
+    kind: input.kind,
+    planId: input.planId ?? null,
+    provider: input.provider,
+    status: 'pending' as const,
+    amountMinor: input.amountMinor,
+    currency: input.currency,
+    discountMinor: input.discountMinor ?? 0n,
+    promocodeId: input.promocodeId ?? null,
+    idempotencyKey: input.idempotencyKey,
+    expiresAt: input.expiresAt,
+    providerInvoiceId: input.providerInvoiceId ?? null,
+    paymentUrl: input.paymentUrl ?? null,
+    providerPayload: (input.providerPayload ?? {}) as Prisma.InputJsonValue,
+    providerAmount: input.providerAmount ?? null,
+    providerCurrency: input.providerCurrency ?? null,
+    fxRate: input.fxRate ?? null,
+  };
+}
+
 /** Money formatting for notification parameters, in exact minor units. */
 function formatMinorRub(amountMinor: bigint): string {
   const units = (amountMinor / 100n).toString();
@@ -120,29 +144,32 @@ export class PaymentsRepository {
   async createInvoice(input: InvoiceInput) {
     try {
       invoicesTotal.inc({ provider: input.provider, status: 'pending' });
-      return await this.prisma.invoice.create({
-        data: {
-          ...(input.id ? { id: input.id } : {}),
-          ...(input.numericId === undefined ? {} : { numericId: input.numericId }),
-          userId: input.userId,
-          kind: input.kind,
-          planId: input.planId ?? null,
-          provider: input.provider,
-          status: 'pending',
-          amountMinor: input.amountMinor,
-          currency: input.currency,
-          discountMinor: input.discountMinor ?? 0n,
-          promocodeId: input.promocodeId ?? null,
-          idempotencyKey: input.idempotencyKey,
-          expiresAt: input.expiresAt,
-          providerInvoiceId: input.providerInvoiceId ?? null,
-          paymentUrl: input.paymentUrl ?? null,
-          providerPayload: (input.providerPayload ?? {}) as Prisma.InputJsonValue,
-          providerAmount: input.providerAmount ?? null,
-          providerCurrency: input.providerCurrency ?? null,
-          fxRate: input.fxRate ?? null,
-        },
+      return await this.prisma.invoice.create({ data: invoiceData(input) });
+    } catch (error) {
+      if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002')
+        return this.prisma.invoice.findUniqueOrThrow({
+          where: { idempotencyKey: input.idempotencyKey },
+        });
+      throw error;
+    }
+  }
+
+  /**
+   * FR-070, section 11.3.7: a balance invoice is paid when it is created or
+   * not created at all. The row and the debit share one transaction, so an
+   * `INSUFFICIENT_FUNDS` leaves no pending invoice behind — one that a later
+   * request under the same key would hand back and «Проверить» would try to
+   * settle.
+   */
+  async createBalanceInvoice(input: InvoiceInput) {
+    try {
+      const invoice = await this.prisma.$transaction(async (tx) => {
+        const created = await tx.invoice.create({ data: invoiceData(input) });
+        await this.settleBalance(tx, created.id);
+        return created;
       });
+      invoicesTotal.inc({ provider: input.provider, status: 'paid' });
+      return invoice;
     } catch (error) {
       if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002')
         return this.prisma.invoice.findUniqueOrThrow({
@@ -217,104 +244,102 @@ export class PaymentsRepository {
     return expired.length;
   }
 
-  async settleBalance(invoiceId: string): Promise<void> {
-    await this.prisma.$transaction(async (tx) => {
-      const rows = await tx.$queryRaw<
-        Array<{
-          id: string;
-          userId: string;
-          amountMinor: bigint;
-          planId: string | null;
-          status: string;
-          kind: string;
-        }>
-      >(
-        Prisma.sql`SELECT id, user_id AS "userId", amount_minor AS "amountMinor", plan_id AS "planId", status, kind::text AS kind FROM invoices WHERE id = ${invoiceId}::uuid FOR UPDATE`,
-      );
-      const invoice = rows[0];
-      if (!invoice || invoice.status !== 'pending') return;
-      await this.ensureAccount(tx, 'user', invoice.userId, '');
-      await this.ensureAccount(tx, 'revenue', invoice.userId, '');
-      const accounts = await tx.$queryRaw<Array<{ id: string; kind: string; balance: bigint }>>(
-        Prisma.sql`SELECT id, kind, balance_minor AS balance FROM accounts WHERE (kind = 'user'::account_kind AND user_id = ${invoice.userId}::uuid) OR kind = 'revenue'::account_kind ORDER BY id FOR UPDATE`,
-      );
-      const user = accounts.find((row) => row.kind === 'user');
-      const revenue = accounts.find((row) => row.kind === 'revenue');
-      if (!user || !revenue) throw new Error('ACCOUNT_NOT_FOUND');
-      // Section 15.2: held referral rewards are shown as pending and cannot be
-      // spent; the available balance is `balance_minor − SUM(held rewards)`.
-      const [held] = await tx.$queryRaw<Array<{ held: bigint }>>(Prisma.sql`
-        SELECT COALESCE(SUM(rr.amount_minor), 0)::bigint AS held
-        FROM referral_rewards rr
-        JOIN transactions t ON t.id = rr.transaction_id
-        WHERE t.user_id = ${invoice.userId}::uuid AND rr.status = 'held'
-      `);
-      if (user.balance - (held?.held ?? 0n) < invoice.amountMinor)
-        throw new PaymentError('INSUFFICIENT_FUNDS');
-      const transaction = await tx.transaction.create({
-        data: {
-          userId: invoice.userId,
-          type: 'purchase',
-          status: 'completed',
-          amountMinor: invoice.amountMinor,
-          currency: 'RUB',
-          provider: 'balance',
-          invoiceId: invoice.id,
-        },
-      });
-      await tx.ledgerEntry.create({
-        data: {
-          transactionId: transaction.id,
-          debitAccountId: user.id,
-          creditAccountId: revenue.id,
-          amountMinor: invoice.amountMinor,
-          currency: 'RUB',
-        },
-      });
-      await tx.account.update({
-        where: { id: user.id },
-        data: { balanceMinor: { decrement: invoice.amountMinor } },
-      });
-      await tx.account.update({
-        where: { id: revenue.id },
-        data: { balanceMinor: { increment: invoice.amountMinor } },
-      });
-      await tx.invoice.update({
-        where: { id: invoice.id },
-        data: { status: 'paid', paidAt: new Date() },
-      });
-      // EX-06: the unused time was priced into this invoice as the plan-change
-      // credit, so a plan change starts now, as it does when a provider pays.
-      if (invoice.planId)
-        await this.activateSubscription(
-          tx,
-          invoice.userId,
-          invoice.planId,
-          invoice.kind === 'plan_change',
-        );
-      await queueNotification(
-        tx,
-        'payment.succeeded',
-        invoice.userId,
-        `payment.succeeded:${invoice.id}`,
-        { amount: formatMinorRub(invoice.amountMinor) },
-      );
-      await paymentSucceeded(tx, transaction, invoice);
-      await this.rewards?.onInvoiceSettled(tx, invoice.id);
-      await this.rewards?.onPaid(tx, {
-        id: transaction.id,
+  private async settleBalance(tx: Tx, invoiceId: string): Promise<void> {
+    const rows = await tx.$queryRaw<
+      Array<{
+        id: string;
+        userId: string;
+        amountMinor: bigint;
+        planId: string | null;
+        status: string;
+        kind: string;
+      }>
+    >(
+      Prisma.sql`SELECT id, user_id AS "userId", amount_minor AS "amountMinor", plan_id AS "planId", status, kind::text AS kind FROM invoices WHERE id = ${invoiceId}::uuid FOR UPDATE`,
+    );
+    const invoice = rows[0];
+    if (!invoice || invoice.status !== 'pending') return;
+    await this.ensureAccount(tx, 'user', invoice.userId, '');
+    await this.ensureAccount(tx, 'revenue', invoice.userId, '');
+    const accounts = await tx.$queryRaw<Array<{ id: string; kind: string; balance: bigint }>>(
+      Prisma.sql`SELECT id, kind, balance_minor AS balance FROM accounts WHERE (kind = 'user'::account_kind AND user_id = ${invoice.userId}::uuid) OR kind = 'revenue'::account_kind ORDER BY id FOR UPDATE`,
+    );
+    const user = accounts.find((row) => row.kind === 'user');
+    const revenue = accounts.find((row) => row.kind === 'revenue');
+    if (!user || !revenue) throw new Error('ACCOUNT_NOT_FOUND');
+    // Section 15.2: held referral rewards are shown as pending and cannot be
+    // spent; the available balance is `balance_minor − SUM(held rewards)`.
+    const [held] = await tx.$queryRaw<Array<{ held: bigint }>>(Prisma.sql`
+      SELECT COALESCE(SUM(rr.amount_minor), 0)::bigint AS held
+      FROM referral_rewards rr
+      JOIN transactions t ON t.id = rr.transaction_id
+      WHERE t.user_id = ${invoice.userId}::uuid AND rr.status = 'held'
+    `);
+    if (user.balance - (held?.held ?? 0n) < invoice.amountMinor)
+      throw new PaymentError('INSUFFICIENT_FUNDS');
+    const transaction = await tx.transaction.create({
+      data: {
         userId: invoice.userId,
         type: 'purchase',
+        status: 'completed',
         amountMinor: invoice.amountMinor,
-      });
-      await tx.outboxJob.create({
-        data: {
-          queue: 'panel',
-          name: 'panel.sync-user',
-          payload: { userId: invoice.userId, reason: 'paid' },
-          jobId: `sync:${invoice.userId}`,
-        },
-      });
+        currency: 'RUB',
+        provider: 'balance',
+        invoiceId: invoice.id,
+      },
+    });
+    await tx.ledgerEntry.create({
+      data: {
+        transactionId: transaction.id,
+        debitAccountId: user.id,
+        creditAccountId: revenue.id,
+        amountMinor: invoice.amountMinor,
+        currency: 'RUB',
+      },
+    });
+    await tx.account.update({
+      where: { id: user.id },
+      data: { balanceMinor: { decrement: invoice.amountMinor } },
+    });
+    await tx.account.update({
+      where: { id: revenue.id },
+      data: { balanceMinor: { increment: invoice.amountMinor } },
+    });
+    await tx.invoice.update({
+      where: { id: invoice.id },
+      data: { status: 'paid', paidAt: new Date() },
+    });
+    // EX-06: the unused time was priced into this invoice as the plan-change
+    // credit, so a plan change starts now, as it does when a provider pays.
+    if (invoice.planId)
+      await this.activateSubscription(
+        tx,
+        invoice.userId,
+        invoice.planId,
+        invoice.kind === 'plan_change',
+      );
+    await queueNotification(
+      tx,
+      'payment.succeeded',
+      invoice.userId,
+      `payment.succeeded:${invoice.id}`,
+      { amount: formatMinorRub(invoice.amountMinor) },
+    );
+    await paymentSucceeded(tx, transaction, invoice);
+    await this.rewards?.onInvoiceSettled(tx, invoice.id);
+    await this.rewards?.onPaid(tx, {
+      id: transaction.id,
+      userId: invoice.userId,
+      type: 'purchase',
+      amountMinor: invoice.amountMinor,
+    });
+    await tx.outboxJob.create({
+      data: {
+        queue: 'panel',
+        name: 'panel.sync-user',
+        payload: { userId: invoice.userId, reason: 'paid' },
+        jobId: `sync:${invoice.userId}`,
+      },
     });
   }
 

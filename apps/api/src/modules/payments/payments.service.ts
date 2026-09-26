@@ -35,6 +35,7 @@ export class PaymentsService {
     if (!input.idempotencyKey) throw new PaymentError('IDEMPOTENCY_REQUIRED');
     const existing = await this.replay(input);
     if (existing) return existing;
+    await this.requireOffered(input.provider, input.kind);
     const user = await this.infra.db.user.findUniqueOrThrow({ where: { id: input.userId } });
     let amount = input.amountMinor ?? 0n;
     let description = 'RemnaRay';
@@ -154,11 +155,13 @@ export class PaymentsService {
           }
         : {}),
     };
-    const invoice = await this.repository.createInvoice(invoiceInput);
+    const invoice =
+      input.provider === 'balance'
+        ? await this.repository.createBalanceInvoice(invoiceInput)
+        : await this.repository.createInvoice(invoiceInput);
     // A concurrent request with the key won the insert; its invoice is ours
     // only if it is the same request.
     if (invoice.id !== shopInvoiceId) return replayed(invoice, input);
-    if (input.provider === 'balance') await this.repository.settleBalance(invoice.id);
     if (provider.capabilities.statusPolling && invoice.status === 'pending') {
       await this.infra.db.outboxJob.create({
         data: {
@@ -276,6 +279,12 @@ export class PaymentsService {
     const invoice = await this.repository.findInvoice(invoiceId);
     if (!invoice) throw new PaymentError('INVOICE_NOT_FOUND');
     const provider = this.providers.get(invoice.provider);
+    // FR-064 asks the provider for the status, and a provider without status
+    // polling has none to give: Telegram Stars are proven only by
+    // `successful_payment`, and the balance settles when the invoice is
+    // created (section 11.3.7), so its `fetchStatus` answers `paid` for any
+    // invoice, including one the balance never covered.
+    if (!provider.capabilities.statusPolling) return invoice;
     const event = await provider.fetchStatus(
       invoice.providerInvoiceId ?? invoice.id,
       await this.providerConfig(invoice.provider),
@@ -334,6 +343,27 @@ export class PaymentsService {
       ? await this.settings.get(crypto ? 'invoice.ttl_minutes_crypto' : 'invoice.ttl_minutes')
       : undefined;
     return typeof value === 'number' && value > 0 ? value : crypto ? 60 : 30;
+  }
+
+  /**
+   * FR-061, AC-061: an invoice is created only through a provider that is
+   * offered to customers — enabled and with a successful last healthcheck, as
+   * `GET /me/payment-methods` shows it. The built-in balance has no row to
+   * enable; it pays for plans (FR-070) and never tops itself up (FR-071).
+   */
+  private async requireOffered(code: string, kind: InvoiceRequest['kind']): Promise<void> {
+    this.providers.get(code);
+    if (code === 'balance') {
+      if (kind === 'topup') throw new PaymentError('PROVIDER_UNAVAILABLE');
+      return;
+    }
+    if (code === 'mock') return;
+    const row = await this.infra.db.paymentProvider.findUnique({
+      where: { code },
+      select: { enabled: true, lastHealthcheckOk: true },
+    });
+    if (!row?.enabled || row.lastHealthcheckOk !== true)
+      throw new PaymentError('PROVIDER_UNAVAILABLE');
   }
 
   private async providerConfig(code: string): Promise<Record<string, unknown>> {

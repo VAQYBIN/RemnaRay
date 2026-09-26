@@ -85,6 +85,7 @@ describe('PaymentsService provider configuration', () => {
         findUnique: vi.fn().mockResolvedValue({
           code: 'stars',
           enabled: true,
+          lastHealthcheckOk: true,
           // Exactly what ProvidersService.update and SetupService write.
           configEnc: encryptSetting({ starsPerRub: 0.75 }, appKey).enc,
         }),
@@ -189,6 +190,86 @@ describe('PaymentsService.recheck (section 7.3 status polling)', () => {
       }),
     );
     expect(repository.applyEvent).toHaveBeenCalledWith('event-1');
+  });
+});
+
+describe('PaymentsService.recheck of a provider without status polling', () => {
+  it('leaves a pending balance invoice as it is instead of asking fetchStatus', async () => {
+    const invoice = {
+      id: 'invoice-1',
+      provider: 'balance',
+      providerInvoiceId: 'key-1',
+      status: 'pending',
+    };
+    const registry = createPaymentProviderRegistry({});
+    const fetchStatus = vi.spyOn(registry.get('balance'), 'fetchStatus');
+    const repository = {
+      findInvoice: vi.fn().mockResolvedValue(invoice),
+      insertEvent: vi.fn(),
+      applyEvent: vi.fn(),
+    };
+    const service = new PaymentsService(
+      { db: {} } as unknown as Infrastructure,
+      repository as unknown as PaymentsRepository,
+      registry,
+    );
+
+    await expect(service.recheck('invoice-1')).resolves.toBe(invoice);
+    expect(fetchStatus).not.toHaveBeenCalled();
+    expect(repository.insertEvent).not.toHaveBeenCalled();
+    expect(repository.applyEvent).not.toHaveBeenCalled();
+  });
+});
+
+describe('PaymentsService.createInvoice provider availability (FR-061, FR-071, AC-061)', () => {
+  function harness(row: Record<string, unknown> | null) {
+    const registry = createPaymentProviderRegistry({});
+    const create = vi.spyOn(registry.get('yookassa'), 'createInvoice');
+    const db = { paymentProvider: { findUnique: vi.fn().mockResolvedValue(row) } };
+    const repository = {
+      findByIdempotencyKey: vi.fn().mockResolvedValue(null),
+      createInvoice: vi.fn(),
+    };
+    const service = new PaymentsService(
+      { db } as unknown as Infrastructure,
+      repository as unknown as PaymentsRepository,
+      registry,
+    );
+    return { create, repository, service };
+  }
+
+  it.each([
+    ['has no row', null],
+    ['is disabled', { code: 'yookassa', enabled: false, lastHealthcheckOk: true }],
+    ['was never checked', { code: 'yookassa', enabled: true, lastHealthcheckOk: null }],
+    ['failed its last check', { code: 'yookassa', enabled: true, lastHealthcheckOk: false }],
+  ])('refuses a provider that %s', async (_name, row) => {
+    const { create, repository, service } = harness(row);
+    await expect(
+      service.createInvoice({
+        userId: 'user-1',
+        kind: 'topup',
+        provider: 'yookassa',
+        amountMinor: 10000n,
+        idempotencyKey: 'key-1',
+      }),
+    ).rejects.toMatchObject({ name: 'PaymentError', code: 'PROVIDER_UNAVAILABLE' });
+    expect(create).not.toHaveBeenCalled();
+    expect(repository.createInvoice).not.toHaveBeenCalled();
+  });
+
+  it('refuses a top-up paid from the balance itself', async () => {
+    const { repository, service } = harness(null);
+    await expect(
+      service.createInvoice({
+        userId: 'user-1',
+        kind: 'topup',
+        provider: 'balance',
+        amountMinor: 10000n,
+        idempotencyKey: 'key-1',
+      }),
+    ).rejects.toMatchObject({ code: 'PROVIDER_UNAVAILABLE' });
+    expect(repository.createInvoice).not.toHaveBeenCalled();
   });
 });
 
@@ -393,6 +474,7 @@ describe('PaymentsService receipts (FR-062)', () => {
         findUnique: vi.fn().mockResolvedValue({
           code: 'robokassa',
           enabled: true,
+          lastHealthcheckOk: true,
           configEnc: encryptSetting(
             { merchantLogin: 'shop', password1: 'p1', password2: 'p2' },
             appKey,

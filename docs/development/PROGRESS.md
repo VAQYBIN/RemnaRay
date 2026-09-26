@@ -44,26 +44,47 @@ panel users yet).
 
 **P0 — money / security**
 
-- **F1 Free payment through provider `balance` + recheck.** CONFIRMED on the
-  stand (admin path) and by code (customer path, not yet reproduced by a
-  test). `BalanceProvider.fetchStatus` always answers `paid`
-  (`apps/api/src/modules/payments/builtin-providers.ts` ~line 809) although
-  it declares `statusPolling: false`; `PaymentService.recheck`
-  (`payments.service.ts:272`) never checks `statusPolling` and applies the
-  polled event; a balance invoice whose `settleBalance` fails with
-  `INSUFFICIENT_FUNDS` stays `pending` (`payments.service.ts:161`,
-  `payments.repository.ts` settleBalance); `MeService.checkInvoice`
-  (`me.service.ts:336`, web «Проверить» on `/pay/<id>`, bot `inv:check`)
-  calls the same `recheck`; `MeService.createInvoice` does not check that a
-  provider is enabled/healthy (AC-061). Any customer with zero balance can
-  buy a plan or top up "from balance", press «Проверить», and get it free.
-  Plan: failing tests first (API unit + E2E customer path, red now); recheck
-  skips providers without `statusPolling`; `BalanceProvider.fetchStatus`
-  stops claiming `paid`; a failed balance settlement closes the invoice
-  (check section 11 for the status); invoice creation refuses disabled or
-  unhealthy providers except the built-in balance; audit every other
-  provider's `fetchStatus` for stubs. Use `$remnaray-financial-safety` +
-  `$differential-review`.
+- **F1 Done — free payment through provider `balance` + recheck.** Cause:
+  a balance invoice whose settlement failed with `INSUFFICIENT_FUNDS` stayed
+  `pending` (row and debit were separate transactions); the same request
+  again under its `Idempotency-Key` handed that invoice back, and «Проверить»
+  (`MeService.checkInvoice`) or the console recheck called
+  `BalanceProvider.fetchStatus`, which answers `paid`. A top-up could also be
+  "paid" from the balance, and `createInvoice` did not check AC-061.
+  Repair: `PaymentsRepository.createBalanceInvoice` writes the row and the
+  debit in one transaction (refused → no row); `recheck` returns the invoice
+  unchanged for providers without `statusPolling` (balance, Stars);
+  `requireOffered` refuses a balance top-up and any provider that is not
+  enabled with `lastHealthcheckOk=true` (`409 PROVIDER_UNAVAILABLE`; `mock`
+  exempt as in `providerConfig`). `BalanceProvider.fetchStatus` still answers
+  `paid`: section 11.3.7 prescribes it, and it is true once no pending
+  balance invoice can exist. Other `fetchStatus` implementations audited:
+  YooKassa, Robokassa, Lava, Platega and CryptoBot query the provider; Stars
+  answer `pending`. Evidence: E2E `account.spec.ts` «leaves no invoice to
+  check…» red on the old code (retry → 201 pending), green now; unit tests
+  (recheck without polling, four unavailable-provider cases, balance top-up)
+  red → green; `m2.payment` integration: refused balance purchase leaves no
+  row, a leftover pending balance invoice is not polled, 5 parallel balance
+  purchases → 1 paid, 4 `INSUFFICIENT_FUNDS`, no stray rows. Full E2E 33
+  passed / 1 skipped (Telegram widget, pre-existing), API unit 292, M2/M4
+  payment integration 6/6, lint/typecheck clean. Stand: the seven fake
+  payments remain until the redeploy; existing pending balance invoices now
+  expire instead of being paid.
+- **F25 Promocode on a balance payment is never applied (found while fixing
+  F1; code reading, no test yet).** `MeService.createInvoice` links the
+  reserved redemption to the invoice (`redemption.invoice_id`) only after
+  `PaymentsService.createInvoice` returns, but a balance invoice is settled
+  inside that call, so `applyReservedPromocode` finds no redemption: it stays
+  `reserved` for good (no `used_count`, no `promo.applied`, never released by
+  expiry). Provider invoices are linked before any webhook in practice, but
+  the same ordering gap exists. Repair: pass the redemption into invoice
+  creation (link inside the creating transaction). `$remnaray-financial-safety`.
+- **F26 Lava, Platega and CryptoBot healthchecks always answer ok (found while
+  fixing F1).** `builtin-providers.ts` `healthcheck()` returns
+  `{ ok: true }` without calling the provider, so AC-061 offers them with any
+  keys. FR-061 allows `healthcheck_skipped` only "for providers without such
+  an API" — verify per provider (contract verification) whether a read-only
+  authenticated call exists and use it; otherwise record the skip explicitly.
 
 **P1 — broken core flows**
 
@@ -191,10 +212,10 @@ contracts/plans.ts:10`) → client parse error, "Не удалось загру�
 
 ### Next
 
-1. F1 (after the owner compacts the session and says go).
+1. F1 — done.
 2. F2, then F3/F4 with the error path visible.
 3. F5–F8, then the rest of P1; F17 only after the discussion.
-4. P2.
+4. F25 (money) and F26 alongside P1; then P2.
 5. Redeploy the stand, re-run the acceptance walk, then the M5-004 gates.
 
 ## Code review repair queue — 2026-09-24

@@ -67,10 +67,15 @@ test(
         create: {
           code: 'stars',
           enabled: true,
+          lastHealthcheckOk: true,
           displayName: { ru: 'Звёзды', en: 'Stars' },
           configEnc: encryptSetting({ starsPerRub: 0.75 }, appKey).enc,
         },
-        update: { enabled: true, configEnc: encryptSetting({ starsPerRub: 0.75 }, appKey).enc },
+        update: {
+          enabled: true,
+          lastHealthcheckOk: true,
+          configEnc: encryptSetting({ starsPerRub: 0.75 }, appKey).enc,
+        },
       });
       const telegramId = 992000042n;
       const user = await prisma.user.create({

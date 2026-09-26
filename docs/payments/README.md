@@ -29,7 +29,25 @@ the same payment reported again (EX-03) and changes nothing — except for
 Telegram Stars, where a new charge id is new money (see [stars](./stars.md)).
 
 Provider configuration is deliberately incomplete until an administrator
-enables the provider and records a successful health check.
+enables the provider and records a successful health check. `POST
+/me/invoices` applies the same rule as `GET /me/payment-methods` (AC-061): an
+invoice through a provider that is disabled, was never checked or failed its
+last check is refused with `409 PROVIDER_UNAVAILABLE` before the provider is
+called.
+
+## The balance
+
+`balance` pays for a plan or a plan change from the customer's available
+balance (FR-070, section 11.3.7). The invoice row and the debit are written in
+one transaction: the invoice is `paid` when the request returns, or it was
+never created and the request answers `409 INSUFFICIENT_FUNDS`, so the same
+request again is refused again rather than handed a pending invoice. A top-up
+cannot be paid from the balance itself (FR-071) and answers
+`PROVIDER_UNAVAILABLE`.
+
+«Проверить» (`POST /me/invoices/:id/check`, the console's recheck, FR-064)
+asks `fetchStatus` only of providers with status polling. The balance and
+Telegram Stars have none: the check answers the invoice as it is.
 
 ## The `mock` provider
 

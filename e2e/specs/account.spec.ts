@@ -196,6 +196,50 @@ test.describe('customer account', () => {
     expect((await create(config.minMinor)).status()).toBe(400);
   });
 
+  test('leaves no invoice to check when the balance cannot pay it (FR-070, section 11.3.7)', async ({
+    request,
+  }) => {
+    const state = stackState();
+    // A customer the bot has just met, with nothing on the balance.
+    const telegramId = String(997_000_000 + Math.floor(Math.random() * 999_999));
+    const met = await request.post(`${state.apiUrl}/api/internal/v1/users/upsert`, {
+      headers: { 'x-internal-token': state.internalToken, 'content-type': 'application/json' },
+      data: { telegramId, firstName: 'Broke' },
+    });
+    expect(met.ok()).toBeTruthy();
+    const headers = {
+      'x-internal-token': state.internalToken,
+      'x-acting-user': telegramId,
+      'content-type': 'application/json',
+    };
+    const key = crypto.randomUUID();
+    const buy = () =>
+      request.post(`${state.apiUrl}/api/internal/v1/me/invoices`, {
+        headers: { ...headers, 'idempotency-key': key },
+        data: { kind: 'purchase', planId: state.plan.id, provider: 'balance' },
+      });
+
+    const refused = await buy();
+    expect(refused.status()).toBe(409);
+    expect(await refused.json()).toMatchObject({ error: { code: 'INSUFFICIENT_FUNDS' } });
+    // The same request again is refused again: no pending invoice was left
+    // behind for «Проверить» to mark paid.
+    const again = await buy();
+    expect(again.status()).toBe(409);
+    expect(await again.json()).toMatchObject({ error: { code: 'INSUFFICIENT_FUNDS' } });
+
+    // FR-071: a top-up is paid through a provider, never from the balance itself.
+    const config = (await (
+      await request.get(`${state.apiUrl}/api/internal/v1/me/topup-config`, { headers })
+    ).json()) as { minMinor: number };
+    const topup = await request.post(`${state.apiUrl}/api/internal/v1/me/invoices`, {
+      headers: { ...headers, 'idempotency-key': crypto.randomUUID() },
+      data: { kind: 'topup', provider: 'balance', amountMinor: config.minMinor },
+    });
+    expect(topup.status()).toBe(409);
+    expect(await topup.json()).toMatchObject({ error: { code: 'PROVIDER_UNAVAILABLE' } });
+  });
+
   test('buys a plan with the mock provider and sees the invoice paid', async ({
     context,
     page,

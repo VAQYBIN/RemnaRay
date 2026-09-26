@@ -156,6 +156,74 @@ test(
         2000n,
       );
 
+      // FR-070, section 11.3.7: a balance invoice is paid when it is created
+      // or not created at all. A refused one used to stay `pending`, and
+      // `recheck` asked `BalanceProvider.fetchStatus`, which answers `paid`,
+      // so the plan was activated for nothing.
+      await assert.rejects(
+        service.createInvoice({
+          userId: user.id,
+          kind: 'purchase',
+          planId: plan.id,
+          provider: 'balance',
+          idempotencyKey: 'm2-balance-short',
+        }),
+        { name: 'PaymentError', code: 'INSUFFICIENT_FUNDS' },
+      );
+      assert.equal(
+        await prisma.invoice.count({ where: { idempotencyKey: 'm2-balance-short' } }),
+        0,
+      );
+      // A pending balance invoice an earlier release left behind is not
+      // polled: the balance has no status to look up.
+      const leftover = await prisma.invoice.create({
+        data: {
+          userId: user.id,
+          kind: 'purchase',
+          planId: plan.id,
+          provider: 'balance',
+          status: 'pending',
+          amountMinor: 29900n,
+          currency: 'RUB',
+          idempotencyKey: 'm2-balance-leftover',
+          providerInvoiceId: 'm2-balance-leftover',
+          expiresAt: new Date(Date.now() + 30 * 60_000),
+        },
+      });
+      assert.equal((await service.recheck(leftover.id)).status, 'pending');
+      assert.equal(await prisma.transaction.count({ where: { invoiceId: leftover.id } }), 0);
+      assert.equal(await prisma.paymentEvent.count({ where: { invoiceId: leftover.id } }), 0);
+      // Parallel balance purchases lock the account: one is paid, the others
+      // are refused, and none of them leaves an invoice behind.
+      const buyer = await prisma.user.create({
+        data: { telegramId: 992000009n, language: 'ru', referralCode: 'M2PAY009' },
+      });
+      await prisma.account.create({
+        data: { kind: 'user', userId: buyer.id, currency: 'RUB', balanceMinor: 6000n },
+      });
+      const attempts = await Promise.allSettled(
+        [1, 2, 3, 4, 5].map((n) =>
+          service.createInvoice({
+            userId: buyer.id,
+            kind: 'purchase',
+            planId: balancePlan.id,
+            provider: 'balance',
+            idempotencyKey: `m2-balance-race-${n}`,
+          }),
+        ),
+      );
+      assert.equal(attempts.filter((result) => result.status === 'fulfilled').length, 1);
+      for (const result of attempts.filter((item) => item.status === 'rejected'))
+        assert.equal(result.reason.code, 'INSUFFICIENT_FUNDS');
+      assert.deepEqual(
+        (await prisma.invoice.findMany({ where: { userId: buyer.id } })).map((row) => row.status),
+        ['paid'],
+      );
+      assert.equal(
+        (await prisma.account.findFirst({ where: { userId: buyer.id } })).balanceMinor,
+        2000n,
+      );
+
       // FR-066/EX-05: a refund returns revenue of a purchase to the balance.
       // A top-up never reached revenue, so refunding one credited the same
       // money to the balance a second time.
@@ -326,11 +394,13 @@ test(
       const previousFetch = globalThis.fetch;
       process.env.RR_APP_KEY = appKey;
       registry.register(new CryptoBotProvider());
-      // The migration seeds the row disabled; the console enables it like this.
+      // The migration seeds the row disabled; the console enables it like
+      // this, and AC-061 offers it after a successful healthcheck.
       await prisma.paymentProvider.update({
         where: { code: 'cryptobot' },
         data: {
           enabled: true,
+          lastHealthcheckOk: true,
           configEnc: encryptSetting({ token: 't', baseUrl: 'http://cryptobot.test/api' }, appKey)
             .enc,
         },
@@ -415,6 +485,7 @@ test(
           where: { code: 'robokassa' },
           data: {
             enabled: true,
+            lastHealthcheckOk: true,
             configEnc: encryptRobokassa(
               { merchantLogin: 'shop', password1: 'p1', password2: 'p2' },
               robokassaKey,
