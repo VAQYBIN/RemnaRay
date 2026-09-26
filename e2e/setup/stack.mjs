@@ -118,8 +118,12 @@ export async function startStack({ seed = true } = {}) {
     stdio: 'pipe',
   });
 
-  const fixtures = seed ? await seedFixtures(databaseUrl) : { setupToken: SETUP_TOKEN };
-  const mocks = seed ? null : await startMocks();
+  // The seeded shop talks to the panel mock too: the console's plan form
+  // loads the panel's squads (FR-145).
+  const mocks = await startMocks();
+  const fixtures = seed
+    ? await seedFixtures(databaseUrl, mocks.panelUrl)
+    : { setupToken: SETUP_TOKEN };
 
   const apiPort = await freePort();
   const webPort = await freePort();
@@ -197,16 +201,16 @@ export async function startStack({ seed = true } = {}) {
     internalToken: INTERNAL_TOKEN,
     brand: { name: BRAND_NAME },
     apiUrl: `http://127.0.0.1:${String(apiPort)}`,
-    ...(mocks
-      ? { panelUrl: mocks.panelUrl, telegramUrl: mocks.telegramUrl, botToken: mocks.botToken }
-      : {}),
+    ...(seed
+      ? {}
+      : { panelUrl: mocks.panelUrl, telegramUrl: mocks.telegramUrl, botToken: mocks.botToken }),
     ...fixtures,
     async stop() {
       proxy.close();
       api.kill('SIGTERM');
       web.kill('SIGTERM');
       await sleep(500);
-      if (mocks) await mocks.stop();
+      await mocks.stop();
       await valkey.stop();
       await postgres.stop();
     },
@@ -251,7 +255,7 @@ async function waitForFreshPage(url, timeoutMs = 60_000) {
   throw new Error(`Timed out waiting for ${url} to serve the seeded content`);
 }
 
-async function seedFixtures(databaseUrl) {
+async function seedFixtures(databaseUrl, panelUrl) {
   const { createPrismaClient } = await import('../../packages/db/dist/index.js');
   const { hashAdminPassword, encryptTotpSecret, createTotp } =
     await import('../../apps/api/dist/modules/admin/admin.crypto.js');
@@ -279,7 +283,7 @@ async function seedFixtures(databaseUrl) {
       durationDays: 30,
       trafficLimitBytes: 0n,
       deviceLimit: 3,
-      squads: [],
+      squads: ['01a0b9f0-e699-7032-9841-6d516d4591ad'],
       priceMinor: 29900n,
       isPublic: true,
       isActive: true,
@@ -308,6 +312,8 @@ async function seedFixtures(databaseUrl) {
       { key: 'bot.token', value: encryptSetting(botToken, APP_KEY), isSecret: true },
       { key: 'trial.enabled', value: true, isSecret: false },
       { key: 'domain.main', value: 'example.test', isSecret: false },
+      { key: 'panel.base_url', value: panelUrl, isSecret: false },
+      { key: 'panel.api_token', value: encryptSetting('e2e-panel-token', APP_KEY), isSecret: true },
     ],
     skipDuplicates: true,
   });

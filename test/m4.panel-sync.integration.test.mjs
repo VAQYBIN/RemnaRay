@@ -117,7 +117,7 @@ test('M4 console changes reach the panel', { timeout: 240_000 }, async () => {
         slug: 'm4-small',
         name: { ru: 'S', en: 'S' },
         durationDays: 30,
-        squads: [],
+        squads: ['01a0b9f0-e699-7032-9841-6d516d4591ad'],
         priceMinor: 9900n,
         trafficLimitBytes: 1024n ** 3n,
       },

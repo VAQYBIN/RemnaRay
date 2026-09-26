@@ -298,6 +298,16 @@ export class RemnawaveService {
     }
   }
 
+  /** FR-145: the internal squads a plan can grant, for the console's plan form. */
+  async squads(): Promise<{ uuid: string; name: string }[]> {
+    const client = await this.client();
+    try {
+      return (await client.squads.list()).map((squad) => ({ uuid: squad.uuid, name: squad.name }));
+    } finally {
+      await client.close();
+    }
+  }
+
   async health() {
     const client = await this.client();
     try {

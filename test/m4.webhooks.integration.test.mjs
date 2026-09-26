@@ -76,7 +76,7 @@ test('M4 outgoing webhooks are emitted, signed and retried', { timeout: 240_000 
         slug: 'm4-hooks',
         name: { ru: 'M4', en: 'M4' },
         durationDays: 30,
-        squads: [],
+        squads: ['01a0b9f0-e699-7032-9841-6d516d4591ad'],
         priceMinor: 29900n,
       },
     });

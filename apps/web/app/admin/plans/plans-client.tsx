@@ -6,6 +6,7 @@ import { z } from 'zod';
 
 import { permissions as allPermissions } from '@remnaray/domain';
 import {
+  Badge,
   Button,
   Card,
   CardContent,
@@ -28,13 +29,24 @@ import { AdminSection, useAdminErrorMessage } from '../admin-states';
 
 const GIGABYTE = 1024 ** 3;
 
+const RESET_STRATEGIES = ['NO_RESET', 'DAY', 'WEEK', 'MONTH'] as const;
+
+const squadsSchema = z.object({
+  items: z.array(z.object({ uuid: z.string(), name: z.string() })),
+});
+
+/** FR-145: every field of a plan the console creates or edits. */
 type Draft = {
   slug: string;
   nameRu: string;
   nameEn: string;
+  descriptionRu: string;
+  descriptionEn: string;
   durationDays: number;
   trafficGb: number;
+  trafficResetStrategy: string;
   deviceLimit: number;
+  squads: string[];
   priceMinor: bigint | null;
   isPublic: boolean;
   isActive: boolean;
@@ -44,19 +56,42 @@ const emptyDraft: Draft = {
   slug: '',
   nameRu: '',
   nameEn: '',
+  descriptionRu: '',
+  descriptionEn: '',
   durationDays: 30,
   trafficGb: 0,
+  trafficResetStrategy: 'NO_RESET',
   deviceLimit: 3,
+  squads: [],
   priceMinor: null,
   isPublic: true,
   isActive: true,
 };
+
+function draftOf(plan: AdminPlan): Draft {
+  return {
+    slug: plan.slug,
+    nameRu: plan.name['ru'] ?? '',
+    nameEn: plan.name['en'] ?? '',
+    descriptionRu: plan.description?.['ru'] ?? '',
+    descriptionEn: plan.description?.['en'] ?? '',
+    durationDays: plan.durationDays,
+    trafficGb: Math.round(plan.trafficLimitBytes / GIGABYTE),
+    trafficResetStrategy: plan.trafficResetStrategy,
+    deviceLimit: plan.deviceLimit,
+    squads: plan.squads,
+    priceMinor: BigInt(plan.price.amountMinor),
+    isPublic: plan.isPublic,
+    isActive: plan.isActive,
+  };
+}
 
 export default function PlansAdminClient() {
   const t = useTranslations('admin');
   const { toast } = useToast();
   const message = useAdminErrorMessage();
   const [draft, setDraft] = useState<Draft>(emptyDraft);
+  const [editing, setEditing] = useState<AdminPlan | null>(null);
   const [order, setOrder] = useState<string[] | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
@@ -65,6 +100,10 @@ export default function PlansAdminClient() {
     adminApi().get('api/admin/v1/plans', adminPlanListSchema, {
       query: { includeInactive: 'true' },
     }),
+  );
+
+  const panelSquads = useResource('admin:panel:squads', () =>
+    adminApi().get('api/admin/v1/panel/squads', squadsSchema),
   );
 
   const fail = useCallback(
@@ -78,29 +117,34 @@ export default function PlansAdminClient() {
     [message, t, toast],
   );
 
-  const create = useCallback(() => {
+  const save = useCallback(() => {
     setPending(true);
-    adminApi()
-      .send('POST', 'api/admin/v1/plans', z.unknown(), {
-        slug: draft.slug,
-        name: { ru: draft.nameRu, en: draft.nameEn },
-        durationDays: draft.durationDays,
-        trafficLimitBytes: draft.trafficGb * GIGABYTE,
-        deviceLimit: draft.deviceLimit,
-        squads: [],
-        priceMinor: Number(draft.priceMinor ?? 0n),
-        isPublic: draft.isPublic,
-        isActive: draft.isActive,
-      })
+    const fields = {
+      name: { ru: draft.nameRu, en: draft.nameEn },
+      description: { ru: draft.descriptionRu, en: draft.descriptionEn },
+      durationDays: draft.durationDays,
+      trafficLimitBytes: draft.trafficGb * GIGABYTE,
+      trafficResetStrategy: draft.trafficResetStrategy,
+      deviceLimit: draft.deviceLimit,
+      squads: draft.squads,
+      priceMinor: Number(draft.priceMinor ?? 0n),
+      isPublic: draft.isPublic,
+      isActive: draft.isActive,
+    };
+    (editing
+      ? adminApi().send('PATCH', `api/admin/v1/plans/${editing.id}`, z.unknown(), fields)
+      : adminApi().send('POST', 'api/admin/v1/plans', z.unknown(), { slug: draft.slug, ...fields })
+    )
       .then(() => {
         setDraft(emptyDraft);
+        setEditing(null);
         invalidate('admin:plans');
         toast({ title: t('saved') });
       }, fail)
       .finally(() => {
         setPending(false);
       });
-  }, [draft, fail, t, toast]);
+  }, [draft, editing, fail, t, toast]);
 
   const saveOrder = useCallback(
     (ids: string[]) => {
@@ -161,6 +205,16 @@ export default function PlansAdminClient() {
                           cell: (row) => money(row.price.amountMinor, row.price.currency, 'ru'),
                         },
                         {
+                          key: 'squads',
+                          header: t('plans.squadsColumn'),
+                          cell: (row) =>
+                            row.squads.length > 0 ? (
+                              row.squads.length
+                            ) : (
+                              <Badge variant="danger">{t('plans.noSquads')}</Badge>
+                            ),
+                        },
+                        {
                           key: 'flags',
                           header: `${t('plans.isPublic')} / ${t('plans.isActive')}`,
                           cell: (row) =>
@@ -202,15 +256,27 @@ export default function PlansAdminClient() {
                           header: '',
                           cell: (row) =>
                             canWrite ? (
-                              <Button
-                                size="sm"
-                                variant="danger"
-                                onClick={() => {
-                                  setDeleteTarget(row.id);
-                                }}
-                              >
-                                {t('plans.delete')}
-                              </Button>
+                              <div className="flex gap-1">
+                                <Button
+                                  size="sm"
+                                  variant="secondary"
+                                  onClick={() => {
+                                    setEditing(row);
+                                    setDraft(draftOf(row));
+                                  }}
+                                >
+                                  {t('plans.edit')}
+                                </Button>
+                                <Button
+                                  size="sm"
+                                  variant="danger"
+                                  onClick={() => {
+                                    setDeleteTarget(row.id);
+                                  }}
+                                >
+                                  {t('plans.delete')}
+                                </Button>
+                              </div>
                             ) : null,
                         },
                       ]}
@@ -242,11 +308,14 @@ export default function PlansAdminClient() {
             {canWrite ? (
               <Card>
                 <CardHeader>
-                  <CardTitle>{t('plans.create')}</CardTitle>
+                  <CardTitle>
+                    {editing ? t('plans.editTitle', { slug: editing.slug }) : t('plans.create')}
+                  </CardTitle>
                 </CardHeader>
                 <CardContent className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
                   <Field id="slug" label={t('plans.slug')}>
                     <Input
+                      disabled={editing !== null}
                       id="slug"
                       value={draft.slug}
                       onChange={(event) => {
@@ -272,6 +341,24 @@ export default function PlansAdminClient() {
                       }}
                     />
                   </Field>
+                  <Field id="description-ru" label={t('plans.descriptionRu')}>
+                    <Input
+                      id="description-ru"
+                      value={draft.descriptionRu}
+                      onChange={(event) => {
+                        setDraft({ ...draft, descriptionRu: event.target.value });
+                      }}
+                    />
+                  </Field>
+                  <Field id="description-en" label={t('plans.descriptionEn')}>
+                    <Input
+                      id="description-en"
+                      value={draft.descriptionEn}
+                      onChange={(event) => {
+                        setDraft({ ...draft, descriptionEn: event.target.value });
+                      }}
+                    />
+                  </Field>
                   <Field id="duration" label={t('plans.durationDays')}>
                     <Input
                       id="duration"
@@ -293,6 +380,22 @@ export default function PlansAdminClient() {
                         setDraft({ ...draft, trafficGb: Number(event.target.value) });
                       }}
                     />
+                  </Field>
+                  <Field id="reset" label={t('plans.resetStrategy')}>
+                    <select
+                      className="h-10 rounded-md border border-border bg-background px-3 text-sm"
+                      id="reset"
+                      value={draft.trafficResetStrategy}
+                      onChange={(event) => {
+                        setDraft({ ...draft, trafficResetStrategy: event.target.value });
+                      }}
+                    >
+                      {RESET_STRATEGIES.map((strategy) => (
+                        <option key={strategy} value={strategy}>
+                          {t(`plans.reset.${strategy}`)}
+                        </option>
+                      ))}
+                    </select>
                   </Field>
                   <Field id="devices" label={t('plans.deviceLimit')}>
                     <Input
@@ -336,13 +439,67 @@ export default function PlansAdminClient() {
                       {t('plans.isActive')}
                     </label>
                   </div>
-                  <div className="flex items-end">
+                  <fieldset className="flex flex-col gap-2 sm:col-span-2 lg:col-span-3">
+                    <legend className="text-sm font-medium">{t('plans.squads')}</legend>
+                    {panelSquads.state.status === 'ready' ? (
+                      <div className="flex flex-wrap gap-4">
+                        {[
+                          ...panelSquads.state.data.items,
+                          // A squad the panel no longer lists stays visible, so
+                          // it can be taken off the plan.
+                          ...draft.squads
+                            .filter((uuid) =>
+                              panelSquads.state.status === 'ready'
+                                ? !panelSquads.state.data.items.some((squad) => squad.uuid === uuid)
+                                : false,
+                            )
+                            .map((uuid) => ({ uuid, name: uuid })),
+                        ].map((squad) => (
+                          <label className="flex items-center gap-2 text-sm" key={squad.uuid}>
+                            <input
+                              checked={draft.squads.includes(squad.uuid)}
+                              type="checkbox"
+                              onChange={(event) => {
+                                setDraft({
+                                  ...draft,
+                                  squads: event.target.checked
+                                    ? [...new Set([...draft.squads, squad.uuid])]
+                                    : draft.squads.filter((uuid) => uuid !== squad.uuid),
+                                });
+                              }}
+                            />
+                            {squad.name}
+                          </label>
+                        ))}
+                      </div>
+                    ) : panelSquads.state.status === 'error' ? (
+                      <p className="text-sm text-destructive">{t('plans.squadsUnavailable')}</p>
+                    ) : null}
+                    <p className="text-xs text-muted-foreground">{t('plans.squadsHint')}</p>
+                  </fieldset>
+                  <div className="flex items-end gap-2">
                     <Button
-                      disabled={pending || !draft.slug || draft.priceMinor === null}
-                      onClick={create}
+                      disabled={
+                        pending ||
+                        !draft.slug ||
+                        draft.priceMinor === null ||
+                        draft.squads.length === 0
+                      }
+                      onClick={save}
                     >
                       {t('plans.save')}
                     </Button>
+                    {editing ? (
+                      <Button
+                        variant="ghost"
+                        onClick={() => {
+                          setEditing(null);
+                          setDraft(emptyDraft);
+                        }}
+                      >
+                        {t('cancel')}
+                      </Button>
+                    ) : null}
                   </div>
                 </CardContent>
               </Card>

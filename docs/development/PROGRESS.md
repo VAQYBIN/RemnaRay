@@ -102,16 +102,24 @@ panel users yet).
   of the three (no handlers either). Implement against FR-041/FR-023 and the
   locale guide keys.
 
-- **F28 Console plan editor falls short of FR-145, and plans can grant
-  nothing (found while fixing F5).** `admin/plans/plans-client.tsx` can only
-  create and delete: no editing, no description, no traffic reset strategy,
-  and it always sends `squads: []`. Section 8 requires
-  `CHECK cardinality(squads) > 0`, which no migration creates, so a console
-  plan sells a subscription with no Remnawave squads. Repair: a full FR-145
-  editor (squads multiselect from the panel, description, reset strategy,
-  edit), the API refusing an empty squad list, and a migration adding the
-  CHECK (check existing rows first; the E2E/integration fixtures use
-  `squads: []`). `$remnaray-financial-safety` for the paid-for-nothing path.
+- **F28 Done — console plan editor fell short of FR-145, and plans could grant
+  nothing.** The panel receives `plan.squads` as `activeInternalSquads`
+  (`remnawave.service.ts`), so a plan without squads takes every squad away
+  from its buyers; the console always sent `squads: []`, the wizard selected
+  none by default, and section 8's `CHECK cardinality(squads) > 0` did not
+  exist. Now: the API refuses a plan (create or patch) without squads;
+  migration 0008 adds the CHECK `NOT VALID` (enforced on new/changed rows,
+  an upgrade never fails; `docs/upgrade.md` tells the owner to fix older
+  plans); the wizard preselects every squad the panel returned and cannot go
+  on without one; the console form creates and edits every FR-145 field
+  (names, descriptions, days, traffic + reset strategy, devices, price,
+  public/active, squads from `GET /api/admin/v1/panel/squads`) and marks a
+  plan «Нет сквадов». Fixtures and `seed-dev` use the mock panel's squad; the
+  seeded E2E shop now talks to the panel mock. **Stand check needed:** if the
+  stand's MONTH plan was created without squads, the owner's purchase took his
+  panel user's squads away — look at the user in the panel. Evidence: plans
+  service test red → green, migration test, 25/25 integration, web 54, API
+  317, E2E 37 (console creates with a squad and edits).
 
 - **F29 Telegram's site login moved to OIDC — owner decision (found while
   fixing F11).** core.telegram.org/widgets/login (read 2026-09-26) now
@@ -151,8 +159,7 @@ panel users yet).
 
 1. F1 — done.
 2. F2, F3, F4 — done.
-3. F5–F8 — done. Then the rest of P1 with F27/F28; F17 only after the
-   discussion.
+3. F5–F8, F10–F16, F28 — done. F27 next; F9 and F17 wait for the owner.
 4. F25, F26 — done; then P2.
 5. Redeploy the stand, re-run the acceptance walk, then the M5-004 gates.
 

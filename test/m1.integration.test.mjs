@@ -49,7 +49,7 @@ test(
           slug: 'tc-m1',
           name: { ru: 'M1', en: 'M1' },
           durationDays: 30,
-          squads: [],
+          squads: ['01a0b9f0-e699-7032-9841-6d516d4591ad'],
           priceMinor: 29900n,
         },
       });

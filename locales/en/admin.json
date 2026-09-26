@@ -327,5 +327,19 @@
   "admin.providers.moveUp": "Up",
   "admin.providers.moveDown": "Down",
   "admin.providers.close": "Close",
-  "admin.providers.saved": "Saved, check: {result}"
+  "admin.providers.saved": "Saved, check: {result}",
+  "admin.plans.edit": "Edit",
+  "admin.plans.editTitle": "Plan {slug}",
+  "admin.plans.descriptionRu": "Description (ru)",
+  "admin.plans.descriptionEn": "Description (en)",
+  "admin.plans.resetStrategy": "Traffic reset",
+  "admin.plans.reset.NO_RESET": "Never",
+  "admin.plans.reset.DAY": "Daily",
+  "admin.plans.reset.WEEK": "Weekly",
+  "admin.plans.reset.MONTH": "Monthly",
+  "admin.plans.squads": "Panel squads",
+  "admin.plans.squadsColumn": "Squads",
+  "admin.plans.squadsHint": "A customer of the plan gets the checked internal squads of the panel; at least one is needed.",
+  "admin.plans.noSquads": "No squads",
+  "admin.plans.squadsUnavailable": "The panel's squads could not be loaded. Check the connection on the «Panel» page."
 }

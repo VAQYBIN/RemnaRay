@@ -48,7 +48,7 @@ test(
           slug: 'm2-core',
           name: { ru: 'M2', en: 'M2' },
           durationDays: 30,
-          squads: [],
+          squads: ['01a0b9f0-e699-7032-9841-6d516d4591ad'],
           priceMinor: 29900n,
         },
       });
@@ -124,7 +124,7 @@ test(
           slug: 'm2-balance',
           name: { ru: 'Balance', en: 'Balance' },
           durationDays: 1,
-          squads: [],
+          squads: ['01a0b9f0-e699-7032-9841-6d516d4591ad'],
           priceMinor: 4000n,
         },
       });
@@ -362,7 +362,7 @@ test(
           slug: 'm2-upgrade',
           name: { ru: 'Upgrade', en: 'Upgrade' },
           durationDays: 60,
-          squads: [],
+          squads: ['01a0b9f0-e699-7032-9841-6d516d4591ad'],
           priceMinor: 39900n,
         },
       });

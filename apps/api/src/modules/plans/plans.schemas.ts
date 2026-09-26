@@ -14,7 +14,9 @@ const mutablePlanFields = {
   trafficLimitBytes: integerString,
   trafficResetStrategy,
   deviceLimit: z.number().int().min(0).max(100),
-  squads: z.array(z.uuid()),
+  // Section 8: `CHECK cardinality(squads) > 0` — the panel receives them as
+  // the customer's `activeInternalSquads`.
+  squads: z.array(z.uuid()).min(1),
   priceMinor: integerString,
   currency: z.string().regex(/^[A-Z]{3}$/),
   priceOverrides,
@@ -31,7 +33,7 @@ export const planInputSchema = z.object({
   trafficLimitBytes: integerString.default(0n),
   trafficResetStrategy: trafficResetStrategy.default('NO_RESET'),
   deviceLimit: z.number().int().min(0).max(100),
-  squads: z.array(z.uuid()),
+  squads: mutablePlanFields.squads,
   priceMinor: integerString,
   currency: z
     .string()

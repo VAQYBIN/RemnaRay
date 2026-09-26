@@ -86,7 +86,7 @@ test(
           slug: 'm2-stars',
           name: { ru: 'Звёздный', en: 'Starry' },
           durationDays: 30,
-          squads: [],
+          squads: ['01a0b9f0-e699-7032-9841-6d516d4591ad'],
           priceMinor: 29900n,
           priceOverrides: { XTR: 200 },
         },

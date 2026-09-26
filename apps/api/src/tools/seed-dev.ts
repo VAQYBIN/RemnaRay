@@ -92,7 +92,7 @@ export async function seed(): Promise<SeedFixture> {
             durationDays: fixture.durationDays,
             trafficLimitBytes: fixture.trafficLimitBytes,
             deviceLimit: fixture.deviceLimit,
-            squads: [],
+            squads: ['01a0b9f0-e699-7032-9841-6d516d4591ad'],
             priceMinor: fixture.priceMinor,
             isPublic: true,
             isActive: true,

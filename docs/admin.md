@@ -113,7 +113,7 @@ keeps outside the owner's override surface. The interface language follows
 | `/admin/users`, `/admin/users/[id]` | FR-140 search and filters; FR-141 actions behind reason modals        |
 | `/admin/subscriptions`              | Status, plan and expiry filters; bulk extension up to 500 rows        |
 | `/admin/payments`                   | Invoices with masked provider events, recheck, transactions, refund   |
-| `/admin/plans`                      | FR-145 CRUD with ordering                                             |
+| `/admin/plans`                      | FR-145 create/edit (squads from the panel), ordering, soft delete     |
 
 `AdminShell` loads `GET /api/admin/v1/auth/me` once, keeps the CSRF token for
 later mutations and hides every section the role does not carry. Server-side,
@@ -128,6 +128,16 @@ account's (section 9.1): the response is kept 24 h under
 per opened dialog, so confirming again after an answer that never arrived does
 not credit, refund or extend twice; another amount under that key is
 `422 IDEMPOTENCY_KEY_REUSED`. A failed request keeps nothing and may be retried.
+
+## Plans (FR-145)
+
+The plan form covers every FR-145 field: names and descriptions per locale,
+days, traffic and its reset strategy, devices, price, public/active and the
+panel's internal squads (`GET /api/admin/v1/panel/squads`). A plan needs at
+least one squad (section 8, `CHECK cardinality(squads) > 0`): the panel receives
+them as the customer's `activeInternalSquads`, so a plan without any would take
+every squad away from its buyers. The API refuses such a plan, and the list
+marks an older one with «Нет сквадов» until it is edited.
 
 ## Dashboard aggregates
 

@@ -40,9 +40,23 @@ test.describe('administration console', () => {
     await page.getByLabel('Название (en)').fill('Week');
     await page.getByLabel('Дней').fill('7');
     await page.getByLabel('Цена').fill('99');
-    await page.getByRole('button', { name: 'Сохранить' }).click();
+    // FR-145: the squads come from the panel, and a plan needs one (section 8).
+    const save = page.getByRole('button', { name: 'Сохранить', exact: true });
+    await expect(save).toBeDisabled();
+    await page.getByRole('checkbox', { name: 'Default' }).check();
+    await save.click();
 
     await expect(page.getByText('e2e-week')).toBeVisible();
+
+    // And it can be edited afterwards.
+    await page
+      .getByRole('row', { name: /e2e-week/u })
+      .getByRole('button', { name: 'Изменить' })
+      .click();
+    await expect(page.getByText('Тариф e2e-week')).toBeVisible();
+    await page.getByLabel('Описание (ru)').fill('Семь дней доступа');
+    await save.click();
+    await expect(page.getByText('Тариф e2e-week')).toBeHidden();
   });
 
   test('settings show the provider health gate from AC-061', async ({ page }) => {

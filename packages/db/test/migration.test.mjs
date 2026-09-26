@@ -48,3 +48,11 @@ test('the Remnawave v3.4.4 numeric user mapping is migrated and unique', () => {
   assert.match(panelUserIdMigration, /CREATE UNIQUE INDEX ux_panel_users_panel_user_id/);
   assert.match(schema, /panelUserId Int\? @map\("panel_user_id"\)/);
 });
+
+test('a plan must name at least one panel squad (section 8)', async () => {
+  const squads = await readFile(
+    'prisma/migrations/0008_plans_squads_nonempty/migration.sql',
+    'utf8',
+  );
+  assert.match(squads, /CHECK \(cardinality\(squads\) > 0\) NOT VALID/);
+});

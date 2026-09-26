@@ -846,7 +846,10 @@ function PlanStep({ pending, state, run, refresh, setStep }: StepProps) {
   const [duration, setDuration] = useState('30');
   const [devices, setDevices] = useState('3');
   const [price, setPrice] = useState('299');
-  const [selected, setSelected] = useState<string[]>([]);
+  // Section 8: a plan names at least one squad; all loaded squads are
+  // selected until the owner changes the choice.
+  const [chosen, setChosen] = useState<string[] | null>(null);
+  const selected = chosen ?? squads.map((squad) => squad.uuid);
   const [trialEnabled, setTrialEnabled] = useState(true);
   const [trialDays, setTrialDays] = useState('3');
   const [trialTraffic, setTrialTraffic] = useState('10');
@@ -888,17 +891,19 @@ function PlanStep({ pending, state, run, refresh, setStep }: StepProps) {
               checked={selected.includes(squad.uuid)}
               type="checkbox"
               onChange={(event) => {
-                setSelected((current) =>
+                setChosen(
                   event.target.checked
-                    ? [...new Set([...current, squad.uuid])]
-                    : current.filter((item) => item !== squad.uuid),
+                    ? [...new Set([...selected, squad.uuid])]
+                    : selected.filter((item) => item !== squad.uuid),
                 );
               }}
             />
             {squad.name}
           </label>
         ))}
-        <p className="text-xs text-muted-foreground">{t('plan.squadsHint')}</p>
+        <p className="text-xs text-muted-foreground">
+          {squads.length === 0 ? t('plan.squadsMissing') : t('plan.squadsHint')}
+        </p>
       </fieldset>
 
       <label className="flex items-center gap-2 text-sm">
@@ -936,7 +941,7 @@ function PlanStep({ pending, state, run, refresh, setStep }: StepProps) {
         }}
       >
         <Button
-          disabled={pending || slug.length === 0}
+          disabled={pending || slug.length === 0 || selected.length === 0}
           onClick={() =>
             void run(async () => {
               await browserApi().send('POST', 'api/setup/v1/steps/6', savedSchema, {

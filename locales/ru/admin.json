@@ -327,5 +327,19 @@
   "admin.providers.moveUp": "Выше",
   "admin.providers.moveDown": "Ниже",
   "admin.providers.close": "Закрыть",
-  "admin.providers.saved": "Сохранено, проверка: {result}"
+  "admin.providers.saved": "Сохранено, проверка: {result}",
+  "admin.plans.edit": "Изменить",
+  "admin.plans.editTitle": "Тариф {slug}",
+  "admin.plans.descriptionRu": "Описание (ru)",
+  "admin.plans.descriptionEn": "Описание (en)",
+  "admin.plans.resetStrategy": "Сброс трафика",
+  "admin.plans.reset.NO_RESET": "Не сбрасывать",
+  "admin.plans.reset.DAY": "Ежедневно",
+  "admin.plans.reset.WEEK": "Еженедельно",
+  "admin.plans.reset.MONTH": "Ежемесячно",
+  "admin.plans.squads": "Сквады панели",
+  "admin.plans.squadsColumn": "Сквады",
+  "admin.plans.squadsHint": "Покупатель тарифа получает доступ к отмеченным внутренним сквадам панели; нужен хотя бы один.",
+  "admin.plans.noSquads": "Нет сквадов",
+  "admin.plans.squadsUnavailable": "Не удалось загрузить сквады с панели. Проверьте подключение на странице «Панель»."
 }

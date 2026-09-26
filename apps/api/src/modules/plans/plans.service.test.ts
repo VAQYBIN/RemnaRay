@@ -34,11 +34,29 @@ describe('PlansService', () => {
       name: { ru: 'Старт', en: 'Starter' },
       durationDays: 7,
       deviceLimit: 1,
-      squads: [],
+      squads: ['00000000-0000-4000-8000-000000000001'],
       priceMinor: 5000,
     });
     expect(repository.creates).toBe(1);
     expect(() => service.create({ slug: 'bad slug' })).toThrow();
+  });
+
+  it('refuses a plan without panel squads (section 8 CHECK cardinality(squads) > 0)', () => {
+    const repository = new MemoryPlans();
+    const service = new PlansService(repository);
+    const plan = {
+      slug: 'starter',
+      name: { ru: 'Старт', en: 'Starter' },
+      durationDays: 7,
+      deviceLimit: 1,
+      squads: [],
+      priceMinor: 5000,
+    };
+    // The panel receives the squads as `activeInternalSquads`: none would
+    // take every squad away from the customers who buy the plan.
+    expect(() => service.create(plan)).toThrow();
+    expect(() => service.update('plan-1', { squads: [] })).toThrow();
+    expect(repository.creates).toBe(0);
   });
 
   it('passes a reorder list straight to the repository', async () => {

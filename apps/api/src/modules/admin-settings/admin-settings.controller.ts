@@ -115,6 +115,12 @@ export class AdminPanelController {
     return new Audited(before, await this.settings.getGroup('panel'));
   }
 
+  /** FR-145: the squads the plan form offers ("мультиселект из панели"). */
+  @Get('squads')
+  async squads() {
+    return { items: await this.panel.squads() };
+  }
+
   @Post('test')
   @HttpCode(200)
   async test() {

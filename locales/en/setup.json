@@ -135,5 +135,6 @@
   "setup.payments.providerName.platega": "Platega",
   "setup.payments.providerName.cryptobot": "CryptoBot",
   "setup.payments.providerName.stars": "Telegram Stars",
-  "setup.payments.providerName.mock": "Mock"
+  "setup.payments.providerName.mock": "Mock",
+  "setup.plan.squadsMissing": "The panel returned no squads. Create an internal squad in the panel and return to the «Panel» step: a plan without squads gives no access."
 }

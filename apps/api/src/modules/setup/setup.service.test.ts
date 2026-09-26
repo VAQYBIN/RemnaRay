@@ -259,7 +259,7 @@ describe('SetupService steps', () => {
       name: { ru: 'Месяц', en: 'Month' },
       durationDays: 30,
       deviceLimit: 3,
-      squads: [],
+      squads: ['00000000-0000-4000-8000-000000000001'],
       priceMinor: '29900',
     };
 

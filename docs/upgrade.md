@@ -53,6 +53,14 @@ Before an irreversible migration, `migrate` takes a dump of its own into
 default). It is a safety net, not a backup policy: see
 [`backup.md`](backup.md).
 
+### Plans without squads (migration 0008)
+
+Migration `0008_plans_squads_nonempty` adds the section 8 check that a plan
+names at least one panel squad. It is added `NOT VALID`, so an upgrade never
+fails on an existing plan without squads, but such a plan can no longer be
+saved as it is. Open «Тарифы» in the console: a plan marked «Нет сквадов» takes
+every squad away from the customers who buy it — edit it and tick its squads.
+
 ## Going back
 
 ```sh
