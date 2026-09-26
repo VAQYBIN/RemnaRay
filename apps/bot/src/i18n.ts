@@ -30,6 +30,7 @@ export class BotI18n {
   async bind(ctx: RrContext, locale: Locale): Promise<void> {
     const messages = await this.catalog(locale);
     ctx.locale = locale;
+    ctx.messages = messages;
     ctx.t = (key, values = {}) => formatMessage(locale, messages, key, values);
   }
 

@@ -6,6 +6,7 @@ import type { RrContext } from '../types.js';
 import { showAccount, showHome, showTrialConfirm } from './home.js';
 import { createPayment, checkPayment, showInvoice } from './payments.js';
 import { STARS_START_PAYLOAD, sendStarsInvoice } from './stars.js';
+import { showHelp } from './help.js';
 import { showPlan, showPlans } from './plans.js';
 import { showReferralList, showReferrals } from './referrals.js';
 import { showSubscription, showClients, showQr, confirmRevoke } from './subscription.js';
@@ -27,7 +28,7 @@ export function registerScreens(bot: Bot<RrContext>, api: ApiClient): void {
   bot.command('ref', (ctx) => showReferrals(ctx, api));
   bot.command('lang', (ctx) => showLanguage(ctx));
   bot.command('notifications', (ctx) => showNotifications(ctx, api));
-  bot.command('help', (ctx) => show(ctx, ctx.t('bot.screen.help.text'), backButton(ctx)));
+  bot.command('help', (ctx) => showHelp(ctx, api));
   bot.command('support', (ctx) => showSupport(ctx, api));
   bot.command('admin_stats', (ctx) => adminStats(ctx, api));
   bot.command('admin_user', (ctx) => adminUser(ctx, api));

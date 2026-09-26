@@ -164,6 +164,9 @@ export class BotInternalController {
       supportForwardChatId,
       supportContact,
       brandName: String(await this.settings.get('brand.name')),
+      clients: (
+        (await this.settings.get('clients.items')) as Array<{ name: string; platforms: string[] }>
+      ).map((client) => ({ name: client.name, platforms: client.platforms })),
       trial: {
         days: Number(await this.settings.get('trial.days')),
         trafficGb: Number(await this.settings.get('trial.traffic_gb')),

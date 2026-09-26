@@ -43,6 +43,9 @@ describe('bot ingress boundary', () => {
       'brand.name': 'Manta VPN',
       'trial.days': 7,
       'trial.traffic_gb': 25,
+      'clients.items': [
+        { id: 'happ', name: 'Happ', platforms: ['ios'], deepLinkTemplate: 'happ://add/{url}' },
+      ],
     };
     const catalogs: Record<string, Record<string, string>> = {
       en: { 'bot.btn.buy': '🛒 Buy', 'bot.commands.start': 'Start the bot' },
@@ -66,6 +69,7 @@ describe('bot ingress boundary', () => {
       admins: ['123'],
       brandName: 'Manta VPN',
       trial: { days: 7, trafficGb: 25 },
+      clients: [{ name: 'Happ', platforms: ['ios'] }],
     });
     expect(config.commands.en?.[0]).toEqual({ command: 'start', description: 'Start the bot' });
   });

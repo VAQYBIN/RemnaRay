@@ -245,10 +245,14 @@ panel users yet).
   `rr:support:*`. `docs/support.md`. Evidence: API `support.service.test.ts`,
   bot `support.test.ts`/`screens/support.test.ts`; API 313, bot 47 tests.
   Not verified with a real Telegram group yet (stand walk).
-- **F15 Bot `/help` is a stub.** Spec (command table, `/help`): client
-  instructions + FAQ from locale keys. Now one generic line
-  (`screens/index.ts:29`). Build it from `bot.screen.help.*`/`bot.faq.*`,
-  editable in «Локали»; share the client list with the landing.
+- **F15 Done — bot `/help` was a stub.** Section 12 gives `/help` "client
+  instructions + FAQ (locale keys)". It now shows the connection steps and the
+  FAQ from the landing page's own keys (`landing.steps`, `landing.faq`, read
+  raw from the catalog since they are JSON arrays, not ICU), so one edit in
+  «Локали» changes the site and the bot, and the clients with their platforms
+  from `settings.clients.items` (now in the bot configuration), then a pointer
+  to «Поддержка». Evidence: bot `help.test.ts` red → green, API bot-config
+  test; bot 48 tests.
 - **F16 Bot balance history.** Raw ISO UTC timestamps; should be localised
   and in `locale.timezone`, with the operation type.
 - **F17 Rate limits — discuss first.** `GET /api/admin/v1/auth/me` (every

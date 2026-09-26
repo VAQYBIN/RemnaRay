@@ -65,7 +65,6 @@
   "bot.screen.topup.ask": "Введите сумму в рублях.",
   "bot.screen.support.ask": "Напишите сообщение оператору.",
   "bot.screen.support.sent": "Сообщение передано оператору.",
-  "bot.screen.help.text": "Выберите действие в меню. Для навигации используйте кнопки.",
   "bot.error.panel_unavailable": "Панель временно недоступна. Попробуйте позже.",
   "bot.error.too_many_attempts": "Слишком много неверных вводов. Диалог завершён.",
   "bot.error.bot_blocked": "Не удалось отправить сообщение: пользователь заблокировал бота.",
@@ -100,5 +99,9 @@
   "bot.screen.support.reply": "💬 Ответ поддержки:\n{text}",
   "bot.screen.support.undelivered": "Не доставлено покупателю: {reason}",
   "bot.screen.support.none": "Поддержка пока не настроена. Попробуйте позже.",
-  "bot.error.support_unavailable": "Не удалось передать сообщение оператору. Попробуйте ещё раз позже."
+  "bot.error.support_unavailable": "Не удалось передать сообщение оператору. Попробуйте ещё раз позже.",
+  "bot.screen.help.title": "Как подключиться",
+  "bot.screen.help.clients": "Клиенты",
+  "bot.screen.help.faq": "Вопросы",
+  "bot.screen.help.more": "Остались вопросы? Нажмите «Поддержка» в меню."
 }

@@ -15,6 +15,8 @@ export type BotSession = {
 export type I18nFlavor = {
   locale: Locale;
   t: (key: string, values?: Record<string, unknown>) => string;
+  /** The raw catalog: array values (`landing.faq`) are JSON, not ICU messages. */
+  messages: Record<string, string>;
 };
 
 export type BaseContext = Context & SessionFlavor<BotSession> & I18nFlavor;
@@ -33,6 +35,8 @@ export type BotConfig = {
   brandName: string;
   /** `settings.trial.days` and `settings.trial.traffic_gb` (0 = unlimited). */
   trial: { days: number; trafficGb: number };
+  /** `settings.clients.items`, for `/help`. */
+  clients: { name: string; platforms: string[] }[];
   defaultLocale: Locale;
   mode: 'webhook' | 'polling';
   webUrl: string;
