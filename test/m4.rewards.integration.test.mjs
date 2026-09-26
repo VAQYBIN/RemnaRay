@@ -373,6 +373,41 @@ test(
         50000n - 26910n,
       );
 
+      // A failure after the invoice was created (here the poll job's outbox
+      // insert) must not release a reservation that already names the
+      // invoice: the invoice keeps its discount, and payment applies it.
+      const failingDb = new Proxy(prisma, {
+        get(target, property) {
+          if (property === 'outboxJob')
+            return { create: () => Promise.reject(new Error('outbox unavailable')) };
+          return Reflect.get(target, property);
+        },
+      });
+      const failingInfra = { ...infra, db: failingDb };
+      const failing = new MeService(
+        failingInfra,
+        settings,
+        {},
+        new PaymentsService(failingInfra, repository, registry, settings),
+        {},
+        {},
+      );
+      const linkedCode = await prisma.promocode.create({
+        data: { code: 'LINKED01', type: 'discount_percent', value: 10n, maxUses: 1 },
+      });
+      await assert.rejects(
+        failing.createInvoice(
+          buyers[1].id,
+          { kind: 'purchase', planId: plan.id, provider: 'mock', promocode: 'LINKED01' },
+          'promo-linked',
+        ),
+      );
+      const linked = await prisma.promocodeRedemption.findFirst({
+        where: { promocodeId: linkedCode.id },
+      });
+      assert.ok(linked.invoiceId, 'the reservation names the invoice');
+      assert.equal(linked.status, 'reserved');
+
       await prisma.$disconnect();
     } finally {
       await postgres.stop();

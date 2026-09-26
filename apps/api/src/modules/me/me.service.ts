@@ -333,9 +333,15 @@ export class MeService {
         });
       return await this.invoiceView(invoice);
     } catch (error) {
+      // Only a reservation no invoice took is given back. One the invoice
+      // already names stays with it: the invoice carries the discount, and
+      // its payment or expiry applies or releases it.
       if (reservation)
         await this.infra.db.promocodeRedemption
-          .update({ where: { id: reservation.redemptionId }, data: { status: 'released' } })
+          .updateMany({
+            where: { id: reservation.redemptionId, invoiceId: null, status: 'reserved' },
+            data: { status: 'released' },
+          })
           .catch(() => undefined);
       throw this.paymentFailure(error);
     }
