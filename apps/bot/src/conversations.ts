@@ -92,10 +92,17 @@ export function installConversations(bot: Bot<RrContext>, redis: Redis, api: Api
             await conversation.external(() => api.redeemPromo(telegramId, text));
             await reply.reply(t('bot.screen.promo.accepted'));
           } else if (id === 'supportMessage') {
-            await conversation.external(() =>
-              api.forwardSupport(telegramId, reply.message?.message_id ?? 0, text),
+            // FR-124: a message that did not reach the operators is not
+            // reported as sent.
+            const delivered = await conversation.external(() =>
+              api.forwardSupport(telegramId, reply.message?.message_id ?? 0, text).then(
+                () => true,
+                () => false,
+              ),
             );
-            await reply.reply(t('bot.screen.support.sent'));
+            await reply.reply(
+              t(delivered ? 'bot.screen.support.sent' : 'bot.error.support_unavailable'),
+            );
           } else {
             const providers = topupProviders(
               await conversation.external(() => api.getPaymentMethods(telegramId)),

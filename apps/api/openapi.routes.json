@@ -2436,6 +2436,12 @@
         "responses": {
           "204": {
             "description": "Forwarded"
+          },
+          "409": {
+            "description": "SUPPORT_UNAVAILABLE: no operators' chat is configured"
+          },
+          "502": {
+            "description": "SUPPORT_UNAVAILABLE: Telegram refused the message"
           }
         },
         "requestBody": {
@@ -2446,6 +2452,39 @@
                 "type": "object"
               }
             }
+          }
+        }
+      }
+    },
+    "/api/internal/v1/support/route": {
+      "post": {
+        "operationId": "routeSupportAnswer",
+        "summary": "The customer an operator's message in the operators' chat answers (FR-124)",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["chatId"],
+                "properties": {
+                  "chatId": {
+                    "type": "integer"
+                  },
+                  "threadId": {
+                    "type": "integer"
+                  },
+                  "replyToMessageId": {
+                    "type": "integer"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "{ target: { telegramId, language } | null }"
           }
         }
       }

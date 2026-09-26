@@ -242,6 +242,14 @@ export class ApiClient {
     });
   }
 
+  /** FR-124: the customer an operator's message in the operators' chat answers. */
+  routeSupport(input: { chatId: number; threadId?: number; replyToMessageId?: number }) {
+    return this.request<{ target: { telegramId: string; language: string } | null }>(
+      '/api/internal/v1/support/route',
+      { method: 'POST', body: input },
+    );
+  }
+
   getAdminRole(telegramId: number) {
     return this.request<{ role: string }>(
       `/api/internal/v1/admins/by-telegram/${String(telegramId)}`,

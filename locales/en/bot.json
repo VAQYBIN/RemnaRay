@@ -96,5 +96,9 @@
   "bot.screen.ref.status.converted": "paid",
   "bot.screen.ref.status.rejected": "not counted",
   "bot.btn.refShare": "📤 Invite a friend",
-  "bot.btn.refList": "📋 Invited"
+  "bot.btn.refList": "📋 Invited",
+  "bot.screen.support.reply": "💬 Support replied:\n{text}",
+  "bot.screen.support.undelivered": "Not delivered to the customer: {reason}",
+  "bot.screen.support.none": "Support is not set up yet. Please try again later.",
+  "bot.error.support_unavailable": "Your message could not reach the operators. Please try again later."
 }

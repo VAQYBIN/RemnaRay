@@ -37,5 +37,6 @@
   "alerts.disk.low": "Less than 10% free space is left on the database volume.",
   "alerts.proxy.config_invalid": "The proxy configuration failed validation; the previous one is still serving.",
   "alerts.setup.completed": "The initial setup finished and the shop is running.",
-  "alerts.title": "RemnaRay: {type}"
+  "alerts.title": "RemnaRay: {type}",
+  "alerts.support.topics": "The bot cannot create topics in the support chat: grant it the \"Manage topics\" administrator right. Messages arrive in the general chat."
 }

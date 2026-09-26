@@ -1,0 +1,63 @@
+import { formatMessage, SUPPORTED_LOCALES, type Locale } from '@remnaray/i18n-core';
+import { GrammyError, type MiddlewareFn } from 'grammy';
+
+import type { ApiClient } from './api-client.js';
+import type { BotI18n } from './i18n.js';
+import type { RrContext } from './types.js';
+
+/**
+ * FR-124, the operators' side: a message in the operators' chat that answers
+ * a customer — written in the customer's forum topic, or a reply to their
+ * forwarded message — is sent to that customer in their language. It runs
+ * before sessions and dialogs, so an operator is never treated as a customer
+ * there. Anything else in that chat is ignored.
+ */
+export function supportRelay(
+  api: Pick<ApiClient, 'getConfig' | 'routeSupport'>,
+  i18n: Pick<BotI18n, 'catalog'>,
+): MiddlewareFn<RrContext> {
+  return async (ctx, next) => {
+    const chat = ctx.chat;
+    if (!chat || chat.type === 'private') return next();
+    const config = await api.getConfig();
+    if (config.supportForwardChatId === null || chat.id !== config.supportForwardChatId)
+      return next();
+    const message = ctx.message;
+    const text = message?.text?.trim();
+    if (!message || !text || message.from.is_bot) return;
+    const { target } = await api.routeSupport({
+      chatId: chat.id,
+      ...(message.is_topic_message && message.message_thread_id !== undefined
+        ? { threadId: message.message_thread_id }
+        : {}),
+      ...(message.reply_to_message
+        ? { replyToMessageId: message.reply_to_message.message_id }
+        : {}),
+    });
+    if (!target) return;
+    const language = (SUPPORTED_LOCALES as readonly string[]).includes(target.language)
+      ? (target.language as Locale)
+      : config.defaultLocale;
+    const catalog = await i18n.catalog(language);
+    try {
+      await ctx.api.sendMessage(
+        Number(target.telegramId),
+        formatMessage(language, catalog, 'bot.screen.support.reply', { text }),
+      );
+    } catch (error) {
+      if (!(error instanceof GrammyError)) throw error;
+      const operators = await i18n.catalog(config.defaultLocale);
+      await ctx.reply(
+        formatMessage(config.defaultLocale, operators, 'bot.screen.support.undelivered', {
+          reason: error.description,
+        }),
+        {
+          reply_parameters: { message_id: message.message_id },
+          ...(message.is_topic_message && message.message_thread_id !== undefined
+            ? { message_thread_id: message.message_thread_id }
+            : {}),
+        },
+      );
+    }
+  };
+}

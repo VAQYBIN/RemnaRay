@@ -28,7 +28,7 @@ export function registerScreens(bot: Bot<RrContext>, api: ApiClient): void {
   bot.command('lang', (ctx) => showLanguage(ctx));
   bot.command('notifications', (ctx) => showNotifications(ctx, api));
   bot.command('help', (ctx) => show(ctx, ctx.t('bot.screen.help.text'), backButton(ctx)));
-  bot.command('support', (ctx) => ctx.conversation.enter('supportMessage'));
+  bot.command('support', (ctx) => showSupport(ctx, api));
   bot.command('admin_stats', (ctx) => adminStats(ctx, api));
   bot.command('admin_user', (ctx) => adminUser(ctx, api));
   bot.command('admin_extend', (ctx) => adminExtend(ctx, api));
@@ -77,7 +77,7 @@ export function registerScreens(bot: Bot<RrContext>, api: ApiClient): void {
   bot.callbackQuery(/^lang:(ru|en)$/u, (ctx) =>
     setLanguage(ctx, api, capture(ctx.match, 1) as 'ru' | 'en'),
   );
-  bot.callbackQuery('support', (ctx) => ctx.conversation.enter('supportMessage'));
+  bot.callbackQuery('support', (ctx) => showSupport(ctx, api));
   bot.callbackQuery('notif:toggle', (ctx) => toggleNotifications(ctx, api));
   bot.callbackQuery('email:ask', (ctx) =>
     show(ctx, ctx.t('bot.screen.email.ask'), backButton(ctx)),
@@ -270,5 +270,24 @@ async function adminBroadcastStatus(ctx: RrContext, api: ApiClient): Promise<voi
     status
       ? `${status.status}: ${String(status.sent)}/${String(status.total)}`
       : ctx.t('bot.admin.broadcast'),
+  );
+}
+
+/**
+ * FR-124: the support contact, and a message to the operators when their chat
+ * is configured (section 12: the `supportMessage` dialog exists only then).
+ */
+export async function showSupport(ctx: RrContext, api: ApiClient): Promise<void> {
+  const config = await api.getConfig();
+  if (config.supportForwardChatId !== null) {
+    await ctx.conversation.enter('supportMessage');
+    return;
+  }
+  await show(
+    ctx,
+    config.supportContact
+      ? ctx.t('bot.screen.support.details', { contact: config.supportContact })
+      : ctx.t('bot.screen.support.none'),
+    backButton(ctx),
   );
 }

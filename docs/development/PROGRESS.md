@@ -224,15 +224,27 @@ panel users yet).
   from `rr_lang`, then `Accept-Language`, then `ru`, so a preview fetched with
   an English `Accept-Language` is English by design — no change. Evidence: bot
   `referrals.test.ts` (red → green), 41 bot tests.
-- **F14 Support (FR-124).** With no `support_forward_chat_id` the API returns
-  204 silently (`bot.controller.ts:185`) and the bot says «передано»; it
-  should show `support_contact`. Operator reply-through is not implemented
-  (nothing handles `reply_to_message`). A failed forward (500) ends the
-  conversation silently and the next message is lost. Owner wants per-user
-  forum topics when the operator chat is a forum (bot needs topic rights;
-  report missing rights in the console). Stand log: one forward failed with
-  `ConnectTimeoutError` to `api.telegram.org` (149.154.166.110 and an IPv6
-  address) — transient VPS egress, watch IPv6.
+- **F14 Done — support (FR-124).** Without an operators' chat the API
+  answered 204 and the bot said «передано»; nothing relayed an operator's
+  answer; a failed forward was silent; the API called `api.telegram.org`
+  directly, ignoring `RR_TELEGRAM_API_URL`. Now: without the chat, «Поддержка»
+  shows `support_contact` (the `supportMessage` dialog only exists with the
+  chat, section 12) and the API refuses `409 SUPPORT_UNAVAILABLE`; a failed
+  forward is `502` and the customer is told. `SupportService`: in a forum
+  supergroup (owner's decision) each customer gets a topic (`createForumTopic`,
+  recreated if deleted); without the `can_manage_topics` right it falls back to
+  the general chat and alerts `support.topics`; in a plain group the message
+  id is kept 30 days for replies. The bot's `supportRelay` (before sessions and
+  dialogs) sends an operator's message in a topic, or a reply to a forwarded
+  message, to the customer in their language, and answers «Не доставлено» when
+  the customer blocked the bot. Contracts (Bot API 10.3, 2026-09-26):
+  `createForumTopic` needs admin + `can_manage_topics`; `sendMessage`
+  `message_thread_id`; `Message.is_topic_message`/`message_thread_id`/
+  `reply_to_message`; features#privacy-mode: bot admins receive all messages,
+  privacy-mode bots receive replies to their messages. Mapping in Valkey
+  `rr:support:*`. `docs/support.md`. Evidence: API `support.service.test.ts`,
+  bot `support.test.ts`/`screens/support.test.ts`; API 313, bot 47 tests.
+  Not verified with a real Telegram group yet (stand walk).
 - **F15 Bot `/help` is a stub.** Spec (command table, `/help`): client
   instructions + FAQ from locale keys. Now one generic line
   (`screens/index.ts:29`). Build it from `bot.screen.help.*`/`bot.faq.*`,

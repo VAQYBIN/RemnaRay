@@ -11,6 +11,7 @@ import {
   UseGuards,
 } from '@nestjs/common';
 import { SUPPORTED_LOCALES, type Locale } from '@remnaray/i18n-core';
+import { z } from 'zod';
 
 import { Infrastructure } from '../../infra/infra.module';
 import { InternalTokenGuard, equalToken } from '../auth/auth.guards';
@@ -18,6 +19,7 @@ import { SettingsService } from '../settings/settings.service';
 import { I18nService } from '../public/i18n.service';
 import { emitWebhook, subscriptionData } from '../webhooks/outgoing';
 import { queuePanelSync } from '../remnawave/panel-jobs';
+import { SupportService } from './support.service';
 
 const appendUpdate = `
 if redis.call('EXISTS', KEYS[2]) == 1 then return 0 end
@@ -88,6 +90,7 @@ export class BotInternalController {
     private readonly infra: Infrastructure,
     private readonly settings: SettingsService,
     private readonly i18n: I18nService,
+    private readonly support: SupportService,
   ) {}
 
   @Get('i18n/:lang')
@@ -171,7 +174,7 @@ export class BotInternalController {
     };
   }
 
-  /** Section 9.5 `POST /api/internal/v1/support/forward`. */
+  /** Section 9.5 `POST /api/internal/v1/support/forward` (FR-124). */
   @Post('support/forward')
   @HttpCode(204)
   async supportForward(
@@ -186,21 +189,23 @@ export class BotInternalController {
       body.text.length > 4000
     )
       throw new BadRequestException('INVALID_BODY');
-    const chatId = await this.settings.get('brand.support_forward_chat_id');
-    const token = await this.settings.get('bot.token');
-    if (typeof chatId !== 'number' || typeof token !== 'string' || !token) return;
-    const response = await fetch(
-      `https://api.telegram.org/bot${encodeURIComponent(token)}/sendMessage`,
-      {
-        method: 'POST',
-        headers: { 'content-type': 'application/json' },
-        signal: AbortSignal.timeout(10_000),
-        body: JSON.stringify({ chat_id: chatId, text: `#support ${actingUser}\n${body.text}` }),
-      },
-    );
-    if (!response.ok) throw new BadRequestException('SUPPORT_UNAVAILABLE');
+    await this.support.forward(actingUser, body.text);
+  }
+
+  /** FR-124: the customer an operator's message in the operators' chat answers. */
+  @Post('support/route')
+  @HttpCode(200)
+  async supportRoute(@Body() body: unknown) {
+    const input = supportRouteSchema.parse(body);
+    return { target: await this.support.route(input) };
   }
 }
+
+const supportRouteSchema = z.object({
+  chatId: z.number().int(),
+  threadId: z.number().int().optional(),
+  replyToMessageId: z.number().int().optional(),
+});
 
 @Controller('api/internal/v1/admins')
 @UseGuards(InternalTokenGuard)

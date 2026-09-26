@@ -12,6 +12,7 @@ import { BotI18n } from './i18n.js';
 import { registerScreens } from './screens/index.js';
 import { isPaymentUpdate, registerStars } from './screens/stars.js';
 import { installConversations } from './conversations.js';
+import { supportRelay } from './support.js';
 import type { BotConfig, BotSession, RrContext } from './types.js';
 
 export type BotRuntime = {
@@ -127,6 +128,8 @@ export function createBot(options: {
     if (ctx.callbackQuery) await ctx.answerCallbackQuery();
     if (ctx.from) await next();
   });
+  // FR-124: operators answer in their chat; they are not customers there.
+  bot.use(supportRelay(api, i18n));
   bot.use(sequentialize((ctx) => ctx.from?.id.toString()));
   bot.use(
     limit({

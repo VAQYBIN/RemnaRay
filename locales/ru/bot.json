@@ -96,5 +96,9 @@
   "bot.screen.ref.status.converted": "оплатил",
   "bot.screen.ref.status.rejected": "не засчитан",
   "bot.btn.refShare": "📤 Пригласить друга",
-  "bot.btn.refList": "📋 Приглашённые"
+  "bot.btn.refList": "📋 Приглашённые",
+  "bot.screen.support.reply": "💬 Ответ поддержки:\n{text}",
+  "bot.screen.support.undelivered": "Не доставлено покупателю: {reason}",
+  "bot.screen.support.none": "Поддержка пока не настроена. Попробуйте позже.",
+  "bot.error.support_unavailable": "Не удалось передать сообщение оператору. Попробуйте ещё раз позже."
 }
