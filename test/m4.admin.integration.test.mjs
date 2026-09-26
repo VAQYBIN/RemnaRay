@@ -263,6 +263,25 @@ test(
         'financial history survives anonymization',
       );
 
+      // Migrations 0008/0009: a plan may keep no squads only while it cannot
+      // be sold; such a plan can still be reordered, and cannot be activated.
+      const legacy = await prisma.plan.create({
+        data: {
+          slug: 'legacy-no-squads',
+          name: { ru: 'Старый', en: 'Legacy' },
+          durationDays: 30,
+          squads: [],
+          priceMinor: 1000n,
+          isActive: false,
+        },
+      });
+      await prisma.plan.update({ where: { id: legacy.id }, data: { sortOrder: 5 } });
+      await assert.rejects(
+        prisma.plan.update({ where: { id: legacy.id }, data: { isActive: true } }),
+        /plans_squads_nonempty/u,
+      );
+      await prisma.plan.update({ where: { id: legacy.id }, data: { deletedAt: new Date() } });
+
       await prisma.$disconnect();
     } finally {
       await postgres.stop();

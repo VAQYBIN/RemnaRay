@@ -41,7 +41,7 @@ describe('PlansService', () => {
     expect(() => service.create({ slug: 'bad slug' })).toThrow();
   });
 
-  it('refuses a plan without panel squads (section 8 CHECK cardinality(squads) > 0)', () => {
+  it('refuses a plan without panel squads (section 8 CHECK cardinality(squads) > 0)', async () => {
     const repository = new MemoryPlans();
     const service = new PlansService(repository);
     const plan = {
@@ -55,7 +55,7 @@ describe('PlansService', () => {
     // The panel receives the squads as `activeInternalSquads`: none would
     // take every squad away from the customers who buy the plan.
     expect(() => service.create(plan)).toThrow();
-    expect(() => service.update('plan-1', { squads: [] })).toThrow();
+    await expect(service.update('plan-1', { squads: [] })).rejects.toThrow();
     expect(repository.creates).toBe(0);
   });
 
@@ -63,5 +63,27 @@ describe('PlansService', () => {
     const repository = new MemoryPlans();
     await new PlansService(repository).reorder(['a', 'b']);
     expect(repository.reordered).toEqual(['a', 'b']);
+  });
+
+  it('refuses to put a plan without squads on sale (migration 0009)', async () => {
+    const repository = new MemoryPlans();
+    repository.list = () => Promise.resolve([{ id: 'legacy', squads: [] } as never]);
+    let updated = 0;
+    repository.update = () => {
+      updated += 1;
+      return Promise.resolve({} as never);
+    };
+    const service = new PlansService(repository);
+
+    await expect(service.update('legacy', { isActive: true })).rejects.toMatchObject({
+      response: { error: { code: 'VALIDATION_ERROR' } },
+    });
+    // Taking it off sale, or giving it squads, still works.
+    await service.update('legacy', { isActive: false });
+    await service.update('legacy', {
+      isActive: true,
+      squads: ['00000000-0000-4000-8000-000000000001'],
+    });
+    expect(updated).toBe(2);
   });
 });

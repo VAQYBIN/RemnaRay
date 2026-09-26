@@ -56,3 +56,15 @@ test('a plan must name at least one panel squad (section 8)', async () => {
   );
   assert.match(squads, /CHECK \(cardinality\(squads\) > 0\) NOT VALID/);
 });
+
+test('plans without squads are taken off sale, and only such plans may keep none', async () => {
+  const squads = await readFile(
+    'prisma/migrations/0009_plans_squads_inactive/migration.sql',
+    'utf8',
+  );
+  assert.match(squads, /UPDATE plans SET is_active = false/);
+  assert.match(
+    squads,
+    /CHECK \(cardinality\(squads\) > 0 OR NOT is_active OR deleted_at IS NOT NULL\)/,
+  );
+});
