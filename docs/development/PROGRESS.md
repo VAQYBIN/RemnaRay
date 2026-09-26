@@ -182,8 +182,13 @@ panel users yet).
   spec does not mandate a picker, so a typed zone still works if valid.
   Evidence: settings service test (unknown zone refused, valid accepted) red
   → green; web 54; E2E 37.
-- **F23 Promocode apply** button sits in each plan card; one «Применить» next
-  to the field, previewing every plan (the API preview is per plan).
+- **F23 Done — the promocode «Применить» sat in every plan card.** One
+  «Применить» now stands next to the field; it previews the code for every
+  plan at once (section 15.5 preview is per plan), and each card shows its
+  discounted price or why the code does not apply to it; a code refused by
+  every plan is also a toast. Evidence: E2E «applies a promo code with one
+  button next to the field» (a seeded `E2E10`) red on the old page → green;
+  E2E 38.
 - **F24 Class check:** find every page/bot screen whose schema can reject a
   200 answer (F5 and F7 are the same class) and make such failures carry a
   visible reason.

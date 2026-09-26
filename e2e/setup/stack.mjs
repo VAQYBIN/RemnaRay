@@ -291,6 +291,11 @@ async function seedFixtures(databaseUrl, panelUrl) {
     },
   });
 
+  // Section 15.5: a code the plans page previews.
+  await prisma.promocode.create({
+    data: { code: 'E2E10', type: 'discount_percent', value: 10n, maxUses: 100 },
+  });
+
   await prisma.paymentProvider.create({
     data: {
       code: 'mock',

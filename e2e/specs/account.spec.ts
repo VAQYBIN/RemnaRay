@@ -120,6 +120,27 @@ test.describe('customer account', () => {
     await expect(radios.first()).toBeVisible();
   });
 
+  test('applies a promo code with one button next to the field, to every plan', async ({
+    context,
+    page,
+    baseURL,
+  }) => {
+    await signIn(context, baseURL ?? '');
+    await page.goto('/ru/account/plans');
+    await expect(page.locator('[data-state="ready"]')).toBeVisible();
+
+    await page.getByLabel('Промокод').fill('e2e10');
+    const apply = page.getByRole('button', { name: 'Применить' });
+    await expect(apply).toHaveCount(1);
+    // Next to the field, not inside a plan card.
+    await expect(
+      page.getByLabel('Промокод').locator('xpath=../..').getByRole('button', { name: 'Применить' }),
+    ).toHaveCount(1);
+    await apply.click();
+    // 10 % of 299 ₽: 29,90 ₽ off, 269,10 ₽ to pay.
+    await expect(page.getByText(/269,10/u).first()).toBeVisible();
+  });
+
   test('shows the balance, its history and the top-up presets', async ({
     context,
     page,

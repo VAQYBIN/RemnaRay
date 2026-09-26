@@ -39,11 +39,10 @@ export default function PlansClient({ locale }: { locale: Locale }) {
   const router = useRouter();
   const [provider, setProvider] = useState('');
   const [promocode, setPromocode] = useState('');
-  const [preview, setPreview] = useState<{
-    planId: string;
-    discount: number;
-    final: number;
-  } | null>(null);
+  // Per plan: the discounted price, or the code the API refused it with.
+  const [previews, setPreviews] = useState<
+    Record<string, { discount: number; final: number } | { error: string }>
+  >({});
   const [pending, setPending] = useState(false);
 
   const catalog = useResource<Catalog>('me:plans', async () => {
@@ -55,27 +54,41 @@ export default function PlansClient({ locale }: { locale: Locale }) {
     return { plans: plans.items, methods };
   });
 
+  /**
+   * Section 15.5 preview is per plan; one «Применить» next to the field asks
+   * it for every plan at once, and each card shows its own answer.
+   */
   const applyPromocode = useCallback(
-    (planId: string) => {
+    (planIds: string[]) => {
       setPending(true);
-      browserApi()
-        .send('POST', 'api/v1/me/promocodes/preview', promocodePreviewSchema, {
-          code: promocode,
-          planId,
-        })
-        .then(
-          (result) => {
-            setPreview({ planId, discount: result.discountMinor, final: result.finalMinor });
-          },
-          (error: unknown) => {
-            setPreview(null);
+      const api = browserApi();
+      void Promise.allSettled(
+        planIds.map((planId) =>
+          api.send('POST', 'api/v1/me/promocodes/preview', promocodePreviewSchema, {
+            code: promocode,
+            planId,
+          }),
+        ),
+      )
+        .then((results) => {
+          const next: typeof previews = {};
+          results.forEach((result, index) => {
+            const planId = planIds[index];
+            if (!planId) return;
+            next[planId] =
+              result.status === 'fulfilled'
+                ? { discount: result.value.discountMinor, final: result.value.finalMinor }
+                : { error: codeOf(result.reason) };
+          });
+          setPreviews(next);
+          const rejected = results.filter((result) => result.status === 'rejected');
+          if (rejected.length === results.length && rejected[0])
             toast({
               title: t('errorTitle'),
-              description: message(codeOf(error)),
+              description: message(codeOf(rejected[0].reason)),
               variant: 'danger',
             });
-          },
-        )
+        })
         .finally(() => {
           setPending(false);
         });
@@ -181,10 +194,19 @@ export default function PlansClient({ locale }: { locale: Locale }) {
                     value={promocode}
                     onChange={(event) => {
                       setPromocode(event.target.value.toUpperCase());
-                      setPreview(null);
+                      setPreviews({});
                     }}
                   />
                 </div>
+                <Button
+                  disabled={pending || !promocode.trim()}
+                  variant="secondary"
+                  onClick={() => {
+                    applyPromocode(data.plans.map((plan) => plan.id));
+                  }}
+                >
+                  {t('plans.promocodeApply')}
+                </Button>
               </div>
 
               <div className="grid gap-4 md:grid-cols-3">
@@ -208,14 +230,20 @@ export default function PlansClient({ locale }: { locale: Locale }) {
                       <p className="text-sm text-muted-foreground">
                         {t('plans.devices', { count: plan.deviceLimit })}
                       </p>
-                      {preview?.planId === plan.id ? (
-                        <p className="text-sm font-medium text-success">
-                          {t('plans.promocodeResult', {
-                            discount: money(preview.discount, plan.price.currency, locale),
-                            final: money(preview.final, plan.price.currency, locale),
-                          })}
-                        </p>
-                      ) : null}
+                      {(() => {
+                        const preview = previews[plan.id];
+                        if (!preview) return null;
+                        return 'error' in preview ? (
+                          <p className="text-sm text-muted-foreground">{message(preview.error)}</p>
+                        ) : (
+                          <p className="text-sm font-medium text-success">
+                            {t('plans.promocodeResult', {
+                              discount: money(preview.discount, plan.price.currency, locale),
+                              final: money(preview.final, plan.price.currency, locale),
+                            })}
+                          </p>
+                        );
+                      })()}
                       <div className="mt-2 flex flex-wrap gap-2">
                         <Button
                           disabled={pending || !selected}
@@ -225,17 +253,6 @@ export default function PlansClient({ locale }: { locale: Locale }) {
                         >
                           {t('plans.pay')}
                         </Button>
-                        {promocode ? (
-                          <Button
-                            disabled={pending}
-                            variant="secondary"
-                            onClick={() => {
-                              applyPromocode(plan.id);
-                            }}
-                          >
-                            {t('plans.promocodeApply')}
-                          </Button>
-                        ) : null}
                       </div>
                     </CardContent>
                   </Card>
