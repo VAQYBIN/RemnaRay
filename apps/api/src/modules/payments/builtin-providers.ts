@@ -20,6 +20,20 @@ const json = async (url: string, init: RequestInit = {}) => {
   if (!response.ok) throw new Error(`payment provider HTTP ${response.status}`);
   return body;
 };
+/** A provider healthcheck: an authenticated call, timed, its failure named. */
+const probe = async (task: () => Promise<void>) => {
+  const started = Date.now();
+  try {
+    await task();
+    return { ok: true, latencyMs: Date.now() - started };
+  } catch (error) {
+    return {
+      ok: false,
+      latencyMs: Date.now() - started,
+      error: error instanceof Error ? error.message : 'healthcheck failed',
+    };
+  }
+};
 const amount = (minor: bigint) => `${minor / 100n}.${(minor % 100n).toString().padStart(2, '0')}`;
 const toMinor = (value: unknown) => {
   const [whole, fraction = ''] = String(value).split('.');
@@ -454,8 +468,24 @@ export class LavaProvider implements PaymentProvider {
       type: r.status === 'paid' || r.status === 'success' ? 'paid' : 'pending',
     } as ProviderEvent;
   }
-  healthcheck() {
-    return Promise.resolve({ ok: true, latencyMs: 0 });
+  /** Lava's read-only, signed `get-available-tariffs` answers only valid keys. */
+  healthcheck(cfg: ProviderConfig) {
+    return probe(async () => {
+      const raw = JSON.stringify({ shopId: cfg.shopId });
+      const r = await json(
+        `${base(cfg, 'https://api.lava.ru')}/business/invoice/get-available-tariffs`,
+        {
+          method: 'POST',
+          headers: {
+            accept: 'application/json',
+            'content-type': 'application/json',
+            Signature: createHmac('sha256', String(cfg.secretKey)).update(raw).digest('hex'),
+          },
+          body: raw,
+        },
+      );
+      if (r.status_check !== true) throw new Error(`lava: ${String(r.error ?? 'refused')}`);
+    });
   }
 }
 
@@ -531,8 +561,16 @@ export class PlategaProvider implements PaymentProvider {
         : {}),
     } as ProviderEvent;
   }
-  healthcheck() {
-    return Promise.resolve({ ok: true, latencyMs: 0 });
+  /** `GET /balance/all` answers 401 to wrong `X-MerchantId`/`X-Secret`. */
+  healthcheck(cfg: ProviderConfig) {
+    return probe(async () => {
+      const response = await fetch(`${base(cfg, 'https://app.platega.io')}/balance/all`, {
+        headers: { 'X-MerchantId': String(cfg.merchantId), 'X-Secret': String(cfg.secret) },
+        signal: AbortSignal.timeout(10_000),
+      });
+      if (!response.ok) throw new Error(`payment provider HTTP ${response.status}`);
+      if (!Array.isArray(await response.json())) throw new Error('platega: unexpected answer');
+    });
   }
 }
 
@@ -618,8 +656,14 @@ export class CryptoBotProvider implements PaymentProvider {
         : {}),
     } as ProviderEvent;
   }
-  healthcheck() {
-    return Promise.resolve({ ok: true, latencyMs: 0 });
+  /** Crypto Pay `getMe` exists to test the app token. */
+  healthcheck(cfg: ProviderConfig) {
+    return probe(async () => {
+      const r = await json(`${base(cfg, 'https://pay.crypt.bot/api')}/getMe`, {
+        headers: this.auth(cfg),
+      });
+      if (r.ok !== true) throw new Error('cryptobot: getMe refused');
+    });
   }
 }
 

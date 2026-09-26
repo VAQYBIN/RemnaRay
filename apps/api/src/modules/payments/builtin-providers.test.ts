@@ -471,3 +471,88 @@ describe('Telegram Stars pricing and invoice link (section 11.3.6)', () => {
     expect(urls).toEqual(['http://telegram.test/bott/getMe']);
   });
 });
+
+describe('provider healthchecks call the provider (FR-061)', () => {
+  afterEach(() => vi.unstubAllGlobals());
+
+  function stub(answer: (url: string, init: RequestInit) => Response) {
+    const requests: { url: string; init: RequestInit }[] = [];
+    vi.stubGlobal('fetch', (url: string, init: RequestInit) => {
+      requests.push({ url, init });
+      return Promise.resolve(answer(url, init));
+    });
+    return requests;
+  }
+
+  it('checks CryptoBot with getMe and its token', async () => {
+    const requests = stub(() => Response.json({ ok: true, result: { app_id: 1 } }));
+    await expect(
+      new CryptoBotProvider().healthcheck({ token: 't-1', baseUrl: 'http://cryptobot.test/api' }),
+    ).resolves.toMatchObject({ ok: true });
+    expect(requests[0]?.url).toBe('http://cryptobot.test/api/getMe');
+    expect(new Headers(requests[0]?.init.headers).get('crypto-pay-api-token')).toBe('t-1');
+
+    stub(() =>
+      Response.json({ ok: false, error: { code: 401, name: 'UNAUTHORIZED' } }, { status: 401 }),
+    );
+    await expect(
+      new CryptoBotProvider().healthcheck({ token: 'bad', baseUrl: 'http://cryptobot.test/api' }),
+    ).resolves.toMatchObject({ ok: false });
+  });
+
+  it('checks Platega with its balances and the merchant credentials', async () => {
+    const requests = stub(() => Response.json([{ amount: 1, currency: 'RUB' }]));
+    await expect(
+      new PlategaProvider().healthcheck({
+        merchantId: 'm-1',
+        secret: 's-1',
+        baseUrl: 'http://platega.test',
+      }),
+    ).resolves.toMatchObject({ ok: true });
+    expect(requests[0]?.url).toBe('http://platega.test/balance/all');
+    const headers = new Headers(requests[0]?.init.headers);
+    expect([headers.get('x-merchantid'), headers.get('x-secret')]).toEqual(['m-1', 's-1']);
+
+    stub(
+      () => new Response('{}', { status: 401, headers: { 'content-type': 'application/json' } }),
+    );
+    await expect(
+      new PlategaProvider().healthcheck({
+        merchantId: 'm',
+        secret: 'bad',
+        baseUrl: 'http://platega.test',
+      }),
+    ).resolves.toMatchObject({ ok: false });
+  });
+
+  it('checks Lava with the shop tariffs, signed with the secret key', async () => {
+    const requests = stub(() => Response.json({ data: [], status: 200, status_check: true }));
+    await expect(
+      new LavaProvider().healthcheck({
+        shopId: 'shop-1',
+        secretKey: 'secret',
+        baseUrl: 'http://lava.test',
+      }),
+    ).resolves.toMatchObject({ ok: true });
+    expect(requests[0]?.url).toBe('http://lava.test/business/invoice/get-available-tariffs');
+    const body = requests[0]?.init.body as string;
+    expect(body).toBe('{"shopId":"shop-1"}');
+    expect(new Headers(requests[0]?.init.headers).get('signature')).toBe(
+      createHmac('sha256', 'secret').update(body).digest('hex'),
+    );
+
+    stub(() =>
+      Response.json(
+        { error: 'Invalid signature', data: null, status: null, status_check: null },
+        { status: 422 },
+      ),
+    );
+    await expect(
+      new LavaProvider().healthcheck({
+        shopId: 'shop-1',
+        secretKey: 'bad',
+        baseUrl: 'http://lava.test',
+      }),
+    ).resolves.toMatchObject({ ok: false });
+  });
+});
