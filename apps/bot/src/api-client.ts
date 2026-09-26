@@ -1,5 +1,7 @@
 import type { Locale } from '@remnaray/i18n-core';
 
+import { setDisplayTimeZone } from './screens/common.js';
+
 export class ApiClientError extends Error {
   constructor(
     readonly status: number,
@@ -200,6 +202,7 @@ export class ApiClient {
       return this.config.value;
     const value = await this.request<import('./types.js').BotConfig>('/api/internal/v1/bot/config');
     this.config = { value, at: Date.now() };
+    setDisplayTimeZone(value.timezone);
     return value;
   }
 
@@ -295,15 +298,16 @@ export class ApiClient {
     });
   }
 
-  getTransactions(telegramId: number) {
+  getTransactions(telegramId: number, limit = 20) {
     return this.request<{
       items: Array<{
+        type: string;
         amount: { amountMinor: number; currency: string };
         description: string | null;
         createdAt: string;
       }>;
       nextCursor: string | null;
-    }>('/api/internal/v1/me/transactions', { userId: telegramId });
+    }>(`/api/internal/v1/me/transactions?limit=${String(limit)}`, { userId: telegramId });
   }
 
   getReferralList(telegramId: number) {

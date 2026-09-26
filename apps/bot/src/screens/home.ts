@@ -51,7 +51,9 @@ export async function showHome(ctx: RrContext, api: ApiClient): Promise<void> {
   ]);
   const subscription = subscriptionState.subscription;
   const status = subscription
-    ? ctx.t('bot.screen.home.subscription', { until: formatDate(subscription.expiresAt) })
+    ? ctx.t('bot.screen.home.subscription', {
+        until: formatDate(subscription.expiresAt, ctx.locale),
+      })
     : ctx.t('bot.screen.home.noSubscription');
   await show(
     ctx,

@@ -35,6 +35,8 @@ export type BotConfig = {
   brandName: string;
   /** `settings.trial.days` and `settings.trial.traffic_gb` (0 = unlimited). */
   trial: { days: number; trafficGb: number };
+  /** `settings.locale.timezone`: dates the bot shows are in this zone. */
+  timezone: string;
   /** `settings.clients.items`, for `/help`. */
   clients: { name: string; platforms: string[] }[];
   defaultLocale: Locale;

@@ -36,8 +36,25 @@ export function formatMinor(amountMinor: string | number, currency = 'RUB'): str
   return new Intl.NumberFormat('ru-RU', { style: 'currency', currency }).format(amount);
 }
 
-export function formatDate(value: string): string {
-  return new Intl.DateTimeFormat('ru-RU', { dateStyle: 'short', timeStyle: 'short' }).format(
-    new Date(value),
-  );
+let displayTimeZone: string | undefined;
+
+/** `settings.locale.timezone`, set whenever the bot reads its configuration. */
+export function setDisplayTimeZone(timeZone: string | undefined): void {
+  displayTimeZone = timeZone;
+}
+
+/**
+ * A date as the customer reads it: in the shop's time zone (an unknown zone
+ * falls back to UTC) and in the customer's language.
+ */
+export function formatDate(value: string, locale = 'ru'): string {
+  const options: Intl.DateTimeFormatOptions = { dateStyle: 'short', timeStyle: 'short' };
+  const tag = locale === 'en' ? 'en-GB' : 'ru-RU';
+  try {
+    return new Intl.DateTimeFormat(tag, { ...options, timeZone: displayTimeZone }).format(
+      new Date(value),
+    );
+  } catch {
+    return new Intl.DateTimeFormat(tag, { ...options, timeZone: 'UTC' }).format(new Date(value));
+  }
 }

@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
+import { setDisplayTimeZone } from './common.js';
 import { showBalance, showTopupProviders } from './index.js';
 import type { RrContext } from '../types.js';
 
@@ -40,6 +41,40 @@ describe('bot balance screen (section 15.2)', () => {
     const { ctx, api, texts } = screen(0);
     await showBalance(ctx, api);
     expect(texts[0]).not.toContain('bot.screen.balance.held');
+  });
+
+  it('lists the last operations with a local date and their type (section 12 `balance`)', async () => {
+    setDisplayTimeZone('Asia/Yekaterinburg');
+    const { ctx, texts, params } = screen(0);
+    const requested: string[] = [];
+    const api = {
+      getMe: () => ({
+        balance: { amountMinor: 20000, currency: 'RUB' },
+        balanceHeld: { amountMinor: 0, currency: 'RUB' },
+      }),
+      getTransactions: (_telegramId: number, limit: number) => {
+        requested.push(String(limit));
+        return {
+          items: [
+            {
+              type: 'topup',
+              amount: { amountMinor: 10000, currency: 'RUB' },
+              description: null,
+              createdAt: '2026-09-26T20:30:00.000Z',
+            },
+          ],
+        };
+      },
+    } as never;
+
+    await showBalance(ctx, api);
+
+    expect(requested).toEqual(['5']);
+    // 20:30 UTC is 01:30 the next day in Yekaterinburg (UTC+5).
+    expect(texts[0]).toContain('27.09.2026, 01:30 · bot.screen.balance.type.topup · ');
+    expect(texts[0]).not.toContain('2026-09-26T20:30');
+    expect(params).toContainEqual({ key: 'bot.screen.balance.transactions' });
+    setDisplayTimeZone(undefined);
   });
 });
 

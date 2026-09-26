@@ -103,5 +103,13 @@
   "bot.screen.help.title": "Как подключиться",
   "bot.screen.help.clients": "Клиенты",
   "bot.screen.help.faq": "Вопросы",
-  "bot.screen.help.more": "Остались вопросы? Нажмите «Поддержка» в меню."
+  "bot.screen.help.more": "Остались вопросы? Нажмите «Поддержка» в меню.",
+  "bot.screen.balance.type.purchase": "покупка",
+  "bot.screen.balance.type.topup": "пополнение",
+  "bot.screen.balance.type.refund": "возврат",
+  "bot.screen.balance.type.referral_reward": "реферальное начисление",
+  "bot.screen.balance.type.referral_reversal": "отмена реферального начисления",
+  "bot.screen.balance.type.promo_bonus": "бонус по промокоду",
+  "bot.screen.balance.type.adjustment": "корректировка",
+  "bot.screen.balance.type.plan_change_credit": "зачёт при смене тарифа"
 }

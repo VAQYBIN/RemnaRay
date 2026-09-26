@@ -10,7 +10,7 @@ import { showHelp } from './help.js';
 import { showPlan, showPlans } from './plans.js';
 import { showReferralList, showReferrals } from './referrals.js';
 import { showSubscription, showClients, showQr, confirmRevoke } from './subscription.js';
-import { backButton, formatMinor, show } from './common.js';
+import { backButton, formatDate, formatMinor, show } from './common.js';
 
 export function registerScreens(bot: Bot<RrContext>, api: ApiClient): void {
   bot.command('start', (ctx) => {
@@ -89,14 +89,18 @@ export async function showBalance(ctx: RrContext, api: ApiClient): Promise<void>
   if (!ctx.from) return;
   const [state, transactions] = await Promise.all([
     api.getMe(ctx.from.id),
-    api.getTransactions(ctx.from.id),
+    api.getTransactions(ctx.from.id, 5),
   ]);
-  const recent = transactions.items
-    .map(
-      (item) =>
-        `${formatMinor(item.amount.amountMinor, item.amount.currency)} · ${item.description ?? item.createdAt}`,
-    )
-    .join('\n');
+  // Section 12 `balance`: the last five operations, dated in the shop's zone.
+  const recent =
+    transactions.items.length > 0
+      ? `\n${ctx.t('bot.screen.balance.transactions')}\n${transactions.items
+          .map(
+            (item) =>
+              `${formatDate(item.createdAt, ctx.locale)} · ${ctx.t(`bot.screen.balance.type.${item.type}`)} · ${formatMinor(item.amount.amountMinor, item.amount.currency)}`,
+          )
+          .join('\n')}`
+      : '';
   const keyboard = new InlineKeyboard()
     .text(ctx.t('bot.btn.topup'), 'topup:open')
     .row()

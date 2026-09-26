@@ -30,7 +30,10 @@ export async function showSubscription(ctx: RrContext, api: ApiClient): Promise<
     .text(ctx.t('bot.btn.back'), 'home');
   await show(
     ctx,
-    ctx.t('bot.screen.sub.details', { until: formatDate(state.subscription.expiresAt), link }),
+    ctx.t('bot.screen.sub.details', {
+      until: formatDate(state.subscription.expiresAt, ctx.locale),
+      link,
+    }),
     keyboard,
   );
 }

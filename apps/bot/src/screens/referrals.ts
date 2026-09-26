@@ -52,7 +52,7 @@ export async function showReferralList(ctx: RrContext, api: ApiClient): Promise<
   const lines = page.items.map((item) =>
     ctx.t('bot.screen.ref.item', {
       name: item.maskedName,
-      date: formatDate(item.joinedAt),
+      date: formatDate(item.joinedAt, ctx.locale),
       status: ctx.t(`bot.screen.ref.status.${item.status}`),
       reward: item.rewardMinor > 0 ? formatMinor(item.rewardMinor) : '—',
     }),

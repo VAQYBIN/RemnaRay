@@ -52,7 +52,7 @@ export async function showInvoice(ctx: RrContext, invoice: InvoiceView): Promise
     ctx,
     ctx.t('bot.screen.pay.wait', {
       price: formatMinor(invoice.amount.amountMinor, invoice.amount.currency),
-      until: formatDate(invoice.expiresAt),
+      until: formatDate(invoice.expiresAt, ctx.locale),
     }),
     keyboard,
   );

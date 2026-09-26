@@ -253,8 +253,14 @@ panel users yet).
   from `settings.clients.items` (now in the bot configuration), then a pointer
   to «Поддержка». Evidence: bot `help.test.ts` red → green, API bot-config
   test; bot 48 tests.
-- **F16 Bot balance history.** Raw ISO UTC timestamps; should be localised
-  and in `locale.timezone`, with the operation type.
+- **F16 Done — bot balance history showed raw ISO UTC timestamps.** The
+  `balance` screen (section 12: balance, last five transactions) now lists
+  «27.09.2026, 01:30 · пополнение · 100 ₽»: dates in `locale.timezone`
+  (now in the bot configuration; an unknown zone falls back to UTC) and the
+  customer's language, the operation type from `bot.screen.balance.type.*`.
+  Every other date the bot shows (subscription end, invoice deadline,
+  referral list) uses the same zone. Evidence: bot `balance.test.ts` (UTC
+  20:30 → 01:30 next day in Yekaterinburg) red → green; bot 49, API bot tests.
 - **F17 Rate limits — discuss first.** `GET /api/admin/v1/auth/me` (every
   console page) falls under nginx `rr_auth` 5r/m burst 10
   (`deploy/proxy/nginx/site.conf.tmpl:60`) → 429 after ~10 section

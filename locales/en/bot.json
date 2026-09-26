@@ -103,5 +103,13 @@
   "bot.screen.help.title": "How to connect",
   "bot.screen.help.clients": "Clients",
   "bot.screen.help.faq": "Questions",
-  "bot.screen.help.more": "Anything else? Press «Support» in the menu."
+  "bot.screen.help.more": "Anything else? Press «Support» in the menu.",
+  "bot.screen.balance.type.purchase": "purchase",
+  "bot.screen.balance.type.topup": "top-up",
+  "bot.screen.balance.type.refund": "refund",
+  "bot.screen.balance.type.referral_reward": "referral reward",
+  "bot.screen.balance.type.referral_reversal": "referral reward reversed",
+  "bot.screen.balance.type.promo_bonus": "promo code bonus",
+  "bot.screen.balance.type.adjustment": "adjustment",
+  "bot.screen.balance.type.plan_change_credit": "plan change credit"
 }

@@ -43,6 +43,7 @@ describe('bot ingress boundary', () => {
       'brand.name': 'Manta VPN',
       'trial.days': 7,
       'trial.traffic_gb': 25,
+      'locale.timezone': 'Asia/Yekaterinburg',
       'clients.items': [
         { id: 'happ', name: 'Happ', platforms: ['ios'], deepLinkTemplate: 'happ://add/{url}' },
       ],
@@ -70,6 +71,7 @@ describe('bot ingress boundary', () => {
       brandName: 'Manta VPN',
       trial: { days: 7, trafficGb: 25 },
       clients: [{ name: 'Happ', platforms: ['ios'] }],
+      timezone: 'Asia/Yekaterinburg',
     });
     expect(config.commands.en?.[0]).toEqual({ command: 'start', description: 'Start the bot' });
   });
