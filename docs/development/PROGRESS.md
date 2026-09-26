@@ -146,11 +146,16 @@ panel users yet).
   F1, a balance top-up is refused by the API anyway. Evidence: API
   me/providers/setup tests, web `account-pages.test.tsx` (red → green), bot
   `balance.test.ts`; API 296, web 49, bot 37 tests; E2E 34 passed, 1 skipped.
-- **F7 `inviteeBonus: null` breaks `/account/referrals`.** `me.service.ts:440`
-  does `Number(settings referral.invitee_bonus)`, but the setting is an
-  object `{type,value}` (`settings.schemas.ts:333`) → `NaN` → JSON `null`;
-  the web schema wants a number (`contracts/me.ts:131`). Decide the contract
-  shape from section 9.4/15 and align API, schema and page.
+- **F7 Done — `inviteeBonus: null` broke `/account/referrals`.** Section 15
+  defines `referral.invitee_bonus` as `{type: none|days|balance, value}`;
+  the API sent `Number(object)` → `NaN` → `null`, and the domain contract
+  expected a number (the API unit fixture stored `'0'`, hiding it).
+  `program.inviteeBonus` is now that object in the API and in
+  `referralsSchema`. The page also compared `mode === 'fixed'`, a value the
+  setting never has, so `fixed_first` was described as a percentage; it now
+  states the terms per `percent_first|percent_all|fixed_first` and the
+  invitee's bonus. Evidence: API contract test (`referralsSchema.parse`)
+  red → green; web terms tests; API 297, web 51, domain 12 tests.
 - **F8 Validation errors answer 500.** No global `ZodError` handling; services
   call `schema.parse(body)` (~17 files), so any bad field is Nest's
   `{statusCode:500,"Internal server error"}` with no incident id. Seen in
@@ -253,7 +258,7 @@ panel users yet).
 
 1. F1 — done.
 2. F2, F3, F4 — done.
-3. F5, F6 — done. F7, F8, then the rest of P1 with F27/F28; F17 only after the
+3. F5, F6, F7 — done. F8, then the rest of P1 with F27/F28; F17 only after the
    discussion.
 4. F25 (money) and F26 alongside P1; then P2.
 5. Redeploy the stand, re-run the acceptance walk, then the M5-004 gates.

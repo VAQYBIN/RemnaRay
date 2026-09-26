@@ -102,7 +102,12 @@ const pages: PageCase[] = [
           invited: 0,
           converted: 0,
           earned: { amountMinor: 0, currency: 'RUB' },
-          program: { mode: 'percent_first', percent: 20, fixedMinor: 0, inviteeBonus: 0 },
+          program: {
+            mode: 'percent_first',
+            percent: 20,
+            fixedMinor: 0,
+            inviteeBonus: { type: 'days', value: 3 },
+          },
         },
       },
       '/api/v1/me/referrals/list': { body: { items: [], nextCursor: null } },
@@ -211,5 +216,43 @@ describe('the balance page (section 15.2)', () => {
     expect(markup).toContain('value="yookassa"');
     expect(markup).toContain('value="stars"');
     expect(markup).not.toContain('value="balance"');
+  });
+});
+
+describe('the referral terms (FR-152, section 15)', () => {
+  const summary = (program: Record<string, unknown>) => ({
+    '/api/v1/me/referrals': {
+      body: {
+        code: 'AB12CD34',
+        link: 'https://shop.test/r/AB12CD34',
+        botLink: 'https://t.me/bot?start=ref_AB12CD34',
+        invited: 0,
+        converted: 0,
+        earned: { amountMinor: 0, currency: 'RUB' },
+        program: {
+          mode: 'percent_first',
+          percent: 20,
+          fixedMinor: 15000,
+          inviteeBonus: { type: 'none', value: 0 },
+          ...program,
+        },
+      },
+    },
+    '/api/v1/me/referrals/list': { body: { items: [], nextCursor: null } },
+  });
+
+  it('states the fixed reward of fixed_first and the invitee bonus', async () => {
+    const markup = await renderPage(
+      ReferralsClient,
+      summary({ mode: 'fixed_first', inviteeBonus: { type: 'days', value: 3 } }),
+    );
+    expect(markup).toMatch(/Вы получаете 150(?:&nbsp;|\s)?₽ за каждого приглашённого/u);
+    expect(markup).toContain('Приглашённый получает 3 дня доступа.');
+  });
+
+  it('states a reward on every payment for percent_all', async () => {
+    const markup = await renderPage(ReferralsClient, summary({ mode: 'percent_all' }));
+    expect(markup).toContain('Вы получаете 20% от каждой оплаты приглашённого.');
+    expect(markup).not.toContain('Приглашённый получает');
   });
 });

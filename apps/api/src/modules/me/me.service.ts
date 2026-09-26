@@ -442,7 +442,7 @@ export class MeService {
         mode,
         percent: Number(percent),
         fixedMinor: Number(fixedMinor),
-        inviteeBonus: Number(inviteeBonus),
+        inviteeBonus: inviteeBonus as { type: 'none' | 'days' | 'balance'; value: number },
       },
     };
   }

@@ -128,7 +128,11 @@ export const referralsSchema = z.object({
     mode: z.string(),
     percent: z.number(),
     fixedMinor: z.number(),
-    inviteeBonus: z.number(),
+    // Section 15 `referral.invitee_bonus`: what the invited customer receives.
+    inviteeBonus: z.object({
+      type: z.enum(['none', 'days', 'balance']),
+      value: z.number(),
+    }),
   }),
 });
 export type ReferralsView = z.infer<typeof referralsSchema>;

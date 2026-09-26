@@ -1,3 +1,4 @@
+import { referralsSchema } from '@remnaray/domain';
 import { describe, expect, it, vi } from 'vitest';
 
 import { MeService } from './me.service';
@@ -23,7 +24,8 @@ const settingValues: Record<string, unknown> = {
   'referral.mode': 'percent_first',
   'referral.percent': 20,
   'referral.fixed_minor': '0',
-  'referral.invitee_bonus': '0',
+  // The shape `settings.referral.invitee_bonus` stores (section 15).
+  'referral.invitee_bonus': { type: 'days', value: 3 },
 };
 
 const user = {
@@ -290,6 +292,13 @@ describe('MeService', () => {
       ['balance', 'balance'],
       ['yookassa', 'redirect'],
     ]);
+  });
+
+  it('answers GET /me/referrals in the shape the site reads (section 9.4)', async () => {
+    const summary = await service().instance.referrals('user-1');
+
+    expect(() => referralsSchema.parse(summary)).not.toThrow();
+    expect(summary.program.inviteeBonus).toEqual({ type: 'days', value: 3 });
   });
 
   it('applies the section 15.5 promocode rules', async () => {

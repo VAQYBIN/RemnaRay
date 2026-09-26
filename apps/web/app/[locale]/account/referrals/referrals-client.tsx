@@ -91,12 +91,24 @@ export default function ReferralsClient({ locale }: { locale: Locale }) {
                   </a>
                 </div>
                 <p className="text-sm text-muted-foreground">
-                  {data.summary.program.mode === 'fixed'
+                  {data.summary.program.mode === 'fixed_first'
                     ? t('referrals.termsFixed', {
                         amount: money(data.summary.program.fixedMinor, 'RUB', locale),
                       })
-                    : t('referrals.termsPercent', { percent: data.summary.program.percent })}
+                    : data.summary.program.mode === 'percent_all'
+                      ? t('referrals.termsPercentAll', { percent: data.summary.program.percent })
+                      : t('referrals.termsPercent', { percent: data.summary.program.percent })}
                 </p>
+                {data.summary.program.inviteeBonus.type === 'none' ||
+                data.summary.program.inviteeBonus.value <= 0 ? null : (
+                  <p className="text-sm text-muted-foreground">
+                    {data.summary.program.inviteeBonus.type === 'days'
+                      ? t('referrals.bonusDays', { days: data.summary.program.inviteeBonus.value })
+                      : t('referrals.bonusBalance', {
+                          amount: money(data.summary.program.inviteeBonus.value, 'RUB', locale),
+                        })}
+                  </p>
+                )}
               </CardContent>
             </Card>
 
