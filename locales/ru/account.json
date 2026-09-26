@@ -142,5 +142,6 @@
   "account.open.install": "Установить ({platform})",
   "account.referrals.termsPercentAll": "Вы получаете {percent}% от каждой оплаты приглашённого.",
   "account.referrals.bonusDays": "Приглашённый получает {days, plural, one {# день} few {# дня} many {# дней} other {# дня}} доступа.",
-  "account.referrals.bonusBalance": "Приглашённый получает {amount} на баланс."
+  "account.referrals.bonusBalance": "Приглашённый получает {amount} на баланс.",
+  "account.open.server": "Подписка с сервера {host}. Добавляйте только ссылки, которые пришли из бота магазина."
 }

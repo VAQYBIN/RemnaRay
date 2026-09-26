@@ -22,6 +22,10 @@ describe('sub:clients bridge page', () => {
       deepLinkFor('happ://add/{url}', `#${encodeURIComponent('javascript:alert(1)')}`),
     ).toBeNull();
     expect(deepLinkFor('happ://add/{url}', '#not a url')).toBeNull();
+    // Plain http would hand a client a link anybody on the path can rewrite.
+    expect(
+      deepLinkFor('happ://add/{url}', `#${encodeURIComponent('http://sub.example/x')}`),
+    ).toBeNull();
   });
 
   it('never follows a template that would run in the page', () => {

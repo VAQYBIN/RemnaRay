@@ -11,7 +11,9 @@ const BLOCKED_SCHEMES = new Set(['javascript', 'data', 'vbscript', 'file', 'blob
 /**
  * The client's deep link for the subscription link carried in the fragment,
  * or null when either is unusable. Only a configured template is ever opened,
- * and only with an http(s) subscription link, so the page is no redirector.
+ * and only with an https subscription link. The page cannot tell the shop's
+ * links from anybody else's, so it never opens one by itself: the customer
+ * sees the server's address and taps.
  */
 export function deepLinkFor(template: string, fragment: string): string | null {
   let value: string;
@@ -26,7 +28,7 @@ export function deepLinkFor(template: string, fragment: string): string | null {
   } catch {
     return null;
   }
-  if (url.protocol !== 'https:' && url.protocol !== 'http:') return null;
+  if (url.protocol !== 'https:') return null;
   const scheme = /^([a-z][a-z0-9+.-]*):/iu.exec(template)?.[1]?.toLowerCase();
   if (!scheme || BLOCKED_SCHEMES.has(scheme)) return null;
   return template.replaceAll('{url}', encodeURIComponent(value));
@@ -43,9 +45,9 @@ export default function OpenClient({
 }) {
   const t = useTranslations('account');
   const { toast } = useToast();
-  const [target, setTarget] = useState<{ link: string; subscription: string } | null | undefined>(
-    undefined,
-  );
+  const [target, setTarget] = useState<
+    { link: string; subscription: string; host: string } | null | undefined
+  >(undefined);
 
   useEffect(() => {
     const link = deepLinkFor(template, window.location.hash);
@@ -53,9 +55,8 @@ export default function OpenClient({
       setTarget(null);
       return;
     }
-    setTarget({ link, subscription: decodeURIComponent(window.location.hash.slice(1)) });
-    // The bot's button is the customer's tap; hand the link to the app at once.
-    window.location.assign(link);
+    const subscription = decodeURIComponent(window.location.hash.slice(1));
+    setTarget({ link, subscription, host: new URL(subscription).host });
   }, [template]);
 
   const stores = Object.entries(storeUrls).filter(([, url]) => /^https?:\/\//u.test(url));
@@ -70,6 +71,7 @@ export default function OpenClient({
           <p className="text-sm text-muted-foreground">{t('open.missing')}</p>
         ) : target ? (
           <>
+            <p className="text-sm">{t('open.server', { host: target.host })}</p>
             <div className="flex flex-wrap gap-2">
               <Button asChild>
                 <a href={target.link} rel="noreferrer">
