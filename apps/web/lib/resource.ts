@@ -9,7 +9,7 @@ export const STALE_TIME_MS = 15_000;
 
 export type Resource<T> =
   | { status: 'loading' }
-  | { status: 'error'; code: string; requestId?: string }
+  | { status: 'error'; code: string; requestId?: string; incidentId?: string }
   | { status: 'ready'; data: T };
 
 type Entry = { at: number; data: unknown };
@@ -37,12 +37,14 @@ export function toResourceError(error: unknown): {
   status: 'error';
   code: string;
   requestId?: string;
+  incidentId?: string;
 } {
   if (error instanceof ApiError)
     return {
       status: 'error',
       code: error.code,
       ...(error.requestId ? { requestId: error.requestId } : {}),
+      ...(error.incidentId ? { incidentId: error.incidentId } : {}),
     };
   return { status: 'error', code: 'INTERNAL_ERROR' };
 }

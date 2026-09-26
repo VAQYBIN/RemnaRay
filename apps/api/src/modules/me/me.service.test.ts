@@ -1,4 +1,12 @@
-import { referralsSchema } from '@remnaray/domain';
+import {
+  paymentMethodsSchema,
+  referralListSchema,
+  referralsSchema,
+  subscriptionStateSchema,
+  topupConfigSchema,
+  transactionsSchema,
+  userMeSchema,
+} from '@remnaray/domain';
 import { describe, expect, it, vi } from 'vitest';
 
 import { MeService } from './me.service';
@@ -292,6 +300,42 @@ describe('MeService', () => {
       ['balance', 'balance'],
       ['yookassa', 'redirect'],
     ]);
+  });
+
+  // F24: an answer the site's contract refuses breaks the whole page, and
+  // F5/F7 were such answers built from database defaults. Every /me read the
+  // site parses is checked against its contract here, from a user with
+  // nothing yet (no subscription, no panel user, no transactions).
+  it('answers every account read in the shape the site parses (section 9.4)', async () => {
+    const test = service({
+      transaction: {
+        count: vi.fn().mockResolvedValue(0),
+        findMany: vi.fn().mockResolvedValue([
+          {
+            id: 'tx-1',
+            type: 'topup',
+            amountMinor: 10000n,
+            currency: 'RUB',
+            provider: 'yookassa',
+            status: 'completed',
+            createdAt: new Date('2026-01-01T00:00:00.000Z'),
+            reason: null,
+          },
+        ]),
+      },
+    });
+    const me = test.instance;
+    const checks: [string, { safeParse(value: unknown): { success: boolean } }, unknown][] = [
+      ['GET /me', userMeSchema, await me.profile('user-1')],
+      ['GET /me/subscription', subscriptionStateSchema, await me.subscription('user-1')],
+      ['GET /me/payment-methods', paymentMethodsSchema, await me.paymentMethods('user-1')],
+      ['GET /me/topup-config', topupConfigSchema, await me.topupConfig()],
+      ['GET /me/transactions', transactionsSchema, await me.transactions('user-1', {})],
+      ['GET /me/referrals', referralsSchema, await me.referrals('user-1')],
+      ['GET /me/referrals/list', referralListSchema, await me.referralList('user-1', {})],
+    ];
+    for (const [route, schema, answer] of checks)
+      expect(schema.safeParse(answer).success, route).toBe(true);
   });
 
   it('answers GET /me/referrals in the shape the site reads (section 9.4)', async () => {

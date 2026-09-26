@@ -256,3 +256,31 @@ describe('the referral terms (FR-152, section 15)', () => {
     expect(markup).not.toContain('Приглашённый получает');
   });
 });
+
+describe('an answer that does not match the contract (F24)', () => {
+  it('names the failure instead of an empty incident code', async () => {
+    const markup = await renderPage(PlansClient, {
+      '/api/v1/public/plans': {
+        body: {
+          items: [
+            {
+              id: 'p1',
+              slug: 'month',
+              name: { ru: 'Месяц', en: 'Month' },
+              description: {},
+              durationDays: 30,
+              trafficLimitBytes: 0,
+              deviceLimit: 3,
+              price: { amountMinor: 29900, currency: 'RUB' },
+              sortOrder: 10,
+            },
+          ],
+        },
+      },
+      '/api/v1/me/payment-methods': { body: { items: [] } },
+    });
+    expect(markup).toContain('data-state="error"');
+    expect(markup).toContain('Сервер ответил не в том формате');
+    expect(markup).not.toMatch(/Код инцидента: ?</u);
+  });
+});

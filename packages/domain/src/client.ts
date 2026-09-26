@@ -9,6 +9,8 @@ export class ApiError extends Error {
     message: string,
     readonly requestId?: string,
     readonly details?: unknown,
+    /** Section 9.3: a 5xx carries the id its failure was logged under. */
+    readonly incidentId?: string,
   ) {
     super(message);
     this.name = 'ApiError';
@@ -86,12 +88,30 @@ export function createApiClient({
         error?.message ?? `Request failed with status ${response.status.toString()}`,
         error?.requestId ?? response.headers.get('x-request-id') ?? undefined,
         error?.details,
+        error?.incidentId,
       );
     }
 
-    if (response.status === 204) return schema.parse(undefined);
-    const payload: unknown = await response.json();
-    return schema.parse(payload);
+    const payload: unknown = response.status === 204 ? undefined : await response.json();
+    const parsed = schema.safeParse(payload);
+    if (parsed.success) return parsed.data;
+    // An answer the page cannot read would otherwise surface as a bare
+    // INTERNAL_ERROR with nothing to report. The request id finds the call in
+    // the proxy and API logs; the paths say which field broke the contract.
+    const requestId = response.headers.get('x-request-id') ?? undefined;
+    const fields = parsed.error.issues.map((issue) => issue.path.map(String).join('.'));
+    console.error('API answer does not match its contract', {
+      path: url.pathname,
+      requestId,
+      fields,
+    });
+    throw new ApiError(
+      'CONTRACT_MISMATCH',
+      response.status,
+      `Unexpected answer from ${url.pathname}`,
+      requestId,
+      fields,
+    );
   }
 
   return {

@@ -7,13 +7,15 @@ import { EmptyState, ErrorState, Skeleton } from '@remnaray/ui';
 
 import type { Resource } from '../../lib/resource';
 
-export function useAdminErrorMessage(): (code: string) => string {
+export function useAdminErrorMessage(): (
+  code: string,
+  ids?: { incidentId?: string | undefined; requestId?: string | undefined },
+) => string {
   const errors = useTranslations('errors');
-  return (code: string) => {
+  return (code, ids = {}) => {
     const key = code.toLowerCase();
-    return errors.has(key)
-      ? errors(key, { incidentId: '', requestId: '' })
-      : errors('internal_error', { incidentId: '' });
+    const values = { incidentId: ids.incidentId ?? '—', requestId: ids.requestId ?? '—' };
+    return errors.has(key) ? errors(key, values) : errors('internal_error', values);
   };
 }
 
@@ -43,7 +45,10 @@ export function AdminSection<T>({
     return (
       <div data-state="error">
         <ErrorState
-          description={message(state.code)}
+          description={message(state.code, {
+            incidentId: state.incidentId,
+            requestId: state.requestId,
+          })}
           onRetry={refresh}
           title={t('errorTitle')}
           {...(state.requestId ? { requestId: state.requestId } : {})}

@@ -39,5 +39,6 @@
   "errors.idempotency_key_reused": "This idempotency key was already used with a different request.",
   "errors.conflict": "The data changed. Reload and try again.",
   "errors.internal_error": "Something went wrong. Incident code: {incidentId}",
-  "errors.requestId": "Request id: {requestId}"
+  "errors.requestId": "Request id: {requestId}",
+  "errors.contract_mismatch": "The server answered in a format this page does not expect. Reload the page; if that does not help, give the administrator the request code {requestId}."
 }

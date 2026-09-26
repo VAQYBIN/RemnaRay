@@ -189,16 +189,27 @@ panel users yet).
   every plan is also a toast. Evidence: E2E «applies a promo code with one
   button next to the field» (a seeded `E2E10`) red on the old page → green;
   E2E 38.
-- **F24 Class check:** find every page/bot screen whose schema can reject a
-  200 answer (F5 and F7 are the same class) and make such failures carry a
-  visible reason.
+- **F24 Done — answers that break a page's contract.** F5 and F7 were 200
+  answers the site's Zod schema refused: the domain client threw a `ZodError`,
+  the page showed «Не удалось загрузить» and «Код инцидента: » with nothing
+  after it. The client now turns such an answer into
+  `ApiError('CONTRACT_MISMATCH')` with the response's `X-Request-Id`, and logs
+  the failing field paths to the browser console; `errors.contract_mismatch`
+  asks to reload and gives the request code. The 5xx `incidentId` of the
+  section 9.3 envelope (F8) now reaches the message too (it was always
+  empty), in the account and the console. Class check: an API contract test
+  parses every `/me` read the site makes (`/me`, subscription, payment
+  methods, top-up config, transactions, referrals, referral list) with its
+  domain schema from a user with nothing yet; plans are covered by the F5
+  repository test. Evidence: domain client test and web page test red →
+  green; API 320, web, E2E 38.
 
 ### Next
 
 1. F1 — done.
 2. F2, F3, F4 — done.
 3. F5–F8, F10–F16, F27, F28 — done; F9 and F17 wait for the owner.
-4. F25, F26 — done; then P2.
+4. F25, F26 — done; P2 (F18–F24) — done.
 5. Redeploy the stand, re-run the acceptance walk, then the M5-004 gates.
 
 ## Code review repair queue — 2026-09-24

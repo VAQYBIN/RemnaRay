@@ -8,13 +8,15 @@ import { EmptyState, ErrorState, Skeleton } from '@remnaray/ui';
 import type { Resource } from '../../../lib/resource';
 
 /** Localized message for a section 9.3 error code, with a safe fallback. */
-export function useErrorMessage(): (code: string) => string {
+export function useErrorMessage(): (
+  code: string,
+  ids?: { incidentId?: string | undefined; requestId?: string | undefined },
+) => string {
   const t = useTranslations('errors');
-  return (code: string) => {
+  return (code, ids = {}) => {
     const key = code.toLowerCase();
-    return t.has(key)
-      ? t(key, { incidentId: '', requestId: '' })
-      : t('internal_error', { incidentId: '' });
+    const values = { incidentId: ids.incidentId ?? '—', requestId: ids.requestId ?? '—' };
+    return t.has(key) ? t(key, values) : t('internal_error', values);
   };
 }
 
@@ -32,10 +34,12 @@ export function LoadingState({ rows = 3 }: { rows?: number }) {
 export function FailureState({
   code,
   requestId,
+  incidentId,
   onRetry,
 }: {
   code: string;
   requestId?: string;
+  incidentId?: string;
   onRetry: () => void;
 }) {
   const t = useTranslations('account');
@@ -43,7 +47,7 @@ export function FailureState({
   return (
     <div data-state="error">
       <ErrorState
-        description={message(code)}
+        description={message(code, { incidentId, requestId })}
         onRetry={onRetry}
         title={t('errorTitle')}
         {...(requestId ? { requestId } : {})}
@@ -98,6 +102,7 @@ export function ResourceSection<T>({
         code={state.code}
         onRetry={refresh}
         {...(state.requestId ? { requestId: state.requestId } : {})}
+        {...(state.incidentId ? { incidentId: state.incidentId } : {})}
       />
     );
   if (isEmpty?.(state.data) && empty) return <>{empty}</>;
