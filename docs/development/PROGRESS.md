@@ -36,7 +36,7 @@ panel users yet).
   FR-124; see F14).
 - Rate limits: to be **discussed as a whole** before changing (F17); the
   owner has hit 429s before.
-- Bot «Профиль» contents: **open** — proposal awaiting the owner (F9).
+- Bot «Профиль» contents: the full profile (owner, 2026-09-26; F9 done).
 - Provider forms: separate fields instead of JSON, in the wizard and the
   console (F12).
 
@@ -96,6 +96,190 @@ panel users yet).
   configuration does not have). AC-061 therefore no longer offers these
   providers with wrong keys. Evidence: `builtin-providers.test.ts` (endpoint,
   credentials, failure) red → green; payments tests 71.
+  **P1 — broken core flows**
+
+- **F2 Done — bot errors were invisible (FR-127).** Cause (verified in the
+  installed grammY 1.46.0 `out/bot.js`): `bot.catch` runs only from
+  `handleUpdates` (`bot.start()`/runner); `bot.handleUpdate`, which
+  `BotIngress.processMessage` calls for every stream entry, rethrows a
+  `BotError`, and the ingress swallowed it with an empty `catch` — no log, no
+  reply, and the entry stayed in the PEL, so `XAUTOCLAIM` re-ran the handler
+  every 60 s. Repair: the ingress passes a `BotError` to `bot.errorHandler`
+  and `XACK`s the update (a non-`BotError` still stays in the PEL);
+  `botErrorHandler` logs the incident id the customer sees, update type,
+  callback data and the cause (Telegram code/method, API status/code, or the
+  error name/message/stack); stream read failures are logged. Evidence:
+  `ingress.test.ts` red → green, `errors.test.ts` handler cases; bot
+  lint/typecheck/tests green; `docs/troubleshooting.md` explains the search.
+- **F3 Done — bot called `getPaymentMethods()` without the Telegram id.**
+  `GET /api/internal/v1/me/payment-methods` resolves the customer from
+  `x-acting-user` and answered 403, which (with F2) silently broke the plan
+  card, renewal and top-up. `ApiClient.getPaymentMethods(telegramId)` now
+  sends it from all three callers. Audit: every other `/me/*` call that the
+  API resolves a user for already passes it; `plans` and `topup-config` need
+  none. Evidence: `api-client.test.ts` red → green; bot lint/typecheck/tests.
+- **F4 Done — bot «Клиенты» sent a `happ://` URL button.** Bot API 10.3
+  (core.telegram.org, 2026-08-24): `InlineKeyboardButton.url` is an "HTTP or
+  tg:// URL", so the button was refused and the screen failed. The spec's
+  `sub:clients` row ("one URL button per client, deep link with a caption")
+  cannot be met with a custom scheme directly; each button now opens
+  `https://<domain>/<locale>/open/<clientId>#<subscription URL>`, a page
+  that hands the link to the client's configured `deepLinkTemplate` (at
+  once, plus an «Открыть <client>» button, copy, store links). The link is in
+  the fragment, so it never reaches the server or proxy logs; the page opens
+  only a configured template (never `javascript:`/`data:`/`vbscript:`/
+  `file:`/`blob:`) and only with an http(s) link, so it is no redirector;
+  unknown client → 404; `noindex`. One button per configured client with a
+  template (the Happ hard-code is gone). Evidence: bot
+  `subscription.test.ts`, web `open-client.test.tsx`, E2E `site.spec.ts`
+  (34 passed, 1 skipped as before).
+- **F5 Done — a plan without a description broke `/account/plans`.** Section
+  8 gives `plans.description` `DEFAULT '{}'` and 9.4 `description{}`, while
+  the site's contract reads `{ru,en}`. The API now serialises `name` and
+  `description` of every plan view (`PlansRepository` views for the public
+  and admin lists, `MeService.publicPlan` for subscriptions and invoices)
+  as `{ru,en}` (`planTexts`: a missing name locale falls back to the other,
+  a missing description is `''`), and a plan created without a description
+  stores `{ru:'',en:''}`. No migration: the read path covers existing rows.
+  The console's description fields belong to F28. Evidence:
+  `plans.repository.test.ts` red → green; API 293 tests, lint, typecheck.
+- **F6 Done — a second `balance` payment method.** The wizard listed the
+  built-in balance as a configurable provider, and enabling it wrote a
+  `payment_providers` row that `/me/payment-methods` returned as a second,
+  `redirect` method; the site's top-up picked it and paid the top-up from the
+  balance itself. Repair: the wizard neither lists, checks nor saves a
+  provider of kind `balance` (404); `/me/payment-methods` and the console
+  list skip a `balance` row a stand already has (no migration needed); the
+  site's top-up offers a provider choice (radio, non-balance, available
+  only), and the bot asks for the provider after the amount (preset or
+  typed) when more than one is offered and goes straight on with one. With
+  F1, a balance top-up is refused by the API anyway. Evidence: API
+  me/providers/setup tests, web `account-pages.test.tsx` (red → green), bot
+  `balance.test.ts`; API 296, web 49, bot 37 tests; E2E 34 passed, 1 skipped.
+- **F7 Done — `inviteeBonus: null` broke `/account/referrals`.** Section 15
+  defines `referral.invitee_bonus` as `{type: none|days|balance, value}`;
+  the API sent `Number(object)` → `NaN` → `null`, and the domain contract
+  expected a number (the API unit fixture stored `'0'`, hiding it).
+  `program.inviteeBonus` is now that object in the API and in
+  `referralsSchema`. The page also compared `mode === 'fixed'`, a value the
+  setting never has, so `fixed_first` was described as a percentage; it now
+  states the terms per `percent_first|percent_all|fixed_first` and the
+  invitee's bonus. Evidence: API contract test (`referralsSchema.parse`)
+  red → green; web terms tests; API 297, web 51, domain 12 tests.
+- **F8 Done — validation errors answered 500.** The API had no exception
+  filter: a `schema.parse` in a service threw a `ZodError` that Nest answered
+  `{statusCode:500}`; Nest exceptions (`ForbiddenException('FORBIDDEN')` …)
+  had no section 9.3 envelope, which the site reads as `INTERNAL_ERROR`; no
+  error carried `requestId`, no 5xx an `incidentId`. `ApiExceptionFilter`
+  (global `APP_FILTER`) now answers every error with the envelope: Zod →
+  400 `VALIDATION_ERROR` with `details[{path,message}]`; an envelope a
+  handler built is kept; a bare Nest exception gets its code (the message
+  when it is a code, else by status); anything else is 500 `INTERNAL_ERROR`
+  with a ULID `incidentId` logged with the error, never its message;
+  `requestId` = the proxy's `X-Request-Id` (token-checked) or Fastify's id,
+  also echoed as a header. Provider webhook answers are untouched (the
+  controller sends them itself). Evidence: E2E «answers an invalid field with
+  400 VALIDATION_ERROR» red (500) → green, filter unit tests; API 302 tests;
+  E2E 35 passed, 1 skipped. `docs/troubleshooting.md` explains the ids.
+- **F9 Done — bot «Профиль» did nothing.** It routed to `showHome` and
+  re-rendered the same message. Per the owner's decision it now shows the
+  Telegram id, language, balance, referral code, receipt email and the
+  subscription status and term, with «Открыть кабинет», «Язык» and «Email для
+  чеков» (the `emailAsk` dialog). Evidence: bot `profile.test.ts`; bot 55.
+- **F10 Done — hard-coded brand and trial.** The bot's welcome said
+  «RemnaRay» and the trial confirmation always «3 дня, 10 GB». The bot
+  configuration (`/api/internal/v1/bot/config`) now carries `brandName` and
+  `trial {days, trafficGb}`; the home screen and the trial confirmation use
+  them (0 GB → ∞). `ApiClient.getConfig` keeps the answer 30 s (it assembles
+  every locale's commands), and `main.ts` reads it afresh on each
+  reconfigure. A top-up's payer-visible description is `brand.name`, no
+  longer «RemnaRay». Kept deliberately: `x-requested-with: RemnaRay` (a
+  protocol constant), the Stars title fallbacks (unreachable once the
+  description is the brand or plan), and the console TOTP issuer «RemnaRay»
+  (the spec names none; it labels the console, not the shop). Evidence: bot
+  home/api-client tests, API bot-config and payment-description tests red →
+  green; API 303, bot 39 tests.
+- **F11 Done — landing «Войти» showed no login widget.** The legacy Telegram
+  Login Widget draws its iframe where its `<script>` is; `next/script`
+  appended the script to `<body>`, so the button appeared at the very bottom,
+  outside `#login`. `LoginWidget` now creates the script inside `#login` (and
+  removes it and its iframe on unmount); the frame-title observer watches
+  the block. `docs/setup.md` explains `/setdomain`. The E2E harness never
+  passed the seeded bot token to the specs, so the widget-callback test was
+  always skipped; it runs now. Evidence: web accessibility test (script
+  inside `#login`) red → green; E2E landing asserts it; E2E 36 passed, 0
+  skipped. Contract: core.telegram.org/widgets/login-legacy (2026-09-26) —
+  `/setdomain`, HMAC-SHA256 with SHA256(bot token), no sunset notice.
+- **F12 Done — payment providers took raw JSON and could not be edited.**
+  `providerFields(configSchema)` (`z.toJSONSchema`, input side) describes each
+  provider's fields (type, required, secret, default, format); the wizard's
+  state and `GET /api/admin/v1/providers` carry them, and one shared form
+  (`apps/web/app/_components/provider-fields.tsx`, labels/hints in
+  `setup.json` and `admin.json`) replaces the JSON box in step 7 and gives the
+  console «Настроить» (enabled, customer-facing name, fields), ↑/↓ reorder and
+  «Проверить». The API checks a configuration against the schema on check and
+  save (a refused field is 400 `VALIDATION_ERROR` with its path) and stores it
+  parsed, with defaults; in the console the fields sent replace the stored
+  ones and an empty secret keeps its stored value (`mergeProviderConfig`).
+  Evidence: API provider-fields/setup/providers tests red → green, web form
+  helper tests, E2E wizard (ЮKassa form, «Далее» disabled until complete) and
+  console (configure → saved, check ok); API 309, web 54, E2E 37 passed.
+- **F13 Done — bot referral screen.** The screen showed only the site link
+  and two counts. It now follows the section 12 `ref` row: the bot link
+  `t.me/<bot>?start=ref_<code>` (`botLink`), invited, paid and earned
+  (FR-151), the programme's terms per mode and the invitee's bonus;
+  `ref:share` is `switch_inline_query` with «Присоединяйся к <brand>: <link>»
+  (Bot API: it asks for a chat and inserts `@bot <text>`, no inline mode
+  needed), and `ref:list` shows the last ten invited (masked names, date,
+  status, reward). The English link preview: section 13.1 picks the locale
+  from `rr_lang`, then `Accept-Language`, then `ru`, so a preview fetched with
+  an English `Accept-Language` is English by design — no change. Evidence: bot
+  `referrals.test.ts` (red → green), 41 bot tests.
+- **F14 Done — support (FR-124).** Without an operators' chat the API
+  answered 204 and the bot said «передано»; nothing relayed an operator's
+  answer; a failed forward was silent; the API called `api.telegram.org`
+  directly, ignoring `RR_TELEGRAM_API_URL`. Now: without the chat, «Поддержка»
+  shows `support_contact` (the `supportMessage` dialog only exists with the
+  chat, section 12) and the API refuses `409 SUPPORT_UNAVAILABLE`; a failed
+  forward is `502` and the customer is told. `SupportService`: in a forum
+  supergroup (owner's decision) each customer gets a topic (`createForumTopic`,
+  recreated if deleted); without the `can_manage_topics` right it falls back to
+  the general chat and alerts `support.topics`; in a plain group the message
+  id is kept 30 days for replies. The bot's `supportRelay` (before sessions and
+  dialogs) sends an operator's message in a topic, or a reply to a forwarded
+  message, to the customer in their language, and answers «Не доставлено» when
+  the customer blocked the bot. Contracts (Bot API 10.3, 2026-09-26):
+  `createForumTopic` needs admin + `can_manage_topics`; `sendMessage`
+  `message_thread_id`; `Message.is_topic_message`/`message_thread_id`/
+  `reply_to_message`; features#privacy-mode: bot admins receive all messages,
+  privacy-mode bots receive replies to their messages. Mapping in Valkey
+  `rr:support:*`. `docs/support.md`. Evidence: API `support.service.test.ts`,
+  bot `support.test.ts`/`screens/support.test.ts`; API 313, bot 47 tests.
+  Not verified with a real Telegram group yet (stand walk).
+- **F15 Done — bot `/help` was a stub.** Section 12 gives `/help` "client
+  instructions + FAQ (locale keys)". It now shows the connection steps and the
+  FAQ from the landing page's own keys (`landing.steps`, `landing.faq`, read
+  raw from the catalog since they are JSON arrays, not ICU), so one edit in
+  «Локали» changes the site and the bot, and the clients with their platforms
+  from `settings.clients.items` (now in the bot configuration), then a pointer
+  to «Поддержка». Evidence: bot `help.test.ts` red → green, API bot-config
+  test; bot 48 tests.
+- **F16 Done — bot balance history showed raw ISO UTC timestamps.** The
+  `balance` screen (section 12: balance, last five transactions) now lists
+  «27.09.2026, 01:30 · пополнение · 100 ₽»: dates in `locale.timezone`
+  (now in the bot configuration; an unknown zone falls back to UTC) and the
+  customer's language, the operation type from `bot.screen.balance.type.*`.
+  Every other date the bot shows (subscription end, invoice deadline,
+  referral list) uses the same zone. Evidence: bot `balance.test.ts` (UTC
+  20:30 → 01:30 next day in Yekaterinburg) red → green; bot 49, API bot tests.
+- **F17 Rate limits — discuss first.** `GET /api/admin/v1/auth/me` (every
+  console page) falls under nginx `rr_auth` 5r/m burst 10
+  (`deploy/proxy/nginx/site.conf.tmpl:60`) → 429 after ~10 section
+  switches. This is the spec's own 7.1 template, while 9.1 limits
+  `POST /api/v1/auth/*`. Prepare for the discussion: every proxy zone
+  (nginx + Caddy) and throttler limit vs spec 9.1/21.3/26, measured requests
+  per console/account page, and a proposal per zone marking spec deviations.
+
 - **F27 Done — the bot `sub` screen lacked the section 12 content and buttons.**
   `sub` now shows FR-041's plan, end date and days left, traffic used of the
   limit, devices n of m (from the panel; «—» when it cannot be read) and the
